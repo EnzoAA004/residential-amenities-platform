@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using ResidentialAmenities.Api.Modules.Amenities.Domain;
 using ResidentialAmenities.Api.Modules.Buildings.Domain;
+using ResidentialAmenities.Api.Modules.Pricing.Domain;
 
 namespace ResidentialAmenities.Api.Infrastructure.Persistence;
 
@@ -8,6 +9,15 @@ public static class DevelopmentDataSeeder
 {
     public static readonly Guid PilotBuildingId =
         Guid.Parse("00000000-0000-0000-0000-000000000001");
+
+    public static readonly Guid PilotSumId =
+        Guid.Parse("00000000-0000-0000-0001-000000000001");
+
+    public static readonly Guid PilotPoolId =
+        Guid.Parse("00000000-0000-0000-0001-000000000002");
+
+    public static readonly Guid PilotBarbecueId =
+        Guid.Parse("00000000-0000-0000-0001-000000000003");
 
     public static async Task SeedDevelopmentDataAsync(
         this IServiceProvider services,
@@ -58,6 +68,16 @@ public static class DevelopmentDataSeeder
             }
         }
 
+        var hasPriceRules = await dbContext.PriceRules
+            .AnyAsync(
+                rule => rule.BuildingId == PilotBuildingId,
+                cancellationToken);
+
+        if (!hasPriceRules)
+        {
+            dbContext.PriceRules.AddRange(CreatePilotPriceRules());
+        }
+
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 
@@ -89,7 +109,7 @@ public static class DevelopmentDataSeeder
     private static IEnumerable<Amenity> CreatePilotAmenities()
     {
         var sum = new Amenity(
-            Guid.Parse("00000000-0000-0000-0001-000000000001"),
+            PilotSumId,
             PilotBuildingId,
             "SUM",
             AmenityKind.Sum,
@@ -97,7 +117,7 @@ public static class DevelopmentDataSeeder
             allowsExclusiveUse: true);
 
         var pool = new Amenity(
-            Guid.Parse("00000000-0000-0000-0001-000000000002"),
+            PilotPoolId,
             PilotBuildingId,
             "Pool",
             AmenityKind.Pool,
@@ -105,7 +125,7 @@ public static class DevelopmentDataSeeder
             allowsExclusiveUse: false);
 
         var barbecue = new Amenity(
-            Guid.Parse("00000000-0000-0000-0001-000000000003"),
+            PilotBarbecueId,
             PilotBuildingId,
             "Barbecue",
             AmenityKind.Barbecue,
@@ -127,5 +147,69 @@ public static class DevelopmentDataSeeder
         }
 
         return [sum, pool, barbecue];
+    }
+
+    // Placeholder pricing only, pending the final pricing decisions in
+    // issue #2 (RB-016). These exist so PricingCalculator has something to
+    // query locally; amounts/currency are not a final product decision.
+    private static IEnumerable<PriceRule> CreatePilotPriceRules()
+    {
+        var effectiveFrom = new DateTimeOffset(
+            2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+
+        yield return new PriceRule(
+            Guid.NewGuid(),
+            PilotBuildingId,
+            PilotSumId,
+            PriceComponentType.Base,
+            ReservationUseType.SharedLeisure,
+            "ARS",
+            5_000m,
+            effectiveFrom,
+            null);
+
+        yield return new PriceRule(
+            Guid.NewGuid(),
+            PilotBuildingId,
+            PilotSumId,
+            PriceComponentType.Base,
+            ReservationUseType.ExclusiveLeisure,
+            "ARS",
+            8_000m,
+            effectiveFrom,
+            null);
+
+        yield return new PriceRule(
+            Guid.NewGuid(),
+            PilotBuildingId,
+            PilotSumId,
+            PriceComponentType.Base,
+            ReservationUseType.Event,
+            "ARS",
+            15_000m,
+            effectiveFrom,
+            null);
+
+        yield return new PriceRule(
+            Guid.NewGuid(),
+            PilotBuildingId,
+            PilotPoolId,
+            PriceComponentType.AddOn,
+            ReservationUseType.Event,
+            "ARS",
+            3_000m,
+            effectiveFrom,
+            null);
+
+        yield return new PriceRule(
+            Guid.NewGuid(),
+            PilotBuildingId,
+            PilotBarbecueId,
+            PriceComponentType.AddOn,
+            ReservationUseType.Event,
+            "ARS",
+            3_000m,
+            effectiveFrom,
+            null);
     }
 }

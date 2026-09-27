@@ -1,7 +1,8 @@
-# Data Dictionary — v0.4
+# Data Dictionary — v0.5
 
 The model now includes the building/membership foundation, ASP.NET Core Identity
-persistence, and the Amenities & Availability foundation (issue #19).
+persistence, the Amenities & Availability foundation (issue #19), and the
+Pricing foundation (issue #22).
 
 ## Buildings
 
@@ -143,6 +144,36 @@ availability (recurring windows minus unavailable periods) for a bounded range
 (currently capped at 62 days). It does not consider concrete reservations —
 per `docs/03-architecture/module-boundaries.md`, that decision belongs to the
 Reservations module once it exists (issue #20/#21/#23).
+
+## PriceRules
+
+| Column | Type | Null | Notes |
+| --- | --- | --- | --- |
+| Id | uuid | No | Primary key. |
+| BuildingId | uuid | No | Owning building. |
+| AmenityId | uuid | No | Priced amenity. Referenced by id only — no FK/navigation to `Amenities`, per the module-boundary rule against cross-module entity sharing. |
+| ComponentType | varchar(20) | No | `Base` or `AddOn` (RB-002: pool/barbecue are independent optional add-ons). |
+| UseType | varchar(30) | No | `SharedLeisure`, `ExclusiveLeisure` or `Event`. |
+| Currency | varchar(3) | No | ISO currency code. Pilot uses `ARS`. |
+| Amount | numeric(18,2) | No | Must be positive. |
+| EffectiveFromUtc | timestamptz | No | Start of this rule's effective period. |
+| EffectiveToUtc | timestamptz | Yes | End of the effective period, or open-ended when null. Set via `PriceRule.Supersede`, never by mutating `Amount` (RB-008). |
+
+There is intentionally no unique constraint forcing exactly one active rule
+per (BuildingId, AmenityId, ComponentType, UseType) at the database level yet
+— `PricingCalculator` picks the most recently started effective rule and a
+future admin workflow (#26) is expected to close the previous one via
+`Supersede` before adding a new one.
+
+## Pricing quote (not persisted)
+
+`GET /api/pricing/quote` returns a `PriceQuote` { Currency, TotalAmount,
+QuotedAtUtc, Lines[] }, where each `PriceQuoteLine` carries the exact
+`PriceRuleId`, `AmenityId`, `ComponentType`, `Currency` and `Amount` that were
+selected. This is the shape Reservations (#20/#21/#23) is expected to copy
+into a future `ReservationPriceLine` table when a reservation is created —
+the "historical snapshot" in RB-008 means copying these values, not keeping a
+live reference to `PriceRules`.
 
 ## Separation of concerns
 

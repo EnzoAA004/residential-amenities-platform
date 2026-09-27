@@ -8,7 +8,7 @@ import {
   IonText,
   IonTitle,
   IonToolbar
-} from '@ionic/angular/standalone';
+} from '@ionic/angular';
 
 type HealthResponse = {
   status: string;

@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authentication.BearerToken;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.Hosting;
 using ResidentialAmenities.Api.Infrastructure.Persistence;
 using ResidentialAmenities.Api.Modules.Identity.Domain;
 
@@ -57,15 +58,25 @@ public static class IdentityModule
                     TimeSpan.FromDays(14);
             });
 
-        services.Configure<CookieAuthenticationOptions>(
-            IdentityConstants.ApplicationScheme,
-            options =>
+        services
+            .AddOptions<CookieAuthenticationOptions>(
+                IdentityConstants.ApplicationScheme)
+            .Configure<IHostEnvironment>((options, environment) =>
             {
-                options.Cookie.Name = "__Host-residential-auth";
+                // __Host- cookies require Secure + Path=/ and a secure
+                // origin. Keep local HTTP development usable without
+                // weakening the production cookie contract.
+                options.Cookie.Name = environment.IsDevelopment()
+                    ? "residential-auth"
+                    : "__Host-residential-auth";
+
                 options.Cookie.HttpOnly = true;
+                options.Cookie.Path = "/";
+                options.Cookie.Domain = null;
                 options.Cookie.SameSite = SameSiteMode.Lax;
-                options.Cookie.SecurePolicy =
-                    CookieSecurePolicy.SameAsRequest;
+                options.Cookie.SecurePolicy = environment.IsDevelopment()
+                    ? CookieSecurePolicy.SameAsRequest
+                    : CookieSecurePolicy.Always;
 
                 options.SlidingExpiration = true;
                 options.ExpireTimeSpan = TimeSpan.FromHours(8);

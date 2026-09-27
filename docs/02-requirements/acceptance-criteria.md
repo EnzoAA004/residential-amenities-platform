@@ -79,6 +79,16 @@ considered fully satisfied until #23 lands.
 
 Related: RF-006, RF-007, RB-001, RB-002, RB-006 — issue #21.
 
+Issue #21 delivers this as a configured `EventSlotDefinition` match (not an
+arbitrary time range that merely falls inside the SUM's general
+availability), with Pool/Barbecue as the only permitted add-on kinds and
+every one of the Event's resources — SUM and add-ons alike — reserved
+exclusively for the whole window. "Independent" pool/barbecue bookings
+outside an Event (OQ-014) are still not implemented.
+Exact Event slot times remain configurable/TBD pending issue #2.
+
+Related: RF-006, RF-007, RB-001, RB-002, RB-006 — issue #21.
+
 ---
 
 ## AC-06 — Pricing snapshot

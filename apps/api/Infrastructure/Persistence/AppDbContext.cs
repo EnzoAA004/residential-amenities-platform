@@ -41,6 +41,9 @@ public sealed class AppDbContext(
     public DbSet<ReservationPriceLine> ReservationPriceLines =>
         Set<ReservationPriceLine>();
 
+    public DbSet<EventSlotDefinition> EventSlotDefinitions =>
+        Set<EventSlotDefinition>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

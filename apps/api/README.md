@@ -148,8 +148,8 @@ POST /api/reservations
 GET  /api/reservations/{id}
 ```
 
-`POST /api/reservations` currently supports `useType` values `SharedLeisure`
-and `ExclusiveLeisure` only (`Event` is issue #21). Request body:
+`POST /api/reservations` supports `useType` values `SharedLeisure`,
+`ExclusiveLeisure` and `Event`. Shared/Exclusive Leisure request body:
 
 ```json
 {
@@ -158,6 +158,23 @@ and `ExclusiveLeisure` only (`Event` is issue #21). Request body:
   "useType": "SharedLeisure",
   "startsAtUtc": "2027-03-02T13:00:00Z",
   "endsAtUtc": "2027-03-02T14:00:00Z"
+}
+```
+
+Event reservations add `addOnAmenityIds` (0–2 amenities of kind `Pool` or
+`Barbecue`); `amenityId` is the base resource, which must be an active
+amenity of kind `Sum`. The requested range must match a configured
+`EventSlotDefinition` exactly — an arbitrary range that merely falls inside
+the SUM's general availability is rejected:
+
+```json
+{
+  "buildingId": "...",
+  "amenityId": "...",
+  "addOnAmenityIds": ["...", "..."],
+  "useType": "Event",
+  "startsAtUtc": "2027-03-02T17:00:00Z",
+  "endsAtUtc": "2027-03-02T22:00:00Z"
 }
 ```
 

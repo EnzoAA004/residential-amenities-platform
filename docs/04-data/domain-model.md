@@ -1,4 +1,4 @@
-# Domain Model — v0.5
+# Domain Model — v0.6
 
 ## Implemented foundation
 
@@ -13,11 +13,12 @@ Issue #9 introduces the first persisted domain slice. The model is deliberately 
 | Amenity | Implemented (issue #19) | Reservable resource such as SUM, pool or barbecue/grill. |
 | AmenityAvailabilityWindow | Implemented (issue #19) | Recurring weekly operating window for an amenity. |
 | AmenityUnavailablePeriod | Implemented (issue #19) | Maintenance/blackout override for an amenity. |
-| Reservation | Implemented (issue #20, Shared/Exclusive Leisure only) | Booking aggregate root and minimal lifecycle. |
-| ReservationResource | Implemented (issue #20) | Resource(s) attached to a reservation, with per-resource exclusivity. |
+| Reservation | Implemented (issues #20, #21) | Booking aggregate root; Shared/Exclusive Leisure and Event. |
+| ReservationResource | Implemented (issues #20, #21) | Resource(s) attached to a reservation, with per-resource exclusivity; Event attaches base + add-ons. |
 | ReservationParticipant | Planned/TBD | Participants in compatible/shared usage if required by the final reservation model. |
+| EventSlotDefinition | Implemented (issue #21) | Configured, bookable time-of-day window for Event reservations. |
 | PriceRule | Implemented (issue #22) | Configurable, effective-dated pricing rule. |
-| ReservationPriceLine | Implemented (issue #20) | Historical snapshot of a `PriceQuoteLine`, copied onto a reservation at booking time. |
+| ReservationPriceLine | Implemented (issues #20, #21) | Historical snapshot of a `PriceQuoteLine`, copied onto a reservation at booking time; one row per priced component (base + each add-on). |
 | Payment | Planned | Payment attempt/record and method/status. |
 | PaymentEvent | Planned | Idempotent provider/payment lifecycle event where useful. |
 | Message | Post-MVP | Reservation-scoped communication. |
@@ -254,6 +255,104 @@ Reservation creation calls `AmenityAvailabilityCalculator.CalculateOpenIntervals
 requested range must be fully covered by the returned open intervals or the
 request is rejected; this already accounts for maintenance/unavailable
 periods.
+
+## Event reservations (issue #21)
+
+Extends the same `Reservation`/`ReservationResource`/`ReservationPriceLine`
+model from #20 to `ReservationUseType.Event` — no parallel model or service.
+`ReservationCreationService` resolves a use-type-specific list of
+`(Amenity, IsExclusive)` "planned resources" (one for Leisure; base + add-ons
+for Event) and then runs one shared pipeline — availability, conflict
+detection, pricing, persistence — over that list, so Leisure and Event never
+duplicate those stages.
+
+### SUM as base, Pool/Barbecue as add-ons (RB-001, RB-002)
+
+An Event's base resource must be an active `Amenity` in the same building
+with `Kind == AmenityKind.Sum` and `AllowsExclusiveUse == true` — checked
+against the kind enum, never the `"SUM"` name/label. Each optional add-on
+must have `Kind` in `{ Pool, Barbecue }` (`AmenityKind.Other` is explicitly
+rejected — issue #21 does not open a general add-on mechanism), belong to
+the same building, be active, allow exclusive use, and not repeat the base
+or another add-on.
+
+### Exclusivity (RB-006)
+
+Every resource an Event books — the SUM and each add-on — is reserved with
+`IsExclusive = true` for the whole range: the event blocks any other
+incompatible use of *each* of its resources, not just the SUM. Conflict
+detection is evaluated per `AmenityId` exactly as in #20
+(`ReservationCompatibility.ConflictsWith`); if any one resource conflicts
+(e.g. the SUM is free but the Pool has an incompatible booking), the entire
+Event is rejected and nothing is persisted (one `SaveChanges` call for the
+whole aggregate).
+
+Pool's pilot seed data now sets `AllowsExclusiveUse = true` (previously only
+shared) specifically so it can serve as an exclusive Event add-on; a
+resident booking Pool exclusively on its own, outside an Event, is not
+implemented yet (OQ-014, still open).
+
+### Event slots vs. amenity availability — a deliberate distinction
+
+`AmenityAvailabilityWindow` (#19) expresses when a resource is
+physically/operationally usable at all. `EventSlotDefinition` is a
+**separate** entity expressing the commercial policy of which windows within
+that availability may be booked as an Event (e.g. an "afternoon" or
+"evening" shift). Conflating the two was explicitly avoided: it would force
+Amenities to encode reservation/business policy it does not own.
+
+```mermaid
+erDiagram
+    EVENT_SLOT_DEFINITION {
+        uuid Id PK
+        uuid BuildingId
+        varchar Name
+        time StartTime
+        time EndTime
+        boolean IsActive
+    }
+```
+
+A request's `startsAtUtc`/`endsAtUtc`, converted to the building's local
+time zone, must match an active `EventSlotDefinition`'s `StartTime`/`EndTime`
+**exactly** (and not cross midnight — overnight/full-day slots are not
+supported yet). An Event that happens to fall inside the SUM's general
+availability but does not match a configured slot (e.g. 13:17–16:43) is
+rejected — availability and slot policy are independent checks and both must
+pass.
+
+**Exact Event slot times remain configurable/TBD pending issue #2**
+(OQ-001/OQ-002: afternoon/night shift boundaries; OQ-003: whether full-day
+belongs in the MVP). Seeded slot names/times are explicit placeholders, not
+an approved policy. Full-day is not implemented; if it is added later it is
+expected to be a composition of slots (or a slot spanning the full
+day-defined-as-available-hours), not a new hardcoded rule — but that
+decision itself is not made by this issue.
+
+### Pricing composition
+
+Unchanged from #22/#20: `PricingCalculator.Calculate(rules, baseAmenityId,
+ReservationUseType.Event, addOnAmenityIds, atUtc)` selects the effective
+`SUM/Base/Event` rule plus one `.../AddOn/Event` rule per add-on, and
+currency consistency across all of them is already enforced by
+`PricingCalculator` itself (reused, not reimplemented). Each returned
+`PriceQuoteLine` becomes one `ReservationPriceLine`, so an Event with two
+add-ons snapshots three rows (base + 2), and the total is their sum — e.g.
+15,000 (SUM) + 3,000 (Pool) + 3,000 (Barbecue) = 21,000 ARS with the pilot's
+placeholder pricing.
+
+### Lifecycle
+
+Same as #20: `Confirmed`/`Cancelled` only. An Event is `Confirmed`
+immediately because no payment step exists yet; `PendingPayment`/holds are
+#23/#24/#25, not simulated here.
+
+### Concurrency
+
+Same limit as #20: ordinary transactional read-then-write, now checked
+across every planned resource. It does not close the race between two truly
+concurrent incompatible requests for any of an Event's resources — #23
+still owns RNF-005.
 
 ## Identity boundary
 

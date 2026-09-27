@@ -1,0 +1,80 @@
+name: Toolchain Spike
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "apps/api/**"
+      - "apps/client/**"
+      - "docker-compose.yml"
+      - "global.json"
+      - ".github/workflows/toolchain-spike.yml"
+  workflow_dispatch:
+
+jobs:
+  validate-stack:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_DB: residential_amenities
+          POSTGRES_USER: residential_app
+          POSTGRES_PASSWORD: local_dev_only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U residential_app -d residential_amenities"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore API
+        run: dotnet restore apps/api/ResidentialAmenities.Api.csproj
+
+      - name: Build API
+        run: dotnet build apps/api/ResidentialAmenities.Api.csproj --configuration Release --no-restore
+
+      - name: Start API and verify PostgreSQL health
+        env:
+          ConnectionStrings__Postgres: Host=127.0.0.1;Port=5432;Database=residential_amenities;Username=residential_app;Password=local_dev_only
+          ASPNETCORE_URLS: http://127.0.0.1:8080
+        run: |
+          dotnet run --project apps/api/ResidentialAmenities.Api.csproj --configuration Release --no-build > /tmp/api.log 2>&1 &
+          API_PID=$!
+
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:8080/api/health > /tmp/health.json; then
+              break
+            fi
+            sleep 2
+          done
+
+          cat /tmp/health.json
+          grep -q '"status":"ok"' /tmp/health.json
+          grep -q '"database":"ok"' /tmp/health.json
+
+          kill $API_PID
+
+      - name: Setup Node 24 LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.x"
+
+      - name: Install client dependencies
+        working-directory: apps/client
+        run: npm install --no-audit --no-fund
+
+      - name: Build Angular/Ionic client
+        working-directory: apps/client
+        run: npm run build

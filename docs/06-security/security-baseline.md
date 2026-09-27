@@ -99,6 +99,12 @@ The check endpoints exist to prove policy enforcement during the foundation phas
 - Use managed secret storage for production credentials.
 - Define backup/restore and retention before production.
 
+## Local configuration baseline
+
+Developer-specific API secrets use .NET User Secrets or environment variables and never live in source-controlled configuration. Development CORS remains an explicit allowlist.
+
+See [Local Development Security](local-development-security.md) for secret names, logging rules and the future Mercado Pago/Azure checklist.
+
 ## Application security backlog
 
 Still to be addressed/refined in later issues:

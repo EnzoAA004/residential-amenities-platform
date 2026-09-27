@@ -31,6 +31,16 @@ The development proxy forwards `/api/*` to the ASP.NET Core API at `http://local
 npm run build
 ```
 
+## Test
+
+The Angular 22 client uses the Angular CLI unit-test builder with Vitest and jsdom.
+
+```bash
+npm test
+```
+
+Tests run once by default through the repository script, which is suitable for local validation and CI.
+
 ## Client structure
 
 ```text

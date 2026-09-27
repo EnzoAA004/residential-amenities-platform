@@ -1,6 +1,6 @@
-# Data Dictionary — v0.2
+# Data Dictionary — v0.3
 
-This dictionary describes the first persisted domain tables introduced by issue #9.
+The model now includes the building/membership foundation plus ASP.NET Core Identity persistence.
 
 ## Buildings
 
@@ -11,12 +11,6 @@ This dictionary describes the first persisted domain tables introduced by issue 
 | TimeZoneId | varchar(100) | No | IANA timezone used for building-local scheduling. |
 | IsActive | boolean | No | Operational status. |
 
-### Constraints
-
-- Primary key: `Id`.
-
----
-
 ## Units
 
 | Column | Type | Null | Notes |
@@ -24,46 +18,61 @@ This dictionary describes the first persisted domain tables introduced by issue 
 | Id | uuid | No | Primary key. |
 | BuildingId | uuid | No | Owning building. |
 | Floor | integer | No | Physical/display floor number. |
-| Door | varchar(8) | No | Unit door/letter, normalized by domain creation. |
-| Label | varchar(20) | No | Human-readable unit label such as `3A`. |
+| Door | varchar(8) | No | Unit door/letter. |
+| Label | varchar(20) | No | Human-readable label such as `3A`. |
 | IsActive | boolean | No | Operational status. |
 
-### Constraints
+Constraints:
 
-- Primary key: `Id`.
-- FK: `BuildingId -> Buildings.Id` with restrict delete.
-- Unique: `(BuildingId, Label)`.
-- Unique: `(BuildingId, Floor, Door)`.
-- Alternate key: `(BuildingId, Id)`, used by the tenant-scoped membership FK.
-
----
+- FK `BuildingId -> Buildings.Id` with restrict delete.
+- unique `(BuildingId, Label)`;
+- unique `(BuildingId, Floor, Door)`;
+- alternate key `(BuildingId, Id)`.
 
 ## UserAccounts
 
-`UserAccounts` is currently an identity/profile anchor, not the completed authentication implementation.
+`UserAccount` extends ASP.NET Core `IdentityUser<Guid>`.
+
+Application fields:
 
 | Column | Type | Null | Notes |
 | --- | --- | --- | --- |
 | Id | uuid | No | Primary key. |
-| Email | varchar(320) | No | Display/original normalized-trimmed email value. |
-| NormalizedEmail | varchar(320) | No | Uppercase lookup value used for uniqueness. |
 | DisplayName | varchar(160) | No | User-facing name. |
-| IsActive | boolean | No | Account/profile operational state. |
+| IsActive | boolean | No | Application account state. |
 | CreatedAtUtc | timestamptz | No | Creation timestamp. |
 
-### Constraints
+Identity-managed fields include:
 
-- Primary key: `Id`.
-- Unique: `NormalizedEmail`.
+- `UserName`, `NormalizedUserName`;
+- `Email`, `NormalizedEmail`, `EmailConfirmed`;
+- `PasswordHash`;
+- `SecurityStamp`, `ConcurrencyStamp`;
+- `PhoneNumber`, `PhoneNumberConfirmed`;
+- `TwoFactorEnabled`;
+- `LockoutEnd`, `LockoutEnabled`, `AccessFailedCount`.
 
-### Deferred to #10
+Important constraints:
 
-- credentials;
-- password hashing/external identity;
-- roles/policies;
-- session/token lifecycle.
+- unique normalized username index;
+- unique application index `UX_UserAccounts_NormalizedEmail`.
 
----
+No plaintext password is stored.
+
+## Identity supporting tables
+
+ASP.NET Core Identity also owns:
+
+| Table | Purpose |
+| --- | --- |
+| Roles | Application roles. Seeds `Resident` and `Administrator`. |
+| UserRoles | Many-to-many user/role assignments. |
+| UserClaims | User claims. |
+| UserLogins | External-login records for future use if enabled. |
+| UserTokens | Identity token records. |
+| RoleClaims | Claims attached to roles. |
+
+Role IDs are deterministic UUIDs so migrations/environments refer to the same two base roles.
 
 ## ResidentMemberships
 
@@ -72,21 +81,34 @@ This dictionary describes the first persisted domain tables introduced by issue 
 | Id | uuid | No | Primary key. |
 | BuildingId | uuid | No | Explicit tenant/building context. |
 | UnitId | uuid | No | Authorized unit. |
-| UserId | uuid | No | User identity anchor. |
+| UserId | uuid | No | Identity user. |
 | Status | integer | No | `Pending=0`, `Active=1`, `Inactive=2`. |
 | StartedAtUtc | timestamptz | No | Membership start. |
 | EndedAtUtc | timestamptz | Yes | Membership end when deactivated. |
 
-### Constraints
+Constraints:
 
-- Primary key: `Id`.
-- Composite FK: `(BuildingId, UnitId) -> Units(BuildingId, Id)` with restrict delete.
-- FK: `UserId -> UserAccounts.Id` with restrict delete.
-- Unique: `(BuildingId, UnitId, UserId)`.
-- Index: `UserId`.
+- composite FK `(BuildingId, UnitId) -> Units(BuildingId, Id)` with restrict delete;
+- FK `UserId -> UserAccounts.Id` with restrict delete;
+- unique `(BuildingId, UnitId, UserId)`;
+- index `UserId`.
 
-## Why the composite foreign key matters
+## Separation of concerns
 
-A standalone `UnitId` foreign key would prove only that the unit exists. The composite FK also proves that the supplied `BuildingId` and unit ownership agree.
+Identity role membership and residential membership are deliberately different:
 
-That database-level invariant supports RNF-016 and ADR-009 by preserving a reliable building/tenant boundary from the first domain slice.
+```text
+Identity role
+  Resident / Administrator
+        |
+        | answers: what application privileges?
+        v
+
+ResidentMembership
+  User + Building + Unit
+        |
+        | answers: where may this resident operate?
+        v
+```
+
+This avoids treating an application role such as `Resident` as proof that a user belongs to a particular building or apartment.

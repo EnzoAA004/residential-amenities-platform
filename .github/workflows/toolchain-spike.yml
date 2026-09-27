@@ -49,9 +49,6 @@ jobs:
       - name: Build API solution
         run: dotnet build apps/api/ResidentialAmenities.slnx --configuration Release --no-restore
 
-      - name: Run backend tests
-        run: dotnet test apps/api/ResidentialAmenities.slnx --configuration Release --no-build
-
       - name: Validate and apply EF Core migrations
         env:
           ConnectionStrings__Postgres: Host=127.0.0.1;Port=5432;Database=residential_amenities;Username=residential_app;Password=local_dev_only
@@ -64,6 +61,7 @@ jobs:
 
           grep -q "20260927163000_InitialInfrastructure" /tmp/migrations.txt
           grep -q "20260927171431_BuildingMembershipDomain" /tmp/migrations.txt
+          grep -q "20260927173608_IdentityRbacFoundation" /tmp/migrations.txt
 
           dotnet ef migrations has-pending-model-changes \
             --project apps/api/ResidentialAmenities.Api.csproj \
@@ -76,6 +74,12 @@ jobs:
             --context AppDbContext \
             --configuration Release \
             --no-build
+
+      - name: Run backend tests
+        env:
+          ConnectionStrings__Postgres: Host=127.0.0.1;Port=5432;Database=residential_amenities;Username=residential_app;Password=local_dev_only
+          ASPNETCORE_ENVIRONMENT: Development
+        run: dotnet test apps/api/ResidentialAmenities.slnx --configuration Release --no-build
 
       - name: Start API and verify health/OpenAPI
         env:

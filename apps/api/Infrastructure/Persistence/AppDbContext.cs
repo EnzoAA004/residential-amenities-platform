@@ -1,11 +1,15 @@
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using ResidentialAmenities.Api.Modules.Buildings.Domain;
 using ResidentialAmenities.Api.Modules.Identity.Domain;
+using ResidentialAmenities.Api.Modules.Identity.Infrastructure.Persistence;
 
 namespace ResidentialAmenities.Api.Infrastructure.Persistence;
 
 public sealed class AppDbContext(
-    DbContextOptions<AppDbContext> options) : DbContext(options)
+    DbContextOptions<AppDbContext> options)
+    : IdentityDbContext<UserAccount, IdentityRole<Guid>, Guid>(options)
 {
     public DbSet<Building> Buildings => Set<Building>();
 
@@ -18,9 +22,11 @@ public sealed class AppDbContext(
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        base.OnModelCreating(modelBuilder);
+
         modelBuilder.ApplyConfigurationsFromAssembly(
             typeof(AppDbContext).Assembly);
 
-        base.OnModelCreating(modelBuilder);
+        IdentityPersistenceModel.Configure(modelBuilder);
     }
 }

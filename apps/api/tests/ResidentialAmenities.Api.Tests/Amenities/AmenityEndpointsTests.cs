@@ -9,10 +9,12 @@ using ResidentialAmenities.Api.Modules.Amenities.Domain;
 using ResidentialAmenities.Api.Modules.Buildings.Domain;
 using ResidentialAmenities.Api.Modules.Identity;
 using ResidentialAmenities.Api.Modules.Identity.Domain;
+using ResidentialAmenities.Api.Tests.Infrastructure;
 using Xunit;
 
 namespace ResidentialAmenities.Api.Tests.Amenities;
 
+[Collection(DevelopmentSeedCollection.Name)]
 public sealed class AmenityEndpointsTests : IAsyncLifetime
 {
     private const string Password = "Test!Password123";

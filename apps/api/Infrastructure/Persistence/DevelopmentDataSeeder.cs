@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using ResidentialAmenities.Api.Modules.Amenities.Domain;
 using ResidentialAmenities.Api.Modules.Buildings.Domain;
 using ResidentialAmenities.Api.Modules.Pricing.Domain;
+using ResidentialAmenities.Api.Modules.Reservations.Domain;
 
 namespace ResidentialAmenities.Api.Infrastructure.Persistence;
 
@@ -78,6 +79,16 @@ public static class DevelopmentDataSeeder
             dbContext.PriceRules.AddRange(CreatePilotPriceRules());
         }
 
+        var hasEventSlots = await dbContext.EventSlotDefinitions
+            .AnyAsync(
+                slot => slot.BuildingId == PilotBuildingId,
+                cancellationToken);
+
+        if (!hasEventSlots)
+        {
+            dbContext.EventSlotDefinitions.AddRange(CreatePilotEventSlots());
+        }
+
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 
@@ -116,13 +127,17 @@ public static class DevelopmentDataSeeder
             allowsSharedUse: true,
             allowsExclusiveUse: true);
 
+        // AllowsExclusiveUse is true (not just shared) so Pool can also be
+        // booked as an exclusive Event add-on (issue #21); a plain
+        // resident-facing exclusive Pool booking is not implemented yet
+        // (OQ-014, still open).
         var pool = new Amenity(
             PilotPoolId,
             PilotBuildingId,
             "Pool",
             AmenityKind.Pool,
             allowsSharedUse: true,
-            allowsExclusiveUse: false);
+            allowsExclusiveUse: true);
 
         var barbecue = new Amenity(
             PilotBarbecueId,
@@ -211,5 +226,31 @@ public static class DevelopmentDataSeeder
             3_000m,
             effectiveFrom,
             null);
+    }
+
+    // Placeholder Event slots only. "Afternoon"/"Evening" naming and exact
+    // boundaries are explicitly TBD pending issue #2 (OQ-001/OQ-002 in
+    // docs/01-discovery/assumptions-and-open-questions.md); full-day is not
+    // seeded because whether it belongs in the MVP is still open (OQ-003).
+    private static IEnumerable<EventSlotDefinition> CreatePilotEventSlots()
+    {
+        yield return new EventSlotDefinition(
+            Guid.NewGuid(),
+            PilotBuildingId,
+            "Placeholder afternoon slot",
+            new TimeOnly(14, 0),
+            new TimeOnly(19, 0));
+
+        // Kept within the amenities' seeded 09:00-22:00 general
+        // availability window (docs/04-data/data-dictionary.md) so this
+        // slot is actually bookable; a later, real evening/night boundary
+        // may need that general window widened too once issue #2 answers
+        // OQ-002.
+        yield return new EventSlotDefinition(
+            Guid.NewGuid(),
+            PilotBuildingId,
+            "Placeholder evening slot",
+            new TimeOnly(19, 0),
+            new TimeOnly(22, 0));
     }
 }

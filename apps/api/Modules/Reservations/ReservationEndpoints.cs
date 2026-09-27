@@ -63,6 +63,7 @@ public static class ReservationEndpoints
         var command = new CreateReservationCommand(
             request.BuildingId,
             request.AmenityId,
+            request.AddOnAmenityIds ?? [],
             useType,
             request.StartsAtUtc,
             request.EndsAtUtc,
@@ -163,7 +164,8 @@ public static class ReservationEndpoints
         Guid AmenityId,
         string UseType,
         DateTimeOffset StartsAtUtc,
-        DateTimeOffset EndsAtUtc);
+        DateTimeOffset EndsAtUtc,
+        Guid[]? AddOnAmenityIds = null);
 
     private sealed record ReservationResponse(
         Guid Id,

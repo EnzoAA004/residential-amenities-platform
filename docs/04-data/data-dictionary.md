@@ -1,8 +1,9 @@
-# Data Dictionary — v0.6
+# Data Dictionary — v0.7
 
 The model now includes the building/membership foundation, ASP.NET Core Identity
 persistence, the Amenities & Availability foundation (issue #19), the Pricing
-foundation (issue #22), and Shared/Exclusive Leisure Reservations (issue #20).
+foundation (issue #22), Shared/Exclusive Leisure Reservations (issue #20), and
+Event Reservations + add-on amenities (issue #21).
 
 ## Buildings
 
@@ -182,7 +183,7 @@ live reference to `PriceRules`.
 | Id | uuid | No | Primary key. |
 | BuildingId | uuid | No | Owning building. |
 | CreatedByMembershipId | uuid | No | The `ResidentMembership.Id` that created it — resolved server-side from the authenticated caller, never a client-sent user/membership id. No FK (Reservations does not own Buildings' tables); kept as a plain historical reference. |
-| UseType | varchar(30) | No | `SharedLeisure`, `ExclusiveLeisure` or `Event`. Reuses Pricing's `ReservationUseType` enum directly (Reservations already depends on Pricing). This issue's endpoint only accepts the first two; `Event` is issue #21. |
+| UseType | varchar(30) | No | `SharedLeisure`, `ExclusiveLeisure` or `Event` (issue #21). Reuses Pricing's `ReservationUseType` enum directly (Reservations already depends on Pricing). |
 | Status | varchar(20) | No | `Confirmed` or `Cancelled` only — see [Domain Model](domain-model.md#reservations--sharedexclusive-leisure-issue-20) for why payment-hold states are deferred. |
 | StartsAtUtc | timestamptz | No | Reservation range start. |
 | EndsAtUtc | timestamptz | No | Reservation range end. Must be after `StartsAtUtc`. |
@@ -199,7 +200,7 @@ queries, `Status` for lifecycle filtering.
 | Id | uuid | No | Primary key. |
 | ReservationId | uuid | No | Owning reservation. Cascade-deleted with it. |
 | AmenityId | uuid | No | Referenced by id only — no FK/navigation to `Amenities`. |
-| IsExclusive | bool | No | Drives conflict detection for **this resource**, independent of any other amenity in the building. For this issue there is exactly one resource per reservation; issue #21 (Event) is expected to attach several. |
+| IsExclusive | bool | No | Drives conflict detection for **this resource**, independent of any other amenity in the building. Leisure (#20) has exactly one resource per reservation; Event (#21) attaches the base SUM plus each selected add-on, every row `IsExclusive = true` (RB-006). |
 
 Index: `(AmenityId, ReservationId)`, used by the conflict-detection query.
 
@@ -218,6 +219,32 @@ Index: `(AmenityId, ReservationId)`, used by the conflict-detection query.
 
 A reservation's total is `SUM(ReservationPriceLines.Amount)` for its id —
 this never requires reading current `PriceRules`.
+
+## EventSlotDefinitions
+
+| Column | Type | Null | Notes |
+| --- | --- | --- | --- |
+| Id | uuid | No | Primary key. |
+| BuildingId | uuid | No | Owning building. |
+| Name | varchar(80) | No | Display name (e.g. "afternoon", "evening"). Configuration data — see note below. |
+| StartTime | time | No | Local start of the bookable Event window. |
+| EndTime | time | No | Local end. Must be after `StartTime`; overnight/full-day slots are not supported yet. |
+| IsActive | bool | No | Operational status. |
+
+Constraint: unique `(BuildingId, StartTime, EndTime)`.
+
+**Separate from `AmenityAvailabilityWindow`** (#19): that entity says when a
+resource is physically usable at all; this says which windows within that
+availability may be booked as an *Event* — a commercial/reservation policy
+Amenities does not own. An Event's `startsAtUtc`/`endsAtUtc`, converted to
+the building's local time zone, must match an active
+`EventSlotDefinition.StartTime`/`EndTime` **exactly**, or the request is
+rejected even if it falls inside the amenity's general availability.
+
+**Exact Event slot times remain configurable/TBD pending issue #2**
+(OQ-001/OQ-002 shift boundaries, OQ-003 full-day). Seeded values
+("Placeholder afternoon slot" 14:00–19:00, "Placeholder evening slot"
+19:00–22:00) are illustrative only, not an approved policy.
 
 ## Separation of concerns
 

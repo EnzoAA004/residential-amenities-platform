@@ -20,3 +20,21 @@ These rules are the current v0.1 model. Items marked **TBD** require stakeholder
 | RB-014 | Administrative reservation changes must record actor, timestamp and reason where applicable. | Accepted |
 | RB-015 | Building/unit membership must be authorized; public selection of an arbitrary unit is not sufficient for account creation. | Accepted |
 | RB-016 | Exact event windows, prices, cancellation rules, cleaning rules and shared capacity remain configurable/TBD until validated. | TBD |
+
+## Implementation notes (issue #21)
+
+RB-001, RB-002 and RB-006 remain **Proposed**, not stakeholder-approved —
+issue #21 implements them as the current working direction because they are
+needed to build Event reservations at all, not because #2 has closed. In
+particular:
+
+- RB-001 is enforced by requiring the base resource's `AmenityKind` to be
+  `Sum` (never the `"SUM"` name/label).
+- RB-002's "independent" add-ons currently means "not a required part of a
+  Leisure reservation" — a resident cannot yet book Pool/Barbecue on their
+  own outside an Event (that is OQ-014, still open).
+- RB-006's exclusivity is implemented for every resource an Event books
+  (SUM and each add-on), not only the SUM.
+- Event slot windows ("afternoon"/"evening") are seeded as explicit
+  placeholders in a configurable `EventSlotDefinition` table, not hardcoded.
+  Exact Event slot times remain configurable/TBD pending issue #2.

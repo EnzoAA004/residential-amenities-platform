@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using ResidentialAmenities.Api.Infrastructure.Persistence;
 using ResidentialAmenities.Api.Modules.Amenities.Application;
+using ResidentialAmenities.Api.Modules.Amenities.Domain;
 using ResidentialAmenities.Api.Modules.Pricing.Application;
 using ResidentialAmenities.Api.Modules.Pricing.Domain;
 using ResidentialAmenities.Api.Modules.Reservations.Domain;
@@ -13,13 +14,19 @@ namespace ResidentialAmenities.Api.Modules.Reservations.Application;
 /// docs/03-architecture/module-boundaries.md. It reuses
 /// <see cref="AmenityAvailabilityCalculator"/> and
 /// <see cref="PricingCalculator"/> rather than re-implementing either.
+///
+/// One pipeline serves both Shared/Exclusive Leisure (#20) and Event (#21):
+/// each resolves to a list of <see cref="PlannedResource"/> (one for
+/// Leisure, base + add-ons for Event), and every later stage — availability,
+/// conflict detection, pricing, persistence — operates uniformly over that
+/// list instead of duplicating logic per use type.
 /// </summary>
 public sealed class ReservationCreationService(AppDbContext dbContext)
 {
-    private static readonly HashSet<ReservationUseType> SupportedUseTypes =
+    private static readonly HashSet<AmenityKind> AllowedEventAddOnKinds =
     [
-        ReservationUseType.SharedLeisure,
-        ReservationUseType.ExclusiveLeisure
+        AmenityKind.Pool,
+        AmenityKind.Barbecue
     ];
 
     public async Task<Reservation> CreateAsync(
@@ -42,24 +49,104 @@ public sealed class ReservationCreationService(AppDbContext dbContext)
                 StatusCodes.Status400BadRequest);
         }
 
-        if (!SupportedUseTypes.Contains(command.UseType))
+        if (command.UseType is not (ReservationUseType.SharedLeisure
+            or ReservationUseType.ExclusiveLeisure
+            or ReservationUseType.Event))
         {
             throw new ReservationRequestException(
-                $"Reservation type '{command.UseType}' is not supported by " +
-                "this endpoint yet (Event reservations are issue #21).",
+                $"Reservation type '{command.UseType}' is not supported.",
+                StatusCodes.Status400BadRequest);
+        }
+
+        var building = await dbContext.Buildings
+            .AsNoTracking()
+            .SingleAsync(
+                candidate => candidate.Id == command.BuildingId,
+                cancellationToken);
+
+        var resources = command.UseType == ReservationUseType.Event
+            ? await PlanEventResourcesAsync(command, building.TimeZoneId, cancellationToken)
+            : await PlanLeisureResourceAsync(command, cancellationToken);
+
+        foreach (var resource in resources)
+        {
+            EnsureWithinAvailability(resource, building.TimeZoneId, command);
+        }
+
+        await EnsureNoConflictAsync(command, resources, cancellationToken);
+
+        var rules = await dbContext.PriceRules
+            .AsNoTracking()
+            .Where(rule => rule.BuildingId == command.BuildingId)
+            .ToListAsync(cancellationToken);
+
+        var quotedAtUtc = DateTimeOffset.UtcNow;
+
+        // PricingException (e.g. no active rule, currency mismatch)
+        // propagates to the endpoint, which already knows how to map it to
+        // a 422 ProblemDetails response for the /api/pricing/quote endpoint.
+        var quote = PricingCalculator.Calculate(
+            rules,
+            command.AmenityId,
+            command.UseType,
+            command.AddOnAmenityIds,
+            quotedAtUtc);
+
+        var reservation = new Reservation(
+            Guid.NewGuid(),
+            command.BuildingId,
+            command.MembershipId,
+            command.UseType,
+            command.StartsAtUtc,
+            command.EndsAtUtc,
+            quotedAtUtc);
+
+        foreach (var resource in resources)
+        {
+            reservation.AddResource(
+                Guid.NewGuid(),
+                resource.Amenity.Id,
+                resource.IsExclusive);
+        }
+
+        foreach (var line in quote.Lines)
+        {
+            reservation.AddPriceLine(
+                Guid.NewGuid(),
+                line.PriceRuleId,
+                line.AmenityId,
+                line.ComponentType,
+                line.Currency,
+                line.Amount,
+                quotedAtUtc);
+        }
+
+        // Nothing is written until this single SaveChanges: an Event that
+        // fails any resource's validation never persists another resource
+        // partially.
+        dbContext.Reservations.Add(reservation);
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        return reservation;
+    }
+
+    private async Task<List<PlannedResource>> PlanLeisureResourceAsync(
+        CreateReservationCommand command,
+        CancellationToken cancellationToken)
+    {
+        if (command.AddOnAmenityIds.Count > 0)
+        {
+            throw new ReservationRequestException(
+                "Add-on resources are only supported for Event reservations.",
                 StatusCodes.Status400BadRequest);
         }
 
         var isExclusive = command.UseType == ReservationUseType.ExclusiveLeisure;
 
-        var amenity = await dbContext.Amenities
-            .Include(candidate => candidate.AvailabilityWindows)
-            .Include(candidate => candidate.UnavailablePeriods)
-            .SingleOrDefaultAsync(
-                candidate =>
-                    candidate.Id == command.AmenityId &&
-                    candidate.BuildingId == command.BuildingId,
-                cancellationToken);
+        var amenity = await LoadAmenityAsync(
+            command.AmenityId,
+            command.BuildingId,
+            cancellationToken);
 
         if (amenity is null)
         {
@@ -68,12 +155,7 @@ public sealed class ReservationCreationService(AppDbContext dbContext)
                 StatusCodes.Status404NotFound);
         }
 
-        if (!amenity.IsActive)
-        {
-            throw new ReservationRequestException(
-                "This amenity is not currently active.",
-                StatusCodes.Status422UnprocessableEntity);
-        }
+        EnsureActive(amenity);
 
         if (isExclusive && !amenity.AllowsExclusiveUse)
         {
@@ -89,64 +171,174 @@ public sealed class ReservationCreationService(AppDbContext dbContext)
                 StatusCodes.Status422UnprocessableEntity);
         }
 
-        var building = await dbContext.Buildings
-            .AsNoTracking()
-            .SingleAsync(
-                candidate => candidate.Id == command.BuildingId,
-                cancellationToken);
+        return [new PlannedResource(amenity, isExclusive)];
+    }
 
-        EnsureWithinAvailability(amenity, building.TimeZoneId, command);
-
-        await EnsureNoConflictAsync(command, isExclusive, cancellationToken);
-
-        var rules = await dbContext.PriceRules
-            .AsNoTracking()
-            .Where(rule => rule.BuildingId == command.BuildingId)
-            .ToListAsync(cancellationToken);
-
-        var quotedAtUtc = DateTimeOffset.UtcNow;
-
-        // PricingException (e.g. no active rule) propagates to the endpoint,
-        // which already knows how to map it to a 422 ProblemDetails
-        // response for the /api/pricing/quote endpoint.
-        var quote = PricingCalculator.Calculate(
-            rules,
-            command.AmenityId,
-            command.UseType,
-            [],
-            quotedAtUtc);
-
-        var reservation = new Reservation(
-            Guid.NewGuid(),
-            command.BuildingId,
-            command.MembershipId,
-            command.UseType,
-            command.StartsAtUtc,
-            command.EndsAtUtc,
-            quotedAtUtc);
-
-        reservation.AddResource(Guid.NewGuid(), command.AmenityId, isExclusive);
-
-        foreach (var line in quote.Lines)
+    private async Task<List<PlannedResource>> PlanEventResourcesAsync(
+        CreateReservationCommand command,
+        string timeZoneId,
+        CancellationToken cancellationToken)
+    {
+        if (command.AddOnAmenityIds.Contains(command.AmenityId))
         {
-            reservation.AddPriceLine(
-                Guid.NewGuid(),
-                line.PriceRuleId,
-                line.AmenityId,
-                line.ComponentType,
-                line.Currency,
-                line.Amount,
-                quotedAtUtc);
+            throw new ReservationRequestException(
+                "An add-on cannot be the same resource as the base amenity.",
+                StatusCodes.Status400BadRequest);
         }
 
-        dbContext.Reservations.Add(reservation);
-        await dbContext.SaveChangesAsync(cancellationToken);
+        if (command.AddOnAmenityIds.Count !=
+            command.AddOnAmenityIds.Distinct().Count())
+        {
+            throw new ReservationRequestException(
+                "Duplicate add-on amenities are not allowed.",
+                StatusCodes.Status400BadRequest);
+        }
 
-        return reservation;
+        var requestedIds = new[] { command.AmenityId }
+            .Concat(command.AddOnAmenityIds)
+            .ToList();
+
+        var amenities = await dbContext.Amenities
+            .Include(candidate => candidate.AvailabilityWindows)
+            .Include(candidate => candidate.UnavailablePeriods)
+            .Where(candidate =>
+                requestedIds.Contains(candidate.Id) &&
+                candidate.BuildingId == command.BuildingId)
+            .ToDictionaryAsync(
+                candidate => candidate.Id,
+                cancellationToken);
+
+        if (amenities.Count != requestedIds.Count)
+        {
+            throw new ReservationRequestException(
+                "One or more requested amenities were not found for this " +
+                "building.",
+                StatusCodes.Status404NotFound);
+        }
+
+        var baseAmenity = amenities[command.AmenityId];
+
+        // RB-001: Event reservations require the SUM as the base resource.
+        // Deliberately checked against AmenityKind.Sum, never a name/label.
+        if (baseAmenity.Kind != AmenityKind.Sum)
+        {
+            throw new ReservationRequestException(
+                "Event reservations require a SUM amenity (AmenityKind.Sum) " +
+                "as the base resource.",
+                StatusCodes.Status422UnprocessableEntity);
+        }
+
+        EnsureActive(baseAmenity);
+
+        if (!baseAmenity.AllowsExclusiveUse)
+        {
+            throw new ReservationRequestException(
+                "The base amenity does not allow exclusive use, which " +
+                "Event reservations require (RB-006).",
+                StatusCodes.Status422UnprocessableEntity);
+        }
+
+        var resources = new List<PlannedResource>
+        {
+            // Event reserves its base and every add-on exclusively for the
+            // whole window (RB-006): the event blocks any other
+            // incompatible use of each of its resources, not just the SUM.
+            new(baseAmenity, IsExclusive: true)
+        };
+
+        foreach (var addOnId in command.AddOnAmenityIds)
+        {
+            var addOn = amenities[addOnId];
+
+            if (!AllowedEventAddOnKinds.Contains(addOn.Kind))
+            {
+                throw new ReservationRequestException(
+                    $"Amenity kind '{addOn.Kind}' is not a permitted Event " +
+                    "add-on. Only Pool and Barbecue are supported.",
+                    StatusCodes.Status422UnprocessableEntity);
+            }
+
+            EnsureActive(addOn);
+
+            if (!addOn.AllowsExclusiveUse)
+            {
+                throw new ReservationRequestException(
+                    $"Add-on amenity '{addOn.Name}' does not allow " +
+                    "exclusive use, which Event add-ons require.",
+                    StatusCodes.Status422UnprocessableEntity);
+            }
+
+            resources.Add(new PlannedResource(addOn, IsExclusive: true));
+        }
+
+        await EnsureValidEventSlotAsync(command, timeZoneId, cancellationToken);
+
+        return resources;
+    }
+
+    private async Task EnsureValidEventSlotAsync(
+        CreateReservationCommand command,
+        string timeZoneId,
+        CancellationToken cancellationToken)
+    {
+        var timeZone = TimeZoneInfo.FindSystemTimeZoneById(timeZoneId);
+
+        var localStart = TimeZoneInfo.ConvertTime(command.StartsAtUtc, timeZone);
+        var localEnd = TimeZoneInfo.ConvertTime(command.EndsAtUtc, timeZone);
+
+        if (localStart.Date != localEnd.Date)
+        {
+            throw new ReservationRequestException(
+                "Event reservations may not cross midnight in the " +
+                "building's local time zone yet.",
+                StatusCodes.Status422UnprocessableEntity);
+        }
+
+        var startTime = TimeOnly.FromDateTime(localStart.DateTime);
+        var endTime = TimeOnly.FromDateTime(localEnd.DateTime);
+
+        var slots = await dbContext.EventSlotDefinitions
+            .AsNoTracking()
+            .Where(slot => slot.BuildingId == command.BuildingId)
+            .ToListAsync(cancellationToken);
+
+        var hasMatchingSlot = slots.Any(slot => slot.Matches(startTime, endTime));
+
+        if (!hasMatchingSlot)
+        {
+            throw new ReservationRequestException(
+                "The requested range does not match a configured Event " +
+                "slot for this building. Exact Event slot times remain " +
+                "configurable/TBD pending issue #2.",
+                StatusCodes.Status422UnprocessableEntity);
+        }
+    }
+
+    private async Task<Amenity?> LoadAmenityAsync(
+        Guid amenityId,
+        Guid buildingId,
+        CancellationToken cancellationToken) =>
+        await dbContext.Amenities
+            .Include(candidate => candidate.AvailabilityWindows)
+            .Include(candidate => candidate.UnavailablePeriods)
+            .SingleOrDefaultAsync(
+                candidate =>
+                    candidate.Id == amenityId &&
+                    candidate.BuildingId == buildingId,
+                cancellationToken);
+
+    private static void EnsureActive(Amenity amenity)
+    {
+        if (!amenity.IsActive)
+        {
+            throw new ReservationRequestException(
+                $"Amenity '{amenity.Name}' is not currently active.",
+                StatusCodes.Status422UnprocessableEntity);
+        }
     }
 
     private static void EnsureWithinAvailability(
-        Amenities.Domain.Amenity amenity,
+        PlannedResource resource,
         string timeZoneId,
         CreateReservationCommand command)
     {
@@ -155,8 +347,8 @@ public sealed class ReservationCreationService(AppDbContext dbContext)
         try
         {
             openIntervals = AmenityAvailabilityCalculator.CalculateOpenIntervals(
-                amenity.AvailabilityWindows,
-                amenity.UnavailablePeriods,
+                resource.Amenity.AvailabilityWindows,
+                resource.Amenity.UnavailablePeriods,
                 timeZoneId,
                 command.StartsAtUtc,
                 command.EndsAtUtc);
@@ -176,50 +368,59 @@ public sealed class ReservationCreationService(AppDbContext dbContext)
         if (coveredDuration < requestedDuration)
         {
             throw new ReservationRequestException(
-                "The requested range is outside the amenity's configured " +
+                $"'{resource.Amenity.Name}' is outside its configured " +
                 "availability or falls within a maintenance/unavailable " +
-                "period.",
+                "period for the requested range.",
                 StatusCodes.Status422UnprocessableEntity);
         }
     }
 
     private async Task EnsureNoConflictAsync(
         CreateReservationCommand command,
-        bool isExclusive,
+        IReadOnlyList<PlannedResource> resources,
         CancellationToken cancellationToken)
     {
-        // Only a cheap prefilter runs in SQL (resource + building + status);
-        // the actual compatibility decision always goes through the single
-        // centralized ReservationCompatibility.ConflictsWith rule so it is
-        // never duplicated between endpoints.
+        var amenityIds = resources.Select(resource => resource.Amenity.Id).ToList();
+
+        // Only a cheap prefilter runs in SQL (resource ids + building +
+        // status); the actual compatibility decision always goes through
+        // the single centralized ReservationCompatibility.ConflictsWith
+        // rule so it is never duplicated between endpoints or resources.
         var candidates = await dbContext.ReservationResources
             .AsNoTracking()
             .Where(resource =>
-                resource.AmenityId == command.AmenityId &&
+                amenityIds.Contains(resource.AmenityId) &&
                 resource.Reservation.BuildingId == command.BuildingId &&
                 resource.Reservation.Status == ReservationStatus.Confirmed)
             .Select(resource => new
             {
+                resource.AmenityId,
                 resource.IsExclusive,
                 resource.Reservation.StartsAtUtc,
                 resource.Reservation.EndsAtUtc
             })
             .ToListAsync(cancellationToken);
 
-        var hasConflict = candidates.Any(candidate =>
-            ReservationCompatibility.ConflictsWith(
-                candidate.IsExclusive,
-                isExclusive,
-                candidate.StartsAtUtc,
-                candidate.EndsAtUtc,
-                command.StartsAtUtc,
-                command.EndsAtUtc));
-
-        if (hasConflict)
+        foreach (var resource in resources)
         {
-            throw new ReservationConflictException(
-                "The requested time range conflicts with an existing " +
-                "incompatible reservation for this amenity.");
+            var hasConflict = candidates
+                .Where(candidate => candidate.AmenityId == resource.Amenity.Id)
+                .Any(candidate => ReservationCompatibility.ConflictsWith(
+                    candidate.IsExclusive,
+                    resource.IsExclusive,
+                    candidate.StartsAtUtc,
+                    candidate.EndsAtUtc,
+                    command.StartsAtUtc,
+                    command.EndsAtUtc));
+
+            if (hasConflict)
+            {
+                throw new ReservationConflictException(
+                    $"The requested time range conflicts with an existing " +
+                    $"incompatible reservation for '{resource.Amenity.Name}'.");
+            }
         }
     }
+
+    private sealed record PlannedResource(Amenity Amenity, bool IsExclusive);
 }

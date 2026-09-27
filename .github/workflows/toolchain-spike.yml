@@ -39,22 +39,23 @@ jobs:
         with:
           dotnet-version: "10.0.x"
 
-      - name: Restore API
-        run: dotnet restore apps/api/ResidentialAmenities.Api.csproj
+      - name: Restore API solution
+        run: dotnet restore apps/api/ResidentialAmenities.slnx
 
-      - name: Build API
-        run: dotnet build apps/api/ResidentialAmenities.Api.csproj --configuration Release --no-restore
+      - name: Build API solution
+        run: dotnet build apps/api/ResidentialAmenities.slnx --configuration Release --no-restore
 
-      - name: Start API and verify PostgreSQL health
+      - name: Start API and verify health/OpenAPI
         env:
           ConnectionStrings__Postgres: Host=127.0.0.1;Port=5432;Database=residential_amenities;Username=residential_app;Password=local_dev_only
           ASPNETCORE_URLS: http://127.0.0.1:8080
+          ASPNETCORE_ENVIRONMENT: Development
         run: |
           dotnet run --project apps/api/ResidentialAmenities.Api.csproj --configuration Release --no-build > /tmp/api.log 2>&1 &
           API_PID=$!
 
           for attempt in {1..30}; do
-            if curl --fail --silent http://127.0.0.1:8080/api/health > /tmp/health.json; then
+            if curl --fail --silent http://127.0.0.1:8080/health > /tmp/health.json; then
               break
             fi
             sleep 2
@@ -63,6 +64,9 @@ jobs:
           cat /tmp/health.json
           grep -q '"status":"ok"' /tmp/health.json
           grep -q '"database":"ok"' /tmp/health.json
+
+          curl --fail --silent http://127.0.0.1:8080/openapi/v1.json > /tmp/openapi.json
+          grep -q '"openapi"' /tmp/openapi.json
 
           kill $API_PID
 

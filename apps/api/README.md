@@ -12,14 +12,15 @@ ASP.NET Core backend for Residential Amenities Platform.
 
 ## Solution
 
-`ResidentialAmenities.slnx` is the backend solution container.
+`ResidentialAmenities.slnx` contains the API and backend test project.
 
-Build:
+Build and test:
 
 ```bash
 dotnet tool restore
 dotnet restore apps/api/ResidentialAmenities.slnx
 dotnet build apps/api/ResidentialAmenities.slnx
+dotnet test apps/api/ResidentialAmenities.slnx
 ```
 
 ## Local PostgreSQL
@@ -71,6 +72,8 @@ dotnet ef migrations add MigrationName \
   --output-dir Infrastructure/Persistence/Migrations
 ```
 
+CI runs `has-pending-model-changes` so an EF model change without a matching migration fails validation.
+
 ## Reset local database
 
 To completely delete the local database volume and recreate it:
@@ -99,6 +102,16 @@ Development URLs:
 
 OpenAPI is exposed only in Development.
 
+## Development data
+
+After migrations are applied, Development startup seeds:
+
+- one pilot building;
+- timezone `America/Argentina/Buenos_Aires`;
+- units `1A` through `5B`.
+
+The seed is for local/dev bootstrap only. Production tenant onboarding will use explicit application workflows.
+
 ## Structure
 
 ```text
@@ -113,16 +126,22 @@ apps/api/
 │   ├── Amenities/
 │   ├── Audit/
 │   ├── Buildings/
+│   │   ├── Domain/
+│   │   └── Infrastructure/
 │   ├── Identity/
+│   │   ├── Domain/
+│   │   └── Infrastructure/
 │   ├── Messaging/
 │   ├── Notifications/
 │   ├── Payments/
 │   ├── Pricing/
 │   ├── Reporting/
 │   └── Reservations/
+├── tests/
+│   └── ResidentialAmenities.Api.Tests/
 ├── Program.cs
 ├── ResidentialAmenities.Api.csproj
 └── ResidentialAmenities.slnx
 ```
 
-Domain tables are intentionally not introduced until issue #9.
+Authentication/authorization is intentionally deferred to issue #10; `UserAccount` in issue #9 is the persistence anchor needed by memberships.

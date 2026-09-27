@@ -62,6 +62,7 @@ app.UseCors("Client");
 
 if (app.Environment.IsDevelopment())
 {
+    await app.Services.SeedDevelopmentDataAsync();
     app.MapOpenApi();
 }
 

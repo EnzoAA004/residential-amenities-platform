@@ -49,17 +49,33 @@ jobs:
       - name: Build API solution
         run: dotnet build apps/api/ResidentialAmenities.slnx --configuration Release --no-restore
 
+      - name: Run backend tests
+        run: dotnet test apps/api/ResidentialAmenities.slnx --configuration Release --no-build
+
       - name: Validate and apply EF Core migrations
         env:
           ConnectionStrings__Postgres: Host=127.0.0.1;Port=5432;Database=residential_amenities;Username=residential_app;Password=local_dev_only
         run: |
-          dotnet ef migrations list             --project apps/api/ResidentialAmenities.Api.csproj             --context AppDbContext             --configuration Release             --no-build | tee /tmp/migrations.txt
+          dotnet ef migrations list \
+            --project apps/api/ResidentialAmenities.Api.csproj \
+            --context AppDbContext \
+            --configuration Release \
+            --no-build | tee /tmp/migrations.txt
 
           grep -q "20260927163000_InitialInfrastructure" /tmp/migrations.txt
+          grep -q "20260927171431_BuildingMembershipDomain" /tmp/migrations.txt
 
-          dotnet ef migrations has-pending-model-changes             --project apps/api/ResidentialAmenities.Api.csproj             --context AppDbContext             --configuration Release             --no-build
+          dotnet ef migrations has-pending-model-changes \
+            --project apps/api/ResidentialAmenities.Api.csproj \
+            --context AppDbContext \
+            --configuration Release \
+            --no-build
 
-          dotnet ef database update             --project apps/api/ResidentialAmenities.Api.csproj             --context AppDbContext             --configuration Release             --no-build
+          dotnet ef database update \
+            --project apps/api/ResidentialAmenities.Api.csproj \
+            --context AppDbContext \
+            --configuration Release \
+            --no-build
 
       - name: Start API and verify health/OpenAPI
         env:
@@ -67,7 +83,10 @@ jobs:
           ASPNETCORE_URLS: http://127.0.0.1:8080
           ASPNETCORE_ENVIRONMENT: Development
         run: |
-          dotnet run --project apps/api/ResidentialAmenities.Api.csproj --configuration Release --no-build > /tmp/api.log 2>&1 &
+          dotnet run \
+            --project apps/api/ResidentialAmenities.Api.csproj \
+            --configuration Release \
+            --no-build > /tmp/api.log 2>&1 &
           API_PID=$!
 
           for attempt in {1..30}; do
@@ -81,7 +100,8 @@ jobs:
           grep -q '"status":"ok"' /tmp/health.json
           grep -q '"database":"ok"' /tmp/health.json
 
-          curl --fail --silent http://127.0.0.1:8080/openapi/v1.json > /tmp/openapi.json
+          curl --fail --silent \
+            http://127.0.0.1:8080/openapi/v1.json > /tmp/openapi.json
           grep -q '"openapi"' /tmp/openapi.json
 
           kill $API_PID

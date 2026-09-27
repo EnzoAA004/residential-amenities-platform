@@ -65,6 +65,7 @@ scripts/
 - [Domain model](docs/04-data/domain-model.md)
 - [Security baseline](docs/06-security/security-baseline.md)
 - [DevOps strategy](docs/07-devops/devops-strategy.md)
+- [Continuous Integration](docs/07-devops/ci.md)
 - [CAPEX / OPEX](docs/09-finops/capex-opex.md)
 - [Roadmap](docs/12-roadmap/roadmap.md)
 

@@ -30,15 +30,21 @@ From repository root:
 docker compose up -d postgres
 ```
 
-Set the API connection string externally.
+Set the API connection string outside source control.
 
-PowerShell:
+Preferred local approach:
+
+```bash
+dotnet user-secrets set "ConnectionStrings:Postgres" "Host=localhost;Port=5432;Database=residential_amenities;Username=residential_app;Password=local_dev_only" --project apps/api/ResidentialAmenities.Api.csproj
+```
+
+A shell environment variable also works when useful for automation:
 
 ```powershell
 $env:ConnectionStrings__Postgres="Host=localhost;Port=5432;Database=residential_amenities;Username=residential_app;Password=local_dev_only"
 ```
 
-The values above are development-only defaults.
+The values above are development-only defaults. Real credentials must never be committed.
 
 ## EF Core migrations
 

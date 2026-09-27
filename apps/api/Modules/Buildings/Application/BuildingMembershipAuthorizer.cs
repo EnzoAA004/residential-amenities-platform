@@ -39,4 +39,27 @@ public sealed class BuildingMembershipAuthorizer(
                     membership.Status == ResidentMembershipStatus.Active,
                 cancellationToken);
     }
+
+    public async Task<Guid?> GetActiveMembershipIdAsync(
+        ClaimsPrincipal principal,
+        Guid buildingId,
+        CancellationToken cancellationToken)
+    {
+        var user = await userManager.GetUserAsync(principal);
+
+        if (user is null)
+        {
+            return null;
+        }
+
+        return await dbContext.ResidentMemberships
+            .AsNoTracking()
+            .Where(
+                membership =>
+                    membership.UserId == user.Id &&
+                    membership.BuildingId == buildingId &&
+                    membership.Status == ResidentMembershipStatus.Active)
+            .Select(membership => (Guid?)membership.Id)
+            .SingleOrDefaultAsync(cancellationToken);
+    }
 }

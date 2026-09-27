@@ -1,8 +1,8 @@
-# Data Dictionary — v0.5
+# Data Dictionary — v0.6
 
 The model now includes the building/membership foundation, ASP.NET Core Identity
-persistence, the Amenities & Availability foundation (issue #19), and the
-Pricing foundation (issue #22).
+persistence, the Amenities & Availability foundation (issue #19), the Pricing
+foundation (issue #22), and Shared/Exclusive Leisure Reservations (issue #20).
 
 ## Buildings
 
@@ -174,6 +174,50 @@ selected. This is the shape Reservations (#20/#21/#23) is expected to copy
 into a future `ReservationPriceLine` table when a reservation is created —
 the "historical snapshot" in RB-008 means copying these values, not keeping a
 live reference to `PriceRules`.
+
+## Reservations
+
+| Column | Type | Null | Notes |
+| --- | --- | --- | --- |
+| Id | uuid | No | Primary key. |
+| BuildingId | uuid | No | Owning building. |
+| CreatedByMembershipId | uuid | No | The `ResidentMembership.Id` that created it — resolved server-side from the authenticated caller, never a client-sent user/membership id. No FK (Reservations does not own Buildings' tables); kept as a plain historical reference. |
+| UseType | varchar(30) | No | `SharedLeisure`, `ExclusiveLeisure` or `Event`. Reuses Pricing's `ReservationUseType` enum directly (Reservations already depends on Pricing). This issue's endpoint only accepts the first two; `Event` is issue #21. |
+| Status | varchar(20) | No | `Confirmed` or `Cancelled` only — see [Domain Model](domain-model.md#reservations--sharedexclusive-leisure-issue-20) for why payment-hold states are deferred. |
+| StartsAtUtc | timestamptz | No | Reservation range start. |
+| EndsAtUtc | timestamptz | No | Reservation range end. Must be after `StartsAtUtc`. |
+| CreatedAtUtc | timestamptz | No | Also the pricing quote timestamp for this reservation's price lines. |
+| CancelledAtUtc | timestamptz | Yes | Set by `Reservation.Cancel`; no HTTP endpoint calls it yet in this issue. |
+
+Indexes: `(BuildingId, StartsAtUtc, EndsAtUtc)` for building/time-range
+queries, `Status` for lifecycle filtering.
+
+## ReservationResources
+
+| Column | Type | Null | Notes |
+| --- | --- | --- | --- |
+| Id | uuid | No | Primary key. |
+| ReservationId | uuid | No | Owning reservation. Cascade-deleted with it. |
+| AmenityId | uuid | No | Referenced by id only — no FK/navigation to `Amenities`. |
+| IsExclusive | bool | No | Drives conflict detection for **this resource**, independent of any other amenity in the building. For this issue there is exactly one resource per reservation; issue #21 (Event) is expected to attach several. |
+
+Index: `(AmenityId, ReservationId)`, used by the conflict-detection query.
+
+## ReservationPriceLines
+
+| Column | Type | Null | Notes |
+| --- | --- | --- | --- |
+| Id | uuid | No | Primary key. |
+| ReservationId | uuid | No | Owning reservation. Cascade-deleted with it. |
+| PriceRuleId | uuid | No | Historical reference only — **no FK** to `PriceRules`, so this row remains valid even if that rule is later superseded/removed (RB-008). |
+| AmenityId | uuid | No | Historical reference only, same rationale. |
+| ComponentType | varchar(20) | No | `Base` or `AddOn`, copied from the `PriceQuoteLine` at quote time. |
+| Currency | varchar(3) | No | Copied at quote time. |
+| Amount | numeric(18,2) | No | Copied at quote time; never recalculated. |
+| QuotedAtUtc | timestamptz | No | When this snapshot was taken (equals the reservation's `CreatedAtUtc`). |
+
+A reservation's total is `SUM(ReservationPriceLines.Amount)` for its id —
+this never requires reading current `PriceRules`.
 
 ## Separation of concerns
 

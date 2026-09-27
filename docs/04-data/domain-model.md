@@ -1,4 +1,4 @@
-# Domain Model — v0.4
+# Domain Model — v0.5
 
 ## Implemented foundation
 
@@ -13,11 +13,11 @@ Issue #9 introduces the first persisted domain slice. The model is deliberately 
 | Amenity | Implemented (issue #19) | Reservable resource such as SUM, pool or barbecue/grill. |
 | AmenityAvailabilityWindow | Implemented (issue #19) | Recurring weekly operating window for an amenity. |
 | AmenityUnavailablePeriod | Implemented (issue #19) | Maintenance/blackout override for an amenity. |
-| Reservation | Planned | Booking request and lifecycle. |
-| ReservationResource | Planned | Resources attached to a reservation. |
+| Reservation | Implemented (issue #20, Shared/Exclusive Leisure only) | Booking aggregate root and minimal lifecycle. |
+| ReservationResource | Implemented (issue #20) | Resource(s) attached to a reservation, with per-resource exclusivity. |
 | ReservationParticipant | Planned/TBD | Participants in compatible/shared usage if required by the final reservation model. |
 | PriceRule | Implemented (issue #22) | Configurable, effective-dated pricing rule. |
-| ReservationPriceLine | Planned (Reservations, #20/#21/#23) | Snapshot of a `PriceQuoteLine` copied onto a reservation at booking time. |
+| ReservationPriceLine | Implemented (issue #20) | Historical snapshot of a `PriceQuoteLine`, copied onto a reservation at booking time. |
 | Payment | Planned | Payment attempt/record and method/status. |
 | PaymentEvent | Planned | Idempotent provider/payment lifecycle event where useful. |
 | Message | Post-MVP | Reservation-scoped communication. |
@@ -152,6 +152,108 @@ can attach them to a real reservation.
 
 See [Data Dictionary](data-dictionary.md#pricerules) for column detail and
 the pilot's placeholder amounts.
+
+## Reservations — Shared/Exclusive Leisure (issue #20)
+
+```mermaid
+erDiagram
+    RESERVATION ||--o{ RESERVATION_RESOURCE : books
+    RESERVATION ||--o{ RESERVATION_PRICE_LINE : "priced by"
+
+    RESERVATION {
+        uuid Id PK
+        uuid BuildingId
+        uuid CreatedByMembershipId
+        varchar UseType
+        varchar Status
+        timestamptz StartsAtUtc
+        timestamptz EndsAtUtc
+        timestamptz CreatedAtUtc
+        timestamptz CancelledAtUtc
+    }
+
+    RESERVATION_RESOURCE {
+        uuid Id PK
+        uuid ReservationId FK
+        uuid AmenityId
+        boolean IsExclusive
+    }
+
+    RESERVATION_PRICE_LINE {
+        uuid Id PK
+        uuid ReservationId FK
+        uuid PriceRuleId
+        uuid AmenityId
+        varchar ComponentType
+        varchar Currency
+        numeric Amount
+        timestamptz QuotedAtUtc
+    }
+```
+
+### Scope of this issue
+
+Covers RF-004 (shared leisure), RF-005 (exclusive leisure), RB-003, RB-004 and
+RB-005. `UseType` reuses Pricing's `ReservationUseType` enum directly (see
+[Data Dictionary](data-dictionary.md#reservations)) rather than duplicating
+it, since Reservations already depends on Pricing per
+`docs/03-architecture/module-boundaries.md` and both need the exact same
+value to select a price rule. The enum already has an `Event` member so
+issue #21 does not need a model-breaking change; this issue's endpoint
+rejects `Event` explicitly (not yet implemented) rather than silently
+accepting it.
+
+### Lifecycle (deliberately minimal for now)
+
+Only `Confirmed` and `Cancelled` exist. There is no payment-hold state yet —
+every reservation created by this issue is `Confirmed` immediately, because
+no payment step exists to hold it. `PendingPayment`/`Expired`/hold-expiry
+states belong to #23 (concurrency/holds) and #24/#25 (Mercado
+Pago/cash); they are intentionally not added now so the codebase has no
+dead states without the logic that gives them meaning.
+
+### Compatibility &amp; overlap (RB-003, RB-005, RF-010)
+
+Centralized in `ReservationCompatibility` (pure, unit-tested): two ranges
+overlap when `existing.Start < requested.End && requested.Start <
+existing.End` (contiguous ranges do not overlap), and a conflict exists when
+the ranges overlap **and** either side is exclusive. Shared+Shared is always
+compatible today. Evaluated per `ReservationResource`/Amenity, never per
+building or per reservation, so booking the SUM does not block unrelated
+amenities.
+
+Maximum shared-use capacity is explicitly **not** decided (`docs/02-requirements/business-rules.md`
+RB-016 — pending issue #2). Until it exists, any number of compatible Shared
+Leisure reservations may coexist for the same resource/time; the capacity
+check has an obvious seam to add once issue #2 answers OQ-* on this, but
+inventing a number now (e.g. hardcoding "2") was explicitly out of scope.
+
+Conflict detection here is ordinary transactional
+read-then-write checking, run inside the same `DbContext`/transaction as the
+insert. **It does not by itself make two truly concurrent incompatible
+requests impossible** — closing that race with real database-level
+concurrency controls (e.g. exclusion constraints, advisory locks) is
+issue #23's job. RNF-005 is not considered fully satisfied by this issue.
+
+### Pricing snapshot (RB-008, RF-009)
+
+`ReservationPriceLine` is populated at creation time by calling
+`PricingCalculator.Calculate` (Pricing module) and copying each
+`PriceQuoteLine` verbatim — `PriceRuleId`, `AmenityId`, `ComponentType`,
+`Currency` and `Amount` — onto the reservation. `PriceRuleId`/`AmenityId` are
+plain historical ids with **no foreign key** to `PriceRules`/`Amenities`, so
+this history stays valid even if that rule is later superseded or the
+amenity changes; the reservation's total is always the sum of its own
+`ReservationPriceLine.Amount` values, never a re-calculation against current
+rules.
+
+### Availability reuse
+
+Reservation creation calls `AmenityAvailabilityCalculator.CalculateOpenIntervals`
+(Amenities module) directly — the calculator itself is not duplicated. The
+requested range must be fully covered by the returned open intervals or the
+request is rejected; this already accounts for maintenance/unavailable
+periods.
 
 ## Identity boundary
 

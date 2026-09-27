@@ -41,6 +41,9 @@ Availability module boundary (`docs/03-architecture/module-boundaries.md`). The
 **Then** the system may accept the reservation only after clearly indicating that the space is shared.
 
 **BLOCKED/TBD:** maximum shared capacity and final compatibility policy require issue #2.
+Until answered, issue #20 accepts any number of compatible shared-leisure
+reservations for the same resource/time; the reservation response always
+identifies the use type as shared so a client can inform the user.
 
 Related: RF-004, RB-003, RB-004 — issue #20.
 
@@ -57,6 +60,12 @@ Related: RF-004, RB-003, RB-004 — issue #20.
 **Then** the request is rejected without creating a valid reservation.
 
 Related: RF-005, RF-010, RB-005 — issues #20, #23.
+
+Issue #20 delivers ordinary transactional conflict detection (overlap +
+exclusivity checked within the same request/transaction). It does not yet
+close the race between two truly concurrent incompatible requests — that is
+issue #23, which also owns payment holds/expiration. RNF-005 is not
+considered fully satisfied until #23 lands.
 
 ---
 

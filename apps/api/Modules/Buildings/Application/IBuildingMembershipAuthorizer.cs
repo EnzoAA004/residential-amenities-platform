@@ -14,4 +14,17 @@ public interface IBuildingMembershipAuthorizer
         ClaimsPrincipal principal,
         Guid buildingId,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Resolves the caller's own active <c>ResidentMembership.Id</c> for the
+    /// building, or null when they have none — including for an
+    /// Administrator with no personal membership there. Callers that must
+    /// attribute an action to a real membership (e.g. creating a
+    /// reservation) use this instead of <see cref="HasAccessAsync"/>, which
+    /// intentionally lets Administrators through without one.
+    /// </summary>
+    Task<Guid?> GetActiveMembershipIdAsync(
+        ClaimsPrincipal principal,
+        Guid buildingId,
+        CancellationToken cancellationToken);
 }

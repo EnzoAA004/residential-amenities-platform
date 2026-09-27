@@ -133,6 +133,37 @@ These are foundation-phase endpoints used to verify Resident/Admin policies.
 
 Production HTTPS, client secure storage and account onboarding/recovery are refined in the security/onboarding work.
 
+## Resident-facing endpoints
+
+All require an authenticated Resident/Administrator session and an active
+`ResidentMembership` for the building in question (Administrator bypasses
+the membership check except when creating a reservation, which always
+requires a real membership to attribute it to).
+
+```http
+GET  /api/buildings/{buildingId}/amenities
+GET  /api/amenities/{amenityId}/availability?fromUtc=&toUtc=
+GET  /api/pricing/quote?buildingId=&amenityId=&useType=&addOnAmenityId=&atUtc=
+POST /api/reservations
+GET  /api/reservations/{id}
+```
+
+`POST /api/reservations` currently supports `useType` values `SharedLeisure`
+and `ExclusiveLeisure` only (`Event` is issue #21). Request body:
+
+```json
+{
+  "buildingId": "...",
+  "amenityId": "...",
+  "useType": "SharedLeisure",
+  "startsAtUtc": "2027-03-02T13:00:00Z",
+  "endsAtUtc": "2027-03-02T14:00:00Z"
+}
+```
+
+The membership, price and availability are always derived/validated
+server-side — a client cannot influence them by sending extra fields.
+
 ## Run
 
 ```bash

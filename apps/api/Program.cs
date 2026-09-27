@@ -1,6 +1,6 @@
-using Npgsql;
 using ResidentialAmenities.Api.Endpoints;
 using ResidentialAmenities.Api.Infrastructure.Errors;
+using ResidentialAmenities.Api.Infrastructure.Persistence;
 using ResidentialAmenities.Api.Modules.Administration;
 using ResidentialAmenities.Api.Modules.Amenities;
 using ResidentialAmenities.Api.Modules.Audit;
@@ -40,18 +40,7 @@ builder.Services.AddCors(options =>
     });
 });
 
-var connectionString =
-    builder.Configuration.GetConnectionString("Postgres");
-
-if (string.IsNullOrWhiteSpace(connectionString))
-{
-    throw new InvalidOperationException(
-        "Missing PostgreSQL connection string. " +
-        "Set ConnectionStrings__Postgres.");
-}
-
-builder.Services.AddSingleton(
-    _ => NpgsqlDataSource.Create(connectionString));
+builder.Services.AddPersistence(builder.Configuration);
 
 builder.Services
     .AddIdentityModule()

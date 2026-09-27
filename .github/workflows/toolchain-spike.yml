@@ -8,6 +8,7 @@ on:
       - "apps/client/**"
       - "docker-compose.yml"
       - "global.json"
+      - ".config/dotnet-tools.json"
       - ".github/workflows/toolchain-spike.yml"
   workflow_dispatch:
 
@@ -39,11 +40,26 @@ jobs:
         with:
           dotnet-version: "10.0.x"
 
+      - name: Restore local .NET tools
+        run: dotnet tool restore
+
       - name: Restore API solution
         run: dotnet restore apps/api/ResidentialAmenities.slnx
 
       - name: Build API solution
         run: dotnet build apps/api/ResidentialAmenities.slnx --configuration Release --no-restore
+
+      - name: Validate and apply EF Core migrations
+        env:
+          ConnectionStrings__Postgres: Host=127.0.0.1;Port=5432;Database=residential_amenities;Username=residential_app;Password=local_dev_only
+        run: |
+          dotnet ef migrations list             --project apps/api/ResidentialAmenities.Api.csproj             --context AppDbContext             --configuration Release             --no-build | tee /tmp/migrations.txt
+
+          grep -q "20260927163000_InitialInfrastructure" /tmp/migrations.txt
+
+          dotnet ef migrations has-pending-model-changes             --project apps/api/ResidentialAmenities.Api.csproj             --context AppDbContext             --configuration Release             --no-build
+
+          dotnet ef database update             --project apps/api/ResidentialAmenities.Api.csproj             --context AppDbContext             --configuration Release             --no-build
 
       - name: Start API and verify health/OpenAPI
         env:

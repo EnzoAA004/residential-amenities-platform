@@ -6,23 +6,33 @@ ASP.NET Core backend for Residential Amenities Platform.
 
 - .NET 10
 - ASP.NET Core Minimal APIs
-- PostgreSQL via Npgsql
+- Entity Framework Core 10
+- PostgreSQL 18 through the Npgsql EF Core provider
 - Built-in ASP.NET Core OpenAPI generation
 
 ## Solution
 
-`ResidentialAmenities.slnx` is the backend solution container. .NET 10 uses the XML-based SLNX solution format by default.
+`ResidentialAmenities.slnx` is the backend solution container.
 
 Build:
 
 ```bash
+dotnet tool restore
 dotnet restore apps/api/ResidentialAmenities.slnx
 dotnet build apps/api/ResidentialAmenities.slnx
 ```
 
-## Configuration
+## Local PostgreSQL
 
-The API requires the PostgreSQL connection string from configuration. It is intentionally not committed as a real secret.
+From the repository root:
+
+```bash
+docker compose up -d postgres
+```
+
+PostgreSQL 18 stores its Docker volume under `/var/lib/postgresql`; the compose file uses that location.
+
+Set the API connection string externally.
 
 PowerShell:
 
@@ -30,7 +40,50 @@ PowerShell:
 $env:ConnectionStrings__Postgres="Host=localhost;Port=5432;Database=residential_amenities;Username=residential_app;Password=local_dev_only"
 ```
 
-Development CORS origins live in `appsettings.Development.json`. Production origins will be supplied through environment-specific configuration.
+The values above are development-only defaults. Production credentials must not be committed.
+
+## EF Core migrations
+
+The repository pins `dotnet-ef` through `.config/dotnet-tools.json`.
+
+List migrations:
+
+```bash
+dotnet ef migrations list \
+  --project apps/api/ResidentialAmenities.Api.csproj \
+  --context AppDbContext
+```
+
+Apply migrations:
+
+```bash
+dotnet ef database update \
+  --project apps/api/ResidentialAmenities.Api.csproj \
+  --context AppDbContext
+```
+
+Create a future migration:
+
+```bash
+dotnet ef migrations add MigrationName \
+  --project apps/api/ResidentialAmenities.Api.csproj \
+  --context AppDbContext \
+  --output-dir Infrastructure/Persistence/Migrations
+```
+
+## Reset local database
+
+To completely delete the local database volume and recreate it:
+
+```bash
+docker compose down -v
+docker compose up -d postgres
+dotnet ef database update \
+  --project apps/api/ResidentialAmenities.Api.csproj \
+  --context AppDbContext
+```
+
+This is destructive and is only intended for local development.
 
 ## Run
 
@@ -38,23 +91,23 @@ Development CORS origins live in `appsettings.Development.json`. Production orig
 dotnet run --project apps/api/ResidentialAmenities.Api.csproj
 ```
 
-Development URLs with the committed launch profile:
+Development URLs:
 
 - Health: `http://localhost:8080/health`
 - Compatibility health route: `http://localhost:8080/api/health`
 - OpenAPI JSON: `http://localhost:8080/openapi/v1.json`
 
-OpenAPI is exposed only in the Development environment.
+OpenAPI is exposed only in Development.
 
 ## Structure
 
 ```text
 apps/api/
 ├── Endpoints/
-│   └── HealthEndpoints.cs
 ├── Infrastructure/
-│   └── Errors/
-│       └── GlobalExceptionHandler.cs
+│   ├── Errors/
+│   └── Persistence/
+│       └── Migrations/
 ├── Modules/
 │   ├── Administration/
 │   ├── Amenities/
@@ -72,12 +125,4 @@ apps/api/
 └── ResidentialAmenities.slnx
 ```
 
-Each module currently contains only a registration boundary. Domain behavior is intentionally deferred to its dedicated issues.
-
-## Error handling
-
-Unhandled exceptions pass through a central `IExceptionHandler` implementation that returns a generic Problem Details payload with a trace ID. Internal exception details are logged server-side rather than returned to clients.
-
-## Architectural rule
-
-`Program.cs` is the composition root. Modules must not access another module's persistence implementation directly. See `docs/03-architecture/module-boundaries.md`.
+Domain tables are intentionally not introduced until issue #9.

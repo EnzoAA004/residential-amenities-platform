@@ -72,6 +72,7 @@ if (app.Environment.IsDevelopment())
 
 app.MapIdentityEndpoints();
 app.MapAmenityEndpoints();
+app.MapPricingEndpoints();
 app.MapHealthEndpoints();
 app.MapGet("/", () => Results.Redirect("/health"));
 

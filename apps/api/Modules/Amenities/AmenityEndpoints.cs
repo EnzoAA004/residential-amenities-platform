@@ -1,12 +1,10 @@
 using System.Security.Claims;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using ResidentialAmenities.Api.Infrastructure.Persistence;
 using ResidentialAmenities.Api.Modules.Amenities.Application;
 using ResidentialAmenities.Api.Modules.Amenities.Domain;
-using ResidentialAmenities.Api.Modules.Buildings.Domain;
+using ResidentialAmenities.Api.Modules.Buildings.Application;
 using ResidentialAmenities.Api.Modules.Identity;
-using ResidentialAmenities.Api.Modules.Identity.Domain;
 
 namespace ResidentialAmenities.Api.Modules.Amenities;
 
@@ -35,14 +33,12 @@ public static class AmenityEndpoints
         Guid buildingId,
         ClaimsPrincipal principal,
         AppDbContext dbContext,
-        UserManager<UserAccount> userManager,
+        IBuildingMembershipAuthorizer membershipAuthorizer,
         CancellationToken cancellationToken)
     {
-        if (!await HasBuildingAccessAsync(
+        if (!await membershipAuthorizer.HasAccessAsync(
                 principal,
                 buildingId,
-                dbContext,
-                userManager,
                 cancellationToken))
         {
             return Forbidden();
@@ -70,7 +66,7 @@ public static class AmenityEndpoints
         DateTimeOffset toUtc,
         ClaimsPrincipal principal,
         AppDbContext dbContext,
-        UserManager<UserAccount> userManager,
+        IBuildingMembershipAuthorizer membershipAuthorizer,
         CancellationToken cancellationToken)
     {
         var amenity = await dbContext.Amenities
@@ -86,11 +82,9 @@ public static class AmenityEndpoints
             return Results.NotFound();
         }
 
-        if (!await HasBuildingAccessAsync(
+        if (!await membershipAuthorizer.HasAccessAsync(
                 principal,
                 amenity.BuildingId,
-                dbContext,
-                userManager,
                 cancellationToken))
         {
             return Forbidden();
@@ -125,35 +119,6 @@ public static class AmenityEndpoints
             interval => new AvailabilityIntervalResponse(
                 interval.StartUtc,
                 interval.EndUtc)));
-    }
-
-    private static async Task<bool> HasBuildingAccessAsync(
-        ClaimsPrincipal principal,
-        Guid buildingId,
-        AppDbContext dbContext,
-        UserManager<UserAccount> userManager,
-        CancellationToken cancellationToken)
-    {
-        if (principal.IsInRole(ApplicationRoles.Administrator))
-        {
-            return true;
-        }
-
-        var user = await userManager.GetUserAsync(principal);
-
-        if (user is null)
-        {
-            return false;
-        }
-
-        return await dbContext.ResidentMemberships
-            .AsNoTracking()
-            .AnyAsync(
-                membership =>
-                    membership.UserId == user.Id &&
-                    membership.BuildingId == buildingId &&
-                    membership.Status == ResidentMembershipStatus.Active,
-                cancellationToken);
     }
 
     private static IResult Forbidden() =>

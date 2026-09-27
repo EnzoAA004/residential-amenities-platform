@@ -5,6 +5,7 @@ using ResidentialAmenities.Api.Modules.Amenities.Domain;
 using ResidentialAmenities.Api.Modules.Buildings.Domain;
 using ResidentialAmenities.Api.Modules.Identity.Domain;
 using ResidentialAmenities.Api.Modules.Identity.Infrastructure.Persistence;
+using ResidentialAmenities.Api.Modules.Pricing.Domain;
 
 namespace ResidentialAmenities.Api.Infrastructure.Persistence;
 
@@ -28,6 +29,8 @@ public sealed class AppDbContext(
 
     public DbSet<AmenityUnavailablePeriod> AmenityUnavailablePeriods =>
         Set<AmenityUnavailablePeriod>();
+
+    public DbSet<PriceRule> PriceRules => Set<PriceRule>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

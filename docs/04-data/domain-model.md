@@ -1,4 +1,4 @@
-# Domain Model — v0.3
+# Domain Model — v0.4
 
 ## Implemented foundation
 
@@ -16,8 +16,8 @@ Issue #9 introduces the first persisted domain slice. The model is deliberately 
 | Reservation | Planned | Booking request and lifecycle. |
 | ReservationResource | Planned | Resources attached to a reservation. |
 | ReservationParticipant | Planned/TBD | Participants in compatible/shared usage if required by the final reservation model. |
-| PriceRule | Planned | Configurable pricing rule with effective period. |
-| ReservationPriceLine | Planned | Snapshot of applied price components. |
+| PriceRule | Implemented (issue #22) | Configurable, effective-dated pricing rule. |
+| ReservationPriceLine | Planned (Reservations, #20/#21/#23) | Snapshot of a `PriceQuoteLine` copied onto a reservation at booking time. |
 | Payment | Planned | Payment attempt/record and method/status. |
 | PaymentEvent | Planned | Idempotent provider/payment lifecycle event where useful. |
 | Message | Post-MVP | Reservation-scoped communication. |
@@ -133,6 +133,25 @@ The availability query (`AmenityAvailabilityCalculator`) is a pure, DB-independe
 function of an amenity's windows/periods plus its building's `TimeZoneId`. It has no
 knowledge of Reservations; see [Data Dictionary](data-dictionary.md#availability-query)
 and `docs/03-architecture/module-boundaries.md` for the ownership boundary.
+
+## Pricing (issue #22)
+
+`PriceRule` is owned by the Pricing module and referenced by `AmenityId` only
+(no EF navigation to `Amenity`), per the module-boundary rule against
+sharing another module's entities. `PricingCalculator` is a pure function of
+already-loaded rules — no DB/HTTP dependency — that selects the rule
+effective at a given instant per (amenity, component, use type) and sums a
+base component with any add-ons into a `PriceQuote`.
+
+Historical correctness (RB-008, RF-009) comes from `PriceRule.Supersede`
+closing a rule's `EffectiveToUtc` instead of mutating its `Amount`: a quote
+calculated for a past instant keeps resolving to the rule that was active
+then. `ReservationPriceLine` does not exist yet — Reservations will
+persist a copy of each `PriceQuoteLine` (rule id, amount, currency) once it
+can attach them to a real reservation.
+
+See [Data Dictionary](data-dictionary.md#pricerules) for column detail and
+the pilot's placeholder amounts.
 
 ## Identity boundary
 

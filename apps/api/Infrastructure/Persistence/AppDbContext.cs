@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using ResidentialAmenities.Api.Modules.Amenities.Domain;
 using ResidentialAmenities.Api.Modules.Buildings.Domain;
 using ResidentialAmenities.Api.Modules.Identity.Domain;
 using ResidentialAmenities.Api.Modules.Identity.Infrastructure.Persistence;
@@ -19,6 +20,14 @@ public sealed class AppDbContext(
 
     public DbSet<ResidentMembership> ResidentMemberships =>
         Set<ResidentMembership>();
+
+    public DbSet<Amenity> Amenities => Set<Amenity>();
+
+    public DbSet<AmenityAvailabilityWindow> AmenityAvailabilityWindows =>
+        Set<AmenityAvailabilityWindow>();
+
+    public DbSet<AmenityUnavailablePeriod> AmenityUnavailablePeriods =>
+        Set<AmenityUnavailablePeriod>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

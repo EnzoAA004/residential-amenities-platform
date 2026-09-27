@@ -1,6 +1,7 @@
-# Data Dictionary — v0.3
+# Data Dictionary — v0.4
 
-The model now includes the building/membership foundation plus ASP.NET Core Identity persistence.
+The model now includes the building/membership foundation, ASP.NET Core Identity
+persistence, and the Amenities & Availability foundation (issue #19).
 
 ## Buildings
 
@@ -92,6 +93,56 @@ Constraints:
 - FK `UserId -> UserAccounts.Id` with restrict delete;
 - unique `(BuildingId, UnitId, UserId)`;
 - index `UserId`.
+
+## Amenities
+
+| Column | Type | Null | Notes |
+| --- | --- | --- | --- |
+| Id | uuid | No | Primary key. |
+| BuildingId | uuid | No | Owning building. Never assume a single pilot building. |
+| Name | varchar(160) | No | Display name (e.g. `SUM`, `Pool`, `Barbecue`). Configuration data, not a code constant. |
+| Kind | varchar(30) | No | `Sum`, `Pool`, `Barbecue` or `Other`. Stored as string for readability/stability across enum reordering. |
+| AllowsSharedUse | boolean | No | Whether the amenity supports shared/compatible concurrent use. |
+| AllowsExclusiveUse | boolean | No | Whether the amenity supports exclusive booking. At least one of the two use flags must be true. |
+| IsActive | boolean | No | Operational status. |
+
+Constraints:
+
+- unique `(BuildingId, Name)`;
+- alternate key `(BuildingId, Id)`.
+
+## AmenityAvailabilityWindows
+
+| Column | Type | Null | Notes |
+| --- | --- | --- | --- |
+| Id | uuid | No | Primary key. |
+| AmenityId | uuid | No | Owning amenity. Cascade-deleted with it. |
+| DayOfWeek | varchar(20) | No | Recurring weekly day. |
+| StartTime | time | No | Local start of the operating window (building time zone). |
+| EndTime | time | No | Local end of the operating window. Must be after `StartTime`; overnight windows are not supported yet. |
+
+Exact shift boundaries remain configuration, pending validation in issue #2
+(`docs/01-discovery/assumptions-and-open-questions.md`). Development seed data
+uses a single 09:00–22:00 placeholder window per day so the availability
+endpoint has something to query locally.
+
+## AmenityUnavailablePeriods
+
+| Column | Type | Null | Notes |
+| --- | --- | --- | --- |
+| Id | uuid | No | Primary key. |
+| AmenityId | uuid | No | Owning amenity. Cascade-deleted with it. |
+| StartsAtUtc | timestamptz | No | Blackout start (maintenance, closure, etc.). |
+| EndsAtUtc | timestamptz | No | Blackout end. Must be after `StartsAtUtc`. |
+| Reason | varchar(280) | Yes | Optional free-text reason. |
+
+## Availability query
+
+`GET /api/amenities/{amenityId}/availability?fromUtc&toUtc` computes structural
+availability (recurring windows minus unavailable periods) for a bounded range
+(currently capped at 62 days). It does not consider concrete reservations —
+per `docs/03-architecture/module-boundaries.md`, that decision belongs to the
+Reservations module once it exists (issue #20/#21/#23).
 
 ## Separation of concerns
 

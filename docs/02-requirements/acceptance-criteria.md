@@ -26,6 +26,12 @@ Related: RF-001, RF-002, RNF-002, RB-015 — issues #9, #10.
 
 Related: RF-003, RF-020 — issue #19.
 
+Issue #19 delivers the configuration/maintenance portion of this AC (structural
+availability: operating windows minus unavailable periods), per the Amenities &
+Availability module boundary (`docs/03-architecture/module-boundaries.md`). The
+"existing incompatible reservations" portion is completed once Reservations
+(#20/#21/#23) can query booked resources.
+
 ---
 
 ## AC-03 — Shared leisure

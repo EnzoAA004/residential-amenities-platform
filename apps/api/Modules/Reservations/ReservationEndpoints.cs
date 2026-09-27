@@ -144,6 +144,7 @@ public static class ReservationEndpoints
             reservation.StartsAtUtc,
             reservation.EndsAtUtc,
             reservation.CreatedAtUtc,
+            reservation.ExpiresAtUtc,
             reservation.Resources
                 .Select(resource => new ReservationResourceResponse(
                     resource.AmenityId,
@@ -175,6 +176,7 @@ public static class ReservationEndpoints
         DateTimeOffset StartsAtUtc,
         DateTimeOffset EndsAtUtc,
         DateTimeOffset CreatedAtUtc,
+        DateTimeOffset ExpiresAtUtc,
         IReadOnlyList<ReservationResourceResponse> Resources,
         IReadOnlyList<ReservationPriceLineResponse> PriceLines,
         string Currency,

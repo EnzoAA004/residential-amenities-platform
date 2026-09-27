@@ -38,3 +38,19 @@ particular:
 - Event slot windows ("afternoon"/"evening") are seeded as explicit
   placeholders in a configurable `EventSlotDefinition` table, not hardcoded.
   Exact Event slot times remain configurable/TBD pending issue #2.
+
+## Implementation notes (issue #23)
+
+RB-009 and RB-010 are now fully implemented — every reservation is created
+as a `Pending` hold with a configured `ExpiresAtUtc`
+(`Reservations:Hold:DurationMinutes`), and an automatic, idempotent
+expiration mechanism (`ReservationExpirationHostedService`) transitions
+past-due holds to `Expired`, at which point they stop blocking resources.
+See `docs/04-data/domain-model.md#concurrency-and-holds-issue-23`.
+
+The **duration value itself remains configuration, not a decided business
+value** — the 30-minute default is a placeholder for local
+development/testing, not the candidate 24/48-hour values under discussion
+for OQ-010. This issue does not close OQ-010; it only makes the hold
+duration a setting rather than a hardcoded constant, so setting the real
+value once #2 answers OQ-010 requires no code change.

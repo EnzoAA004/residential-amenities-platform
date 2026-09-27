@@ -1,4 +1,4 @@
-# Domain Model — v0.6
+# Domain Model — v0.7
 
 ## Implemented foundation
 
@@ -13,7 +13,7 @@ Issue #9 introduces the first persisted domain slice. The model is deliberately 
 | Amenity | Implemented (issue #19) | Reservable resource such as SUM, pool or barbecue/grill. |
 | AmenityAvailabilityWindow | Implemented (issue #19) | Recurring weekly operating window for an amenity. |
 | AmenityUnavailablePeriod | Implemented (issue #19) | Maintenance/blackout override for an amenity. |
-| Reservation | Implemented (issues #20, #21) | Booking aggregate root; Shared/Exclusive Leisure and Event. |
+| Reservation | Implemented (issues #20, #21, #23) | Booking aggregate root; Shared/Exclusive Leisure and Event; hold/expiration lifecycle. |
 | ReservationResource | Implemented (issues #20, #21) | Resource(s) attached to a reservation, with per-resource exclusivity; Event attaches base + add-ons. |
 | ReservationParticipant | Planned/TBD | Participants in compatible/shared usage if required by the final reservation model. |
 | EventSlotDefinition | Implemented (issue #21) | Configured, bookable time-of-day window for Event reservations. |
@@ -204,14 +204,12 @@ issue #21 does not need a model-breaking change; this issue's endpoint
 rejects `Event` explicitly (not yet implemented) rather than silently
 accepting it.
 
-### Lifecycle (deliberately minimal for now)
+### Lifecycle (superseded by issue #23)
 
-Only `Confirmed` and `Cancelled` exist. There is no payment-hold state yet —
-every reservation created by this issue is `Confirmed` immediately, because
-no payment step exists to hold it. `PendingPayment`/`Expired`/hold-expiry
-states belong to #23 (concurrency/holds) and #24/#25 (Mercado
-Pago/cash); they are intentionally not added now so the codebase has no
-dead states without the logic that gives them meaning.
+As of #20/#21 only `Confirmed` and `Cancelled` existed and every reservation
+was `Confirmed` immediately. Issue #23 introduces the `Pending`/`Expired`
+hold lifecycle described below — see
+["Concurrency and holds (issue #23)"](#concurrency-and-holds-issue-23).
 
 ### Compatibility &amp; overlap (RB-003, RB-005, RF-010)
 
@@ -229,12 +227,10 @@ Leisure reservations may coexist for the same resource/time; the capacity
 check has an obvious seam to add once issue #2 answers OQ-* on this, but
 inventing a number now (e.g. hardcoding "2") was explicitly out of scope.
 
-Conflict detection here is ordinary transactional
-read-then-write checking, run inside the same `DbContext`/transaction as the
-insert. **It does not by itself make two truly concurrent incompatible
-requests impossible** — closing that race with real database-level
-concurrency controls (e.g. exclusion constraints, advisory locks) is
-issue #23's job. RNF-005 is not considered fully satisfied by this issue.
+Conflict detection now runs inside a transaction guarded by a per-Amenity
+PostgreSQL advisory lock (issue #23) — see
+["Concurrency and holds (issue #23)"](#concurrency-and-holds-issue-23) for
+why, and for what makes RNF-005 actually hold under real concurrency.
 
 ### Pricing snapshot (RB-008, RF-009)
 
@@ -341,18 +337,136 @@ add-ons snapshots three rows (base + 2), and the total is their sum — e.g.
 15,000 (SUM) + 3,000 (Pool) + 3,000 (Barbecue) = 21,000 ARS with the pilot's
 placeholder pricing.
 
-### Lifecycle
+### Lifecycle and concurrency
 
-Same as #20: `Confirmed`/`Cancelled` only. An Event is `Confirmed`
-immediately because no payment step exists yet; `PendingPayment`/holds are
-#23/#24/#25, not simulated here.
+Superseded by issue #23, exactly like #20 — an Event is created `Pending`
+(a hold) and its multiple resources are all locked/checked together within
+the same guarded transaction. See
+["Concurrency and holds (issue #23)"](#concurrency-and-holds-issue-23).
 
-### Concurrency
+## Concurrency and holds (issue #23)
 
-Same limit as #20: ordinary transactional read-then-write, now checked
-across every planned resource. It does not close the race between two truly
-concurrent incompatible requests for any of an Event's resources — #23
-still owns RNF-005.
+Covers RF-010, RF-011, RF-012, RNF-005, RB-009, RB-010.
+
+### Why PostgreSQL advisory locks, not an exclusion constraint or bare Serializable
+
+The plain read-then-write conflict check from #20/#21 has a real race: two
+concurrent requests can both read "no conflict" before either writes. Three
+alternatives were evaluated:
+
+- **PostgreSQL exclusion constraint** (`EXCLUDE USING gist` over
+  `(AmenityId, tstzrange(...))`, requiring the `btree_gist` extension) — but
+  RB-003/RB-005's compatibility rule is **asymmetric**: any number of Shared
+  bookings may overlap each other, while an Exclusive booking must conflict
+  with everything overlapping it, shared or exclusive. An exclusion
+  constraint's predicate is evaluated per stored row (like a partial index):
+  it cannot express "this row conflicts with rows of a *different* kind"
+  without forcing every booking through the same equality key — which would
+  reintroduce a symmetric rule and break Shared+Shared coexistence.
+- **`Serializable` isolation** — rejected because it would push a retry loop
+  onto every caller for serialization failures, and its actual guarantees
+  are easy to get subtly wrong without dedicated testing this issue's time
+  budget did not include (the issue explicitly warned against relying on it
+  "without testing the real behavior").
+- **PostgreSQL transaction-scoped advisory locks
+  (`pg_advisory_xact_lock`)** — chosen. A transaction acquires one lock per
+  distinct `AmenityId` it is about to book, in a fixed order (sorted by the
+  Amenity's own Guid, so two requests wanting overlapping resource sets in
+  different orders can never deadlock each other), then re-runs the
+  already-correct read-then-write check. Because the lock fully serializes
+  access per Amenity, that check now always sees any concurrently-committed
+  sibling transaction — closing the race. Locks release automatically on
+  commit or rollback (`pg_advisory_xact_lock`, not the session-scoped
+  variant), so there is no separate cleanup path to forget. See
+  `Modules/Reservations/Infrastructure/Persistence/ResourceAdvisoryLock.cs`.
+
+This required no exclusion-constraint schema changes and, unlike
+Serializable, needed no retry logic anywhere — `ReservationCreationService`
+gained one transaction + a lock-acquisition step, nothing else changed
+structurally for Leisure vs. Event.
+
+### Hold/lifecycle model
+
+`ReservationStatus` gained `Pending` and `Expired`:
+
+```mermaid
+stateDiagram-v2
+    [*] --> Pending: reservation created (hold)
+    Pending --> Expired: ExpiresAtUtc passed, unpaid
+    Pending --> Cancelled
+    Confirmed --> Cancelled
+    Expired --> [*]
+    Cancelled --> [*]
+```
+
+- **`Pending`** is the hold (RB-009): every reservation is created in this
+  state now, with an `ExpiresAtUtc` computed from the configurable
+  `Reservations:Hold:DurationMinutes` setting (`ReservationHoldOptions` —
+  RF-011). A `Pending` hold blocks resources exactly like `Confirmed`.
+- It stops blocking the instant `now >= ExpiresAtUtc` — checked at
+  conflict-detection query time, not only when the expiration job has run —
+  and transitions to **`Expired`** (RB-010) via
+  `ReservationExpirationService`.
+- There is still **no `Pending` → `Confirmed` transition**. That requires a
+  trusted payment confirmation, which is #24 (Mercado Pago) / #25 (cash) —
+  intentionally not simulated here, per the issue's explicit instruction not
+  to build a payment workflow ahead of those issues.
+- `Confirmed` and `Cancelled` are otherwise unchanged from #20.
+
+The hold duration default (30 minutes) is an explicit placeholder for local
+development/testing, **not** the real candidate values under discussion for
+OQ-010 (24 or 48 hours — see
+`docs/01-discovery/assumptions-and-open-questions.md`). Production must set
+`Reservations:Hold:DurationMinutes` via configuration once issue #2 answers
+OQ-010.
+
+### Expiration mechanism (RF-012)
+
+`ReservationExpirationService.ExpirePastHoldsAsync` is a single EF Core
+`ExecuteUpdateAsync` — one atomic `UPDATE ... WHERE "Status" = 'Pending' AND
+"ExpiresAtUtc" <= @now` — rather than loading entities into the change
+tracker. This is what makes it safe under real concurrent execution with no
+locking of its own: PostgreSQL locks and re-evaluates each candidate row's
+`WHERE` predicate individually, so if two expiration runs race, whichever
+commits first flips a row to `Expired`; the second run's predicate no longer
+matches that row (it is no longer `Pending`), so it is simply skipped — no
+exception, no double-processing. Calling it twice in a row is equally
+idempotent (the second call matches nothing new and returns `0`). It never
+touches `Confirmed`/`Cancelled` rows and never "revives" an
+already-`Expired` one, because the `WHERE` clause only ever matches rows
+still `Pending`.
+
+`ReservationExpirationHostedService` (a `BackgroundService` using
+`PeriodicTimer`, interval configurable via
+`Reservations:Expiration:IntervalSeconds`) calls this automatically so
+RF-012 ("release expired unpaid holds automatically") does not depend on any
+manual/admin trigger. One tick's failure is logged and never stops future
+ticks or crashes the host.
+
+### Clock abstraction
+
+`ReservationCreationService` and `ReservationExpirationService` both take a
+`TimeProvider` (the standard .NET clock abstraction, not a bespoke
+interface) instead of calling `DateTimeOffset.UtcNow` directly, so
+expiration tests can control "now" deterministically without
+`Thread.Sleep`. Production registers `TimeProvider.System`.
+
+### Atomicity (multi-resource Event)
+
+Unchanged in spirit from #21, now inside the lock-guarded transaction: an
+Event's advisory locks (one per resource), conflict check, price quote and
+`Reservation`/`ReservationResource`/`ReservationPriceLine` inserts all
+happen before a single `SaveChanges` + `Commit`. If any resource fails its
+conflict check, the transaction is rolled back by disposing it uncommitted —
+no resource, hold or price line for that Event persists partially.
+
+### What #23 does not do
+
+- No Mercado Pago/cash integration and no `Pending → Confirmed` transition
+  (that's #24/#25).
+- No admin cancel/reschedule of a hold.
+- Hold duration remains configuration, not a decided business value
+  (OQ-010).
 
 ## Identity boundary
 

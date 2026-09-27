@@ -27,7 +27,8 @@ public sealed class Reservation
         ReservationUseType useType,
         DateTimeOffset startsAtUtc,
         DateTimeOffset endsAtUtc,
-        DateTimeOffset createdAtUtc)
+        DateTimeOffset createdAtUtc,
+        DateTimeOffset expiresAtUtc)
     {
         if (id == Guid.Empty)
         {
@@ -57,14 +58,24 @@ public sealed class Reservation
                 nameof(endsAtUtc));
         }
 
+        if (expiresAtUtc <= createdAtUtc)
+        {
+            throw new ArgumentException(
+                "Expiration must be after creation.",
+                nameof(expiresAtUtc));
+        }
+
         Id = id;
         BuildingId = buildingId;
         CreatedByMembershipId = createdByMembershipId;
         UseType = useType;
-        Status = ReservationStatus.Confirmed;
+        // Every reservation starts as a payment hold (RB-009): there is no
+        // payment step yet to confirm it immediately. See ReservationStatus.
+        Status = ReservationStatus.Pending;
         StartsAtUtc = startsAtUtc;
         EndsAtUtc = endsAtUtc;
         CreatedAtUtc = createdAtUtc;
+        ExpiresAtUtc = expiresAtUtc;
     }
 
     public Guid Id { get; private set; }
@@ -84,6 +95,19 @@ public sealed class Reservation
     public DateTimeOffset CreatedAtUtc { get; private set; }
 
     public DateTimeOffset? CancelledAtUtc { get; private set; }
+
+    /// <summary>
+    /// When this hold stops blocking resources if it never becomes
+    /// <see cref="ReservationStatus.Confirmed"/>. Conflict detection treats
+    /// a <see cref="ReservationStatus.Pending"/> reservation as active only
+    /// while <c>now &lt; ExpiresAtUtc</c>, independent of whether the
+    /// expiration job has already flipped its <see cref="Status"/> — so a
+    /// hold never blocks past its own deadline even if that job hasn't run
+    /// yet.
+    /// </summary>
+    public DateTimeOffset ExpiresAtUtc { get; private set; }
+
+    public DateTimeOffset? ExpiredAtUtc { get; private set; }
 
     public IReadOnlyCollection<ReservationResource> Resources => _resources;
 
@@ -128,5 +152,24 @@ public sealed class Reservation
 
         Status = ReservationStatus.Cancelled;
         CancelledAtUtc = cancelledAtUtc;
+    }
+
+    /// <summary>
+    /// Transitions an unpaid hold to <see cref="ReservationStatus.Expired"/>
+    /// (RF-012, RB-010). A no-op guard, not an exception, for anything that
+    /// is not currently an active, past-due <see cref="ReservationStatus.Pending"/>
+    /// hold — this method must never "revive" a reservation or touch
+    /// <see cref="ReservationStatus.Confirmed"/>/<see cref="ReservationStatus.Cancelled"/>
+    /// state, and calling it twice (or from two concurrent workers) is safe.
+    /// </summary>
+    public void Expire(DateTimeOffset nowUtc)
+    {
+        if (Status != ReservationStatus.Pending || nowUtc < ExpiresAtUtc)
+        {
+            return;
+        }
+
+        Status = ReservationStatus.Expired;
+        ExpiredAtUtc = nowUtc;
     }
 }

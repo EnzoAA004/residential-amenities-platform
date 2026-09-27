@@ -1,10 +1,12 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using ResidentialAmenities.Api.Infrastructure.Persistence;
 using ResidentialAmenities.Api.Modules.Amenities.Application;
 using ResidentialAmenities.Api.Modules.Amenities.Domain;
 using ResidentialAmenities.Api.Modules.Pricing.Application;
 using ResidentialAmenities.Api.Modules.Pricing.Domain;
 using ResidentialAmenities.Api.Modules.Reservations.Domain;
+using ResidentialAmenities.Api.Modules.Reservations.Infrastructure.Persistence;
 
 namespace ResidentialAmenities.Api.Modules.Reservations.Application;
 
@@ -20,8 +22,18 @@ namespace ResidentialAmenities.Api.Modules.Reservations.Application;
 /// Leisure, base + add-ons for Event), and every later stage — availability,
 /// conflict detection, pricing, persistence — operates uniformly over that
 /// list instead of duplicating logic per use type.
+///
+/// RNF-005: the conflict check and the insert happen inside one database
+/// transaction, guarded by a <see cref="ResourceAdvisoryLock"/> per
+/// requested Amenity (see that type for why advisory locks were chosen over
+/// an exclusion constraint or bare Serializable isolation). If any resource
+/// fails validation/conflict/pricing, the transaction is never committed —
+/// a multi-resource Event never persists a subset of its resources.
 /// </summary>
-public sealed class ReservationCreationService(AppDbContext dbContext)
+public sealed class ReservationCreationService(
+    AppDbContext dbContext,
+    TimeProvider timeProvider,
+    IOptions<ReservationHoldOptions> holdOptions)
 {
     private static readonly HashSet<AmenityKind> AllowedEventAddOnKinds =
     [
@@ -73,14 +85,26 @@ public sealed class ReservationCreationService(AppDbContext dbContext)
             EnsureWithinAvailability(resource, building.TimeZoneId, command);
         }
 
-        await EnsureNoConflictAsync(command, resources, cancellationToken);
+        // Everything from here on — the conflict check and the insert —
+        // runs inside one transaction guarded by a per-Amenity advisory
+        // lock, so a concurrent sibling request for the same resource is
+        // fully serialized against this one rather than racing it (RNF-005).
+        await using var transaction =
+            await dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+        await ResourceAdvisoryLock.AcquireAsync(
+            dbContext,
+            resources.Select(resource => resource.Amenity.Id),
+            cancellationToken);
+
+        var nowUtc = timeProvider.GetUtcNow();
+
+        await EnsureNoConflictAsync(command, resources, nowUtc, cancellationToken);
 
         var rules = await dbContext.PriceRules
             .AsNoTracking()
             .Where(rule => rule.BuildingId == command.BuildingId)
             .ToListAsync(cancellationToken);
-
-        var quotedAtUtc = DateTimeOffset.UtcNow;
 
         // PricingException (e.g. no active rule, currency mismatch)
         // propagates to the endpoint, which already knows how to map it to
@@ -90,7 +114,7 @@ public sealed class ReservationCreationService(AppDbContext dbContext)
             command.AmenityId,
             command.UseType,
             command.AddOnAmenityIds,
-            quotedAtUtc);
+            nowUtc);
 
         var reservation = new Reservation(
             Guid.NewGuid(),
@@ -99,7 +123,8 @@ public sealed class ReservationCreationService(AppDbContext dbContext)
             command.UseType,
             command.StartsAtUtc,
             command.EndsAtUtc,
-            quotedAtUtc);
+            nowUtc,
+            nowUtc + holdOptions.Value.Duration);
 
         foreach (var resource in resources)
         {
@@ -118,14 +143,17 @@ public sealed class ReservationCreationService(AppDbContext dbContext)
                 line.ComponentType,
                 line.Currency,
                 line.Amount,
-                quotedAtUtc);
+                nowUtc);
         }
 
-        // Nothing is written until this single SaveChanges: an Event that
-        // fails any resource's validation never persists another resource
-        // partially.
+        // Nothing is written until this single SaveChanges + commit: an
+        // Event that fails any resource's validation, conflict check or
+        // pricing never persists another resource partially, and rolling
+        // back (including via the `await using` disposing an uncommitted
+        // transaction on an exception) also releases the advisory locks.
         dbContext.Reservations.Add(reservation);
         await dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
 
         return reservation;
     }
@@ -378,20 +406,27 @@ public sealed class ReservationCreationService(AppDbContext dbContext)
     private async Task EnsureNoConflictAsync(
         CreateReservationCommand command,
         IReadOnlyList<PlannedResource> resources,
+        DateTimeOffset nowUtc,
         CancellationToken cancellationToken)
     {
         var amenityIds = resources.Select(resource => resource.Amenity.Id).ToList();
 
         // Only a cheap prefilter runs in SQL (resource ids + building +
-        // status); the actual compatibility decision always goes through
-        // the single centralized ReservationCompatibility.ConflictsWith
-        // rule so it is never duplicated between endpoints or resources.
+        // status/expiry); the actual compatibility decision always goes
+        // through the single centralized ReservationCompatibility
+        // .ConflictsWith rule so it is never duplicated between endpoints or
+        // resources. A Pending hold blocks exactly like Confirmed while it
+        // has not yet passed its own ExpiresAtUtc (RB-009/RB-010) — checked
+        // here at query time so a hold stops blocking the instant it is
+        // past due, even if the expiration job has not run yet.
         var candidates = await dbContext.ReservationResources
             .AsNoTracking()
             .Where(resource =>
                 amenityIds.Contains(resource.AmenityId) &&
                 resource.Reservation.BuildingId == command.BuildingId &&
-                resource.Reservation.Status == ReservationStatus.Confirmed)
+                (resource.Reservation.Status == ReservationStatus.Confirmed ||
+                 (resource.Reservation.Status == ReservationStatus.Pending &&
+                  resource.Reservation.ExpiresAtUtc > nowUtc)))
             .Select(resource => new
             {
                 resource.AmenityId,

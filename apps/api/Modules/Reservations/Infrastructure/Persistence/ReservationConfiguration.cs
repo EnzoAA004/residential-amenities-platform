@@ -31,6 +31,9 @@ public sealed class ReservationConfiguration : IEntityTypeConfiguration<Reservat
         builder.Property(reservation => reservation.CreatedAtUtc)
             .IsRequired();
 
+        builder.Property(reservation => reservation.ExpiresAtUtc)
+            .IsRequired();
+
         builder.HasMany(reservation => reservation.Resources)
             .WithOne(resource => resource.Reservation)
             .HasForeignKey(resource => resource.ReservationId)
@@ -60,5 +63,13 @@ public sealed class ReservationConfiguration : IEntityTypeConfiguration<Reservat
         });
 
         builder.HasIndex(reservation => reservation.Status);
+
+        // Supports the expiration job's bulk UPDATE ... WHERE Status =
+        // 'Pending' AND ExpiresAtUtc <= @now.
+        builder.HasIndex(reservation => new
+        {
+            reservation.Status,
+            reservation.ExpiresAtUtc
+        });
     }
 }

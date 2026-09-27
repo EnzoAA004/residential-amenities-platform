@@ -31,7 +31,9 @@ builder.Services.AddCors(options =>
     {
         if (allowedOrigins.Length > 0)
         {
-            policy.WithOrigins(allowedOrigins);
+            policy
+                .WithOrigins(allowedOrigins)
+                .AllowCredentials();
         }
 
         policy
@@ -59,6 +61,8 @@ var app = builder.Build();
 
 app.UseExceptionHandler();
 app.UseCors("Client");
+app.UseAuthentication();
+app.UseAuthorization();
 
 if (app.Environment.IsDevelopment())
 {
@@ -66,7 +70,10 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
+app.MapIdentityEndpoints();
 app.MapHealthEndpoints();
 app.MapGet("/", () => Results.Redirect("/health"));
 
 app.Run();
+
+public partial class Program;

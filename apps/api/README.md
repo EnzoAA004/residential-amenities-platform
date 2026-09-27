@@ -6,15 +6,14 @@ ASP.NET Core backend for Residential Amenities Platform.
 
 - .NET 10
 - ASP.NET Core Minimal APIs
+- ASP.NET Core Identity
 - Entity Framework Core 10
-- PostgreSQL 18 through the Npgsql EF Core provider
+- PostgreSQL 18 through Npgsql
 - Built-in ASP.NET Core OpenAPI generation
 
 ## Solution
 
 `ResidentialAmenities.slnx` contains the API and backend test project.
-
-Build and test:
 
 ```bash
 dotnet tool restore
@@ -25,13 +24,11 @@ dotnet test apps/api/ResidentialAmenities.slnx
 
 ## Local PostgreSQL
 
-From the repository root:
+From repository root:
 
 ```bash
 docker compose up -d postgres
 ```
-
-PostgreSQL 18 stores its Docker volume under `/var/lib/postgresql`; the compose file uses that location.
 
 Set the API connection string externally.
 
@@ -41,52 +38,94 @@ PowerShell:
 $env:ConnectionStrings__Postgres="Host=localhost;Port=5432;Database=residential_amenities;Username=residential_app;Password=local_dev_only"
 ```
 
-The values above are development-only defaults. Production credentials must not be committed.
+The values above are development-only defaults.
 
 ## EF Core migrations
-
-The repository pins `dotnet-ef` through `.config/dotnet-tools.json`.
-
-List migrations:
-
-```bash
-dotnet ef migrations list \
-  --project apps/api/ResidentialAmenities.Api.csproj \
-  --context AppDbContext
-```
 
 Apply migrations:
 
 ```bash
+dotnet tool restore
 dotnet ef database update \
   --project apps/api/ResidentialAmenities.Api.csproj \
   --context AppDbContext
 ```
 
-Create a future migration:
+CI checks for pending model changes, so EF model changes without a matching migration fail validation.
 
-```bash
-dotnet ef migrations add MigrationName \
-  --project apps/api/ResidentialAmenities.Api.csproj \
-  --context AppDbContext \
-  --output-dir Infrastructure/Persistence/Migrations
+## Development data
+
+In Development, startup seeds:
+
+- one pilot building;
+- timezone `America/Argentina/Buenos_Aires`;
+- units `1A` through `5B`.
+
+Base Identity roles (`Resident` and `Administrator`) are seeded by the Identity migration.
+
+No real resident/admin account is seeded by the application.
+
+## Authentication
+
+Public self-registration is intentionally disabled.
+
+### Login
+
+```http
+POST /api/auth/login?useCookies=true
 ```
 
-CI runs `has-pending-model-changes` so an EF model change without a matching migration fails validation.
+Use `useCookies=true` for the browser/web session.
 
-## Reset local database
+For mobile/non-browser clients:
 
-To completely delete the local database volume and recreate it:
-
-```bash
-docker compose down -v
-docker compose up -d postgres
-dotnet ef database update \
-  --project apps/api/ResidentialAmenities.Api.csproj \
-  --context AppDbContext
+```http
+POST /api/auth/login?useCookies=false
 ```
 
-This is destructive and is only intended for local development.
+The response contains ASP.NET Core Identity bearer/refresh credentials. These are opaque application tokens, not custom JWTs.
+
+### Refresh
+
+```http
+POST /api/auth/refresh
+```
+
+### Logout
+
+```http
+POST /api/auth/logout
+```
+
+Requires an authenticated session.
+
+### Current user
+
+```http
+GET /api/auth/me
+```
+
+Returns the authenticated user's basic profile, roles and active residential memberships.
+
+### RBAC verification endpoints
+
+```http
+GET /api/auth/check/resident
+GET /api/auth/check/admin
+```
+
+These are foundation-phase endpoints used to verify Resident/Admin policies.
+
+## Authentication defaults
+
+- unique email;
+- minimum password length 10 with upper/lower/digit/symbol;
+- 5 failed attempts before 15-minute lockout;
+- web cookie: HttpOnly, SameSite=Lax, sliding eight-hour lifetime;
+- bearer access token: 20 minutes;
+- bearer refresh token: 14 days.
+
+Production HTTPS, client secure storage and account onboarding/recovery are refined in the security/onboarding work.
 
 ## Run
 
@@ -97,51 +136,19 @@ dotnet run --project apps/api/ResidentialAmenities.Api.csproj
 Development URLs:
 
 - Health: `http://localhost:8080/health`
-- Compatibility health route: `http://localhost:8080/api/health`
-- OpenAPI JSON: `http://localhost:8080/openapi/v1.json`
+- Compatibility health: `http://localhost:8080/api/health`
+- OpenAPI: `http://localhost:8080/openapi/v1.json`
 
 OpenAPI is exposed only in Development.
 
-## Development data
+## Reset local database
 
-After migrations are applied, Development startup seeds:
-
-- one pilot building;
-- timezone `America/Argentina/Buenos_Aires`;
-- units `1A` through `5B`.
-
-The seed is for local/dev bootstrap only. Production tenant onboarding will use explicit application workflows.
-
-## Structure
-
-```text
-apps/api/
-├── Endpoints/
-├── Infrastructure/
-│   ├── Errors/
-│   └── Persistence/
-│       └── Migrations/
-├── Modules/
-│   ├── Administration/
-│   ├── Amenities/
-│   ├── Audit/
-│   ├── Buildings/
-│   │   ├── Domain/
-│   │   └── Infrastructure/
-│   ├── Identity/
-│   │   ├── Domain/
-│   │   └── Infrastructure/
-│   ├── Messaging/
-│   ├── Notifications/
-│   ├── Payments/
-│   ├── Pricing/
-│   ├── Reporting/
-│   └── Reservations/
-├── tests/
-│   └── ResidentialAmenities.Api.Tests/
-├── Program.cs
-├── ResidentialAmenities.Api.csproj
-└── ResidentialAmenities.slnx
+```bash
+docker compose down -v
+docker compose up -d postgres
+dotnet ef database update \
+  --project apps/api/ResidentialAmenities.Api.csproj \
+  --context AppDbContext
 ```
 
-Authentication/authorization is intentionally deferred to issue #10; `UserAccount` in issue #9 is the persistence anchor needed by memberships.
+This is destructive and intended only for local development.

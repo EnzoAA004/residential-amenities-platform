@@ -11,15 +11,17 @@ public sealed class UserAccountConfiguration :
     {
         builder.ToTable("UserAccounts");
 
-        builder.HasKey(user => user.Id);
-
         builder.Property(user => user.Email)
-            .HasMaxLength(320)
-            .IsRequired();
+            .HasMaxLength(320);
 
         builder.Property(user => user.NormalizedEmail)
-            .HasMaxLength(320)
-            .IsRequired();
+            .HasMaxLength(320);
+
+        builder.Property(user => user.UserName)
+            .HasMaxLength(320);
+
+        builder.Property(user => user.NormalizedUserName)
+            .HasMaxLength(320);
 
         builder.Property(user => user.DisplayName)
             .HasMaxLength(160)
@@ -32,6 +34,7 @@ public sealed class UserAccountConfiguration :
             .IsRequired();
 
         builder.HasIndex(user => user.NormalizedEmail)
-            .IsUnique();
+            .IsUnique()
+            .HasDatabaseName("UX_UserAccounts_NormalizedEmail");
     }
 }

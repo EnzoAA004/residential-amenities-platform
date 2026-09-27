@@ -16,14 +16,18 @@ public static class IdentityPersistenceModel
                 {
                     Id = ApplicationRoles.ResidentId,
                     Name = ApplicationRoles.Resident,
-                    NormalizedName = ApplicationRoles.Resident.ToUpperInvariant()
+                    NormalizedName = ApplicationRoles.Resident.ToUpperInvariant(),
+                    ConcurrencyStamp =
+                        ApplicationRoles.ResidentConcurrencyStamp
                 },
                 new IdentityRole<Guid>
                 {
                     Id = ApplicationRoles.AdministratorId,
                     Name = ApplicationRoles.Administrator,
                     NormalizedName =
-                        ApplicationRoles.Administrator.ToUpperInvariant()
+                        ApplicationRoles.Administrator.ToUpperInvariant(),
+                    ConcurrencyStamp =
+                        ApplicationRoles.AdministratorConcurrencyStamp
                 });
         });
 

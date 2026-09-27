@@ -108,14 +108,9 @@ Capacitor is initialized through `capacitor.config.ts`, but native Android/iOS p
 
 ## Automated validation
 
-The `Toolchain Spike` GitHub Actions workflow:
-
-1. starts PostgreSQL 18;
-2. restores/builds the .NET 10 API;
-3. starts the API;
-4. calls `/api/health` and verifies database connectivity;
-5. installs client dependencies under Node 24;
-6. builds the Angular/Ionic client.
+The checks this spike proved out now run as the permanent `CI` GitHub Actions workflow
+(`.github/workflows/ci.yml`). See [ci.md](ci.md) for the current pipeline and how to
+reproduce it locally.
 
 ## Exit criteria
 

@@ -13,6 +13,13 @@ This project currently uses a single-maintainer workflow but follows team-grade 
 7. Verify CI checks.
 8. Merge only when the change is coherent and documented.
 
+## CI
+
+Every Pull Request to `main` runs the `CI` workflow (`.github/workflows/ci.yml`): backend
+restore/build/migrations/tests, API health/OpenAPI check, and frontend install/test/build.
+See [docs/07-devops/ci.md](docs/07-devops/ci.md) to reproduce these checks locally before
+opening a PR.
+
 ## Branch naming
 
 - `feat/<topic>`

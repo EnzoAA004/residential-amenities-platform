@@ -1,15 +1,8 @@
-name: Toolchain Spike
+name: CI
 
 on:
   pull_request:
     branches: [main]
-    paths:
-      - "apps/api/**"
-      - "apps/client/**"
-      - "docker-compose.yml"
-      - "global.json"
-      - ".config/dotnet-tools.json"
-      - ".github/workflows/toolchain-spike.yml"
   workflow_dispatch:
 
 jobs:
@@ -114,10 +107,12 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "24.x"
+          cache: "npm"
+          cache-dependency-path: apps/client/package-lock.json
 
       - name: Install client dependencies
         working-directory: apps/client
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
 
       - name: Run client tests
         working-directory: apps/client

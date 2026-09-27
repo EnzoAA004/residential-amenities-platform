@@ -1,5 +1,18 @@
 # Client
 
-Reserved for the Angular + Ionic + Capacitor client.
+Angular + Ionic + Capacitor client.
 
-The client is a presentation/interaction layer; authoritative pricing, authorization, availability and payment confirmation remain server-side.
+## Toolchain spike
+
+Install and run:
+
+```bash
+npm install
+npm start
+```
+
+Open `http://localhost:8100`.
+
+The development proxy forwards `/api/*` to the ASP.NET Core API at `http://localhost:8080`.
+
+The spike UI performs a real health request and shows API/database state. Native Android/iOS projects are intentionally deferred to issue #7.

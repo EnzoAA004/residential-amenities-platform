@@ -17,7 +17,8 @@ Two first-party client modes are supported:
 
 - Cookie-based Identity session.
 - Cookie is `HttpOnly`.
-- Cookie name: `__Host-residential-auth`.
+- Development over local HTTP uses `residential-auth` with `SameAsRequest` secure policy.
+- Non-Development environments use `__Host-residential-auth` with `Secure=Always`, `Path=/` and no `Domain`.
 - `SameSite=Lax`.
 - Sliding session with an eight-hour application-cookie lifetime.
 - Security-stamp validation interval: five minutes.

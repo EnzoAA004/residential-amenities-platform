@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using ResidentialAmenities.Api.Modules.Amenities.Domain;
 using ResidentialAmenities.Api.Modules.Buildings.Domain;
 
 namespace ResidentialAmenities.Api.Infrastructure.Persistence;
@@ -44,6 +45,19 @@ public static class DevelopmentDataSeeder
             }
         }
 
+        var existingAmenityNames = await dbContext.Amenities
+            .Where(amenity => amenity.BuildingId == PilotBuildingId)
+            .Select(amenity => amenity.Name)
+            .ToHashSetAsync(cancellationToken);
+
+        foreach (var amenity in CreatePilotAmenities())
+        {
+            if (!existingAmenityNames.Contains(amenity.Name))
+            {
+                dbContext.Amenities.Add(amenity);
+            }
+        }
+
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 
@@ -66,5 +80,52 @@ public static class DevelopmentDataSeeder
                 ordinal++;
             }
         }
+    }
+
+    // Placeholder daily windows only, pending business-hours validation in
+    // issue #2 (docs/01-discovery/assumptions-and-open-questions.md). These
+    // exist so the availability endpoint has something to query locally;
+    // they are not a final product decision.
+    private static IEnumerable<Amenity> CreatePilotAmenities()
+    {
+        var sum = new Amenity(
+            Guid.Parse("00000000-0000-0000-0001-000000000001"),
+            PilotBuildingId,
+            "SUM",
+            AmenityKind.Sum,
+            allowsSharedUse: true,
+            allowsExclusiveUse: true);
+
+        var pool = new Amenity(
+            Guid.Parse("00000000-0000-0000-0001-000000000002"),
+            PilotBuildingId,
+            "Pool",
+            AmenityKind.Pool,
+            allowsSharedUse: true,
+            allowsExclusiveUse: false);
+
+        var barbecue = new Amenity(
+            Guid.Parse("00000000-0000-0000-0001-000000000003"),
+            PilotBuildingId,
+            "Barbecue",
+            AmenityKind.Barbecue,
+            allowsSharedUse: false,
+            allowsExclusiveUse: true);
+
+        foreach (var amenity in new[] { sum, pool, barbecue })
+        {
+            for (var day = DayOfWeek.Sunday;
+                 day <= DayOfWeek.Saturday;
+                 day++)
+            {
+                amenity.AddAvailabilityWindow(
+                    Guid.NewGuid(),
+                    day,
+                    new TimeOnly(9, 0),
+                    new TimeOnly(22, 0));
+            }
+        }
+
+        return [sum, pool, barbecue];
     }
 }

@@ -10,10 +10,12 @@ using ResidentialAmenities.Api.Infrastructure.Persistence;
 using ResidentialAmenities.Api.Modules.Buildings.Domain;
 using ResidentialAmenities.Api.Modules.Identity;
 using ResidentialAmenities.Api.Modules.Identity.Domain;
+using ResidentialAmenities.Api.Tests.Infrastructure;
 using Xunit;
 
 namespace ResidentialAmenities.Api.Tests.Identity;
 
+[Collection(DevelopmentSeedCollection.Name)]
 public sealed class AuthenticationAuthorizationTests :
     IAsyncLifetime
 {

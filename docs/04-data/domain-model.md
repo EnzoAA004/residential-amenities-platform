@@ -1,4 +1,4 @@
-# Domain Model — v0.2
+# Domain Model — v0.3
 
 ## Implemented foundation
 
@@ -10,7 +10,9 @@ Issue #9 introduces the first persisted domain slice. The model is deliberately 
 | Unit | Implemented | Residential unit belonging to a building. |
 | UserAccount | Implemented foundation | Stable identity/profile anchor. Credentials, login sessions and roles are deferred to #10. |
 | ResidentMembership | Implemented | Authorized relationship between a user, building and unit. |
-| Amenity | Planned | Reservable resource such as SUM, pool or barbecue/grill. |
+| Amenity | Implemented (issue #19) | Reservable resource such as SUM, pool or barbecue/grill. |
+| AmenityAvailabilityWindow | Implemented (issue #19) | Recurring weekly operating window for an amenity. |
+| AmenityUnavailablePeriod | Implemented (issue #19) | Maintenance/blackout override for an amenity. |
 | Reservation | Planned | Booking request and lifecycle. |
 | ReservationResource | Planned | Resources attached to a reservation. |
 | ReservationParticipant | Planned/TBD | Participants in compatible/shared usage if required by the final reservation model. |
@@ -91,6 +93,46 @@ Development startup seeds one pilot building plus these units:
 ```
 
 The seed runs only in the ASP.NET Core Development environment and is idempotent by building/unit identifiers. It is development bootstrap data, not production onboarding logic.
+
+## Amenities & Availability (issue #19)
+
+```mermaid
+erDiagram
+    BUILDING ||--o{ AMENITY : offers
+    AMENITY ||--o{ AMENITY_AVAILABILITY_WINDOW : "recurs on"
+    AMENITY ||--o{ AMENITY_UNAVAILABLE_PERIOD : "blocked by"
+
+    AMENITY {
+        uuid Id PK
+        uuid BuildingId FK
+        varchar Name
+        varchar Kind
+        boolean AllowsSharedUse
+        boolean AllowsExclusiveUse
+        boolean IsActive
+    }
+
+    AMENITY_AVAILABILITY_WINDOW {
+        uuid Id PK
+        uuid AmenityId FK
+        varchar DayOfWeek
+        time StartTime
+        time EndTime
+    }
+
+    AMENITY_UNAVAILABLE_PERIOD {
+        uuid Id PK
+        uuid AmenityId FK
+        timestamptz StartsAtUtc
+        timestamptz EndsAtUtc
+        varchar Reason
+    }
+```
+
+The availability query (`AmenityAvailabilityCalculator`) is a pure, DB-independent
+function of an amenity's windows/periods plus its building's `TimeZoneId`. It has no
+knowledge of Reservations; see [Data Dictionary](data-dictionary.md#availability-query)
+and `docs/03-architecture/module-boundaries.md` for the ownership boundary.
 
 ## Identity boundary
 

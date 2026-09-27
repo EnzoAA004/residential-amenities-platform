@@ -119,6 +119,10 @@ jobs:
         working-directory: apps/client
         run: npm install --no-audit --no-fund
 
+      - name: Run client tests
+        working-directory: apps/client
+        run: npm test
+
       - name: Build Angular/Ionic client
         working-directory: apps/client
         run: npm run build

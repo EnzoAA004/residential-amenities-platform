@@ -1,9 +1,10 @@
-# Data Dictionary — v0.7
+# Data Dictionary — v0.8
 
 The model now includes the building/membership foundation, ASP.NET Core Identity
 persistence, the Amenities & Availability foundation (issue #19), the Pricing
-foundation (issue #22), Shared/Exclusive Leisure Reservations (issue #20), and
-Event Reservations + add-on amenities (issue #21).
+foundation (issue #22), Shared/Exclusive Leisure Reservations (issue #20),
+Event Reservations + add-on amenities (issue #21), and reservation
+concurrency/hold management (issue #23).
 
 ## Buildings
 
@@ -184,14 +185,17 @@ live reference to `PriceRules`.
 | BuildingId | uuid | No | Owning building. |
 | CreatedByMembershipId | uuid | No | The `ResidentMembership.Id` that created it — resolved server-side from the authenticated caller, never a client-sent user/membership id. No FK (Reservations does not own Buildings' tables); kept as a plain historical reference. |
 | UseType | varchar(30) | No | `SharedLeisure`, `ExclusiveLeisure` or `Event` (issue #21). Reuses Pricing's `ReservationUseType` enum directly (Reservations already depends on Pricing). |
-| Status | varchar(20) | No | `Confirmed` or `Cancelled` only — see [Domain Model](domain-model.md#reservations--sharedexclusive-leisure-issue-20) for why payment-hold states are deferred. |
+| Status | varchar(20) | No | `Pending` (the payment hold, issue #23 — every new reservation starts here), `Confirmed`, `Cancelled` or `Expired`. See [Domain Model](domain-model.md#concurrency-and-holds-issue-23). |
 | StartsAtUtc | timestamptz | No | Reservation range start. |
 | EndsAtUtc | timestamptz | No | Reservation range end. Must be after `StartsAtUtc`. |
 | CreatedAtUtc | timestamptz | No | Also the pricing quote timestamp for this reservation's price lines. |
-| CancelledAtUtc | timestamptz | Yes | Set by `Reservation.Cancel`; no HTTP endpoint calls it yet in this issue. |
+| CancelledAtUtc | timestamptz | Yes | Set by `Reservation.Cancel`; no HTTP endpoint calls it yet. |
+| ExpiresAtUtc | timestamptz | No | When this hold stops blocking resources if never confirmed (RB-009). Computed at creation as `now + Reservations:Hold:DurationMinutes` (configurable, RF-011). Checked live in conflict detection — a `Pending` row past this instant no longer blocks, even before the expiration job runs. |
+| ExpiredAtUtc | timestamptz | Yes | Set by `ReservationExpirationService` when the hold is actually flipped to `Expired` (RB-010, RF-012). |
 
 Indexes: `(BuildingId, StartsAtUtc, EndsAtUtc)` for building/time-range
-queries, `Status` for lifecycle filtering.
+queries, `Status` for lifecycle filtering, `(Status, ExpiresAtUtc)` for the
+expiration job's bulk `UPDATE ... WHERE`.
 
 ## ReservationResources
 
@@ -219,6 +223,21 @@ Index: `(AmenityId, ReservationId)`, used by the conflict-detection query.
 
 A reservation's total is `SUM(ReservationPriceLines.Amount)` for its id —
 this never requires reading current `PriceRules`.
+
+## Concurrency: PostgreSQL advisory locks (issue #23)
+
+No new table. Reservation creation runs inside an explicit transaction
+(`dbContext.Database.BeginTransactionAsync`) that first calls
+`pg_advisory_xact_lock(key1, key2)` once per distinct `AmenityId` in the
+request (SUM + add-ons for Event), in ascending Guid order to avoid
+deadlocks between two requests wanting overlapping resource sets. The two
+`int` keys are folded from the Amenity's 16 Guid bytes
+(`ResourceAdvisoryLock.ToLockKey`); a hash collision between two different
+Amenities only costs an unnecessary bit of serialization, never an incorrect
+result. Locks are transaction-scoped, so they release automatically on
+commit or rollback. See
+[Domain Model](domain-model.md#concurrency-and-holds-issue-23) for why this
+was chosen over an exclusion constraint or `Serializable` isolation.
 
 ## EventSlotDefinitions
 

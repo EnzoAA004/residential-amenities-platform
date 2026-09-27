@@ -43,12 +43,13 @@ builder.Services.AddCors(options =>
 });
 
 builder.Services.AddPersistence(builder.Configuration);
+builder.Services.AddSingleton(TimeProvider.System);
 
 builder.Services
     .AddIdentityModule()
     .AddBuildingsModule()
     .AddAmenitiesModule()
-    .AddReservationsModule()
+    .AddReservationsModule(builder.Configuration)
     .AddPricingModule()
     .AddPaymentsModule()
     .AddAdministrationModule()

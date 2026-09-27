@@ -181,6 +181,42 @@ the SUM's general availability is rejected:
 The membership, price and availability are always derived/validated
 server-side — a client cannot influence them by sending extra fields.
 
+### Holds and concurrency (issue #23)
+
+Every reservation is created as a `Pending` **hold** (RB-009) — there is no
+payment step yet, so `Pending` is the only state a fresh reservation can
+start in. The response's `status` field will read `"Pending"`, not
+`"Confirmed"`, and includes `expiresAtUtc`. A hold blocks its resources
+exactly like a `Confirmed` reservation until that instant, then stops
+blocking automatically — a background service releases past-due holds
+(flips them to `Expired`) every
+`Reservations:Expiration:IntervalSeconds` seconds (default 60), and the
+conflict-detection query itself already treats an expired-but-not-yet-swept
+hold as inactive.
+
+Hold duration is configurable, **not** hardcoded:
+
+```json
+{
+  "Reservations": {
+    "Hold": { "DurationMinutes": 30 },
+    "Expiration": { "IntervalSeconds": 60 }
+  }
+}
+```
+
+30 minutes is a placeholder for local development — production must set
+this once issue #2 answers OQ-010 (candidates under discussion: 24 or 48
+hours).
+
+Two truly concurrent, incompatible requests for the same resource/time can
+never both succeed: reservation creation acquires a PostgreSQL
+transaction-scoped advisory lock per requested Amenity before checking for
+conflicts, serializing concurrent attempts on the same resource. See
+`docs/04-data/domain-model.md#concurrency-and-holds-issue-23` for why this
+approach was chosen over a database exclusion constraint or `Serializable`
+isolation.
+
 ## Run
 
 ```bash

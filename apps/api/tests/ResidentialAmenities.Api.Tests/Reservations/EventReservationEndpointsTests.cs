@@ -504,7 +504,8 @@ public sealed class EventReservationEndpointsTests : IAsyncLifetime
                 ReservationUseType.ExclusiveLeisure,
                 startUtc,
                 endUtc,
-                DateTimeOffset.UtcNow);
+                DateTimeOffset.UtcNow,
+                DateTimeOffset.UtcNow.AddDays(1));
             existingPoolReservation.AddResource(
                 Guid.NewGuid(),
                 DevelopmentDataSeeder.PilotPoolId,

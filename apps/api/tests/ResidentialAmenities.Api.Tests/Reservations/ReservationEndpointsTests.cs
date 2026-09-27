@@ -140,7 +140,9 @@ public sealed class ReservationEndpointsTests : IAsyncLifetime
 
         Assert.NotNull(body);
         Assert.Equal("SharedLeisure", body.UseType);
-        Assert.Equal("Confirmed", body.Status);
+        // Every reservation starts as a payment hold (issue #23, RB-009):
+        // there is still no payment step to confirm it immediately.
+        Assert.Equal("Pending", body.Status);
         Assert.Equal(5_000m, body.TotalAmount);
         Assert.Equal("ARS", body.Currency);
     }

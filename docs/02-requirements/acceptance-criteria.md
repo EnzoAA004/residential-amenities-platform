@@ -61,11 +61,12 @@ Related: RF-004, RB-003, RB-004 — issue #20.
 
 Related: RF-005, RF-010, RB-005 — issues #20, #23.
 
-Issue #20 delivers ordinary transactional conflict detection (overlap +
-exclusivity checked within the same request/transaction). It does not yet
-close the race between two truly concurrent incompatible requests — that is
-issue #23, which also owns payment holds/expiration. RNF-005 is not
-considered fully satisfied until #23 lands.
+Issue #20 delivered ordinary transactional conflict detection (overlap +
+exclusivity checked within the same request/transaction). Issue #23 closes
+the remaining race between two truly concurrent incompatible requests with a
+PostgreSQL advisory lock — see AC-12 and
+`docs/04-data/domain-model.md#concurrency-and-holds-issue-23`. RNF-005 is
+now considered satisfied.
 
 ---
 
@@ -116,6 +117,15 @@ Related: RF-008, RF-009, RF-019, RB-007, RB-008 — issue #22.
 **BLOCKED/TBD:** exact hold duration requires issue #2.
 
 Related: RF-011, RF-012, RB-009, RB-010 — issue #23.
+
+Implemented: every reservation is created `Pending` (the hold) with a
+configurable `ExpiresAtUtc` (`Reservations:Hold:DurationMinutes`); it blocks
+resources exactly like `Confirmed` while active and stops the instant it is
+past due. `ReservationExpirationHostedService` releases expired holds
+automatically (idempotent bulk `UPDATE`, safe under concurrent execution) —
+see `docs/04-data/domain-model.md#concurrency-and-holds-issue-23`. The
+30-minute default duration is an explicit placeholder, not the real value
+under discussion for OQ-010 (24/48 hours).
 
 ---
 
@@ -183,6 +193,27 @@ Related: RF-017 through RF-021, RB-013, RB-014 — issues #26, #27.
 **And** the Ionic/Capacitor project remains configured so Android/iOS packaging can be introduced without rewriting the client.
 
 Related: RF-022, RF-023, RNF-008, RNF-009 — issue #7.
+
+---
+
+## AC-12 — Reservation concurrency correctness (RNF-005)
+
+**Given** two truly concurrent requests for incompatible bookings on the
+same resource/time
+**When** both are submitted at effectively the same moment
+**Then** exactly one is confirmed as a hold and the other receives a
+conflict response; neither a multi-resource Event nor any of its individual
+resources is ever persisted partially.
+
+Related: RF-010, RNF-005 — issue #23.
+
+Implemented via a per-Amenity PostgreSQL advisory lock held for the
+duration of the conflict-check-and-insert transaction (see
+`docs/04-data/domain-model.md#concurrency-and-holds-issue-23` for why this
+was chosen over an exclusion constraint or `Serializable` isolation).
+Verified with genuinely concurrent HTTP requests against a real PostgreSQL
+database, for both single-resource Leisure and multi-resource Event
+bookings.
 
 ## Definition of acceptance evidence
 

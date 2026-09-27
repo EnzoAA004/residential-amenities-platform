@@ -1,4 +1,5 @@
-using Npgsql;
+using Microsoft.EntityFrameworkCore;
+using ResidentialAmenities.Api.Infrastructure.Persistence;
 
 namespace ResidentialAmenities.Api.Endpoints;
 
@@ -8,21 +9,14 @@ public static class HealthEndpoints
         this IEndpointRouteBuilder endpoints)
     {
         static async Task<IResult> CheckHealth(
-            NpgsqlDataSource dataSource,
+            AppDbContext dbContext,
             CancellationToken cancellationToken)
         {
             try
             {
-                await using var connection =
-                    await dataSource.OpenConnectionAsync(cancellationToken);
-
-                await using var command =
-                    new NpgsqlCommand("SELECT 1", connection);
-
-                var result =
-                    await command.ExecuteScalarAsync(cancellationToken);
-
-                var databaseHealthy = Convert.ToInt32(result) == 1;
+                var databaseHealthy =
+                    await dbContext.Database.CanConnectAsync(
+                        cancellationToken);
 
                 return databaseHealthy
                     ? Results.Ok(new
@@ -35,7 +29,7 @@ public static class HealthEndpoints
                         new
                         {
                             status = "degraded",
-                            database = "unexpected",
+                            database = "unavailable",
                             utc = DateTimeOffset.UtcNow
                         },
                         statusCode: StatusCodes.Status503ServiceUnavailable);

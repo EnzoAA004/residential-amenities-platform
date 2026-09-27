@@ -4,6 +4,8 @@
 
 The initial product uses a **modular monolith**. This keeps deployment and operations simple for a very small pilot while preserving internal boundaries that can evolve later if justified.
 
+The detailed responsibilities, allowed dependencies and forbidden coupling rules are defined in [Module Boundaries](module-boundaries.md).
+
 ## Major modules
 
 - Identity & Access
@@ -17,6 +19,43 @@ The initial product uses a **modular monolith**. This keeps deployment and opera
 - Messaging (post-MVP)
 - Audit
 - Reporting/Analytics (post-MVP)
+
+## Core dependency direction
+
+```mermaid
+flowchart LR
+    IAM[Identity & Access]
+    BM[Buildings & Memberships]
+    AA[Amenities & Availability]
+    R[Reservations]
+    P[Pricing]
+    PAY[Payments]
+    ADM[Administration]
+
+    IAM --> BM
+    R --> BM
+    R --> AA
+    R --> P
+    PAY --> R
+
+    ADM --> BM
+    ADM --> AA
+    ADM --> R
+    ADM --> P
+    ADM --> PAY
+```
+
+The direction represents business/application dependencies, not database foreign-key diagrams.
+
+Reservations owns booking lifecycle; Pricing owns authoritative price rules; Payments owns payment attempts/provider state. These three concerns must remain conceptually separate.
+
+## Communication rules
+
+- Use explicit application contracts for synchronous cross-module operations.
+- Use events for secondary effects such as audit/notifications.
+- Do not use another module's repository/persistence implementation as an integration API.
+- Avoid circular dependencies.
+- Keep business entities out of generic shared/common packages.
 
 ## Runtime direction
 
@@ -50,6 +89,7 @@ Core records should carry a clear building/tenant ownership path. The pilot can 
 
 - simplicity;
 - consistency;
+- explicit module boundaries;
 - security boundaries;
 - concurrency correctness;
 - auditability;

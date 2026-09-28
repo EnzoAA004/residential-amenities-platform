@@ -9,6 +9,7 @@ import { AppShellComponent } from '../../../layout/app-shell/app-shell.component
 import { AmenitiesService } from './amenities.service';
 import { AmenitySummary } from './amenities.models';
 import { AmenityAvailabilityComponent } from './amenity-availability.component';
+import { LeisureReservationComponent } from '../reservations/leisure/leisure-reservation.component';
 
 type AmenitiesLoadState =
   | { status: 'idle' }
@@ -18,9 +19,13 @@ type AmenitiesLoadState =
   | { status: 'error'; error: ApiError };
 
 /**
- * Resident-facing amenity and structural-availability browsing (issue #46).
- * This page never creates a reservation and never computes availability
- * itself — see `AmenityAvailabilityComponent` and the client README.
+ * Resident building/amenity context and browsing (issue #46): building
+ * selection, amenity listing, and an amenity's structural availability via
+ * `AmenityAvailabilityComponent`. Once an amenity is selected, it also
+ * hosts the Shared/Exclusive Leisure reservation flow
+ * (`LeisureReservationComponent`, issue #47) — quote, confirm, create a
+ * `Pending` hold. This page itself never computes availability or a price
+ * client-side; see the client README for both issues' details.
  */
 @Component({
   selector: 'app-amenities-page',
@@ -28,6 +33,7 @@ type AmenitiesLoadState =
   imports: [
     AppShellComponent,
     AmenityAvailabilityComponent,
+    LeisureReservationComponent,
     IonBadge,
     IonButton,
     IonItem,
@@ -149,6 +155,7 @@ type AmenitiesLoadState =
           @if (selectedAmenity(); as amenity) {
             <h2>{{ amenity.name }}</h2>
             <app-amenity-availability [amenity]="amenity" />
+            <app-leisure-reservation [amenity]="amenity" />
           }
         }
       }

@@ -4,13 +4,15 @@ Angular + Ionic + Capacitor client for Residential Amenities Platform.
 
 ## Status
 
-Frontend foundation, web authentication and resident amenity/availability
-browsing (issues #44, #45 and #46): a real application shell, a small design
-system, a typed API client/error model/endpoint catalog, cookie-backed web
-login/logout, session bootstrap, route guards, global 401 handling, a
-resident building context derived from the user's own memberships, and
-browsing of a building's amenities and their structural availability.
-Reservations and payment arrive with issues #47 and later (see
+Frontend foundation, web authentication, resident amenity/availability
+browsing and the first reservation flow (issues #44, #45, #46 and #47): a
+real application shell, a small design system, a typed API client/error
+model/endpoint catalog, cookie-backed web login/logout, session bootstrap,
+route guards, global 401 handling, a resident building context derived from
+the user's own memberships, browsing of a building's amenities and their
+structural availability, and creating a Shared/Exclusive Leisure reservation
+hold (quote → confirm → create). Event reservations, payment and admin
+operations arrive with issues #48 and later (see
 [`docs/12-roadmap/backlog-mvp-client.md`](../../docs/12-roadmap/backlog-mvp-client.md)).
 
 ## Baseline
@@ -28,6 +30,8 @@ Reservations and payment arrive with issues #47 and later (see
 - A web login page (`features/login`)
 - Resident amenity listing and structural-availability browsing
   (`features/resident/amenities`)
+- Shared/Exclusive Leisure reservation quote-and-create flow
+  (`features/resident/reservations/leisure`)
 - An internal `/health` diagnostic (`features/diagnostics`, `core/health`)
 
 ## Install and run
@@ -88,7 +92,9 @@ src/
 │   │   ├── landing/       # authenticated landing page
 │   │   ├── login/         # public web login
 │   │   ├── resident/
-│   │   │   └── amenities/ # amenity listing + availability browsing (#46)
+│   │   │   ├── amenities/    # amenity listing + availability browsing (#46)
+│   │   │   └── reservations/
+│   │   │       └── leisure/  # Shared/Exclusive Leisure quote+create (#47)
 │   │   └── diagnostics/   # internal /health check, not linked from nav
 │   ├── app.component.ts   # root: <ion-app><ion-router-outlet></ion-router-outlet></ion-app>
 │   ├── app.config.ts
@@ -376,6 +382,143 @@ made against a building or amenity the user has since navigated away from
 is cancelled and never overwrites the current view. Selecting a different
 amenity or building also clears the previous selection/availability state
 immediately, before any new request is made.
+
+## Leisure reservation flow (Shared/Exclusive)
+
+Issue #47 adds the first flow that actually creates a reservation:
+`SharedLeisure`/`ExclusiveLeisure` against `POST /api/reservations`. It ends
+when a `Pending` hold exists — Event reservations (#48), payment (#49) and
+admin cancel/reschedule (#52) are all out of scope.
+
+`features/resident/reservations/leisure/` embeds directly under the
+selected amenity on `/amenities` (no new route): `LeisureReservationComponent`
+takes the already-loaded `AmenitySummary` as its `amenity` input, and reads
+`buildingId` from `ResidentContextStore.activeBuildingId()` — the same
+identity-scoped source #46 established. Neither id is ever an editable
+field, so there is no way for a resident to type an arbitrary
+building/amenity id into this flow.
+
+### Use type
+
+`LeisureUseType` is a closed union (`'SharedLeisure' | 'ExclusiveLeisure'`),
+never a free `string`. Which options are offered is derived only from the
+selected amenity's own flags:
+
+- only `allowsSharedUse`: `SharedLeisure` is used, no selector shown;
+- only `allowsExclusiveUse`: `ExclusiveLeisure` is used, no selector shown;
+- both: the resident must choose explicitly — nothing is auto-picked;
+- neither: no functional reservation form renders at all ("Esta amenity no
+  admite reservas de ocio."), and no request the backend would reject is
+  ever sent.
+
+### Quote, then create — two separate requests, never bound together
+
+`GET /api/pricing/quote` (`buildingId`, `amenityId`, `useType` — never
+add-ons, never a membership id) must succeed before the "Confirm
+reservation" button is enabled at all. But quoting and creating are
+independent requests: `POST /api/reservations` recalculates the price at
+the instant it runs, so the client never claims the quoted price is
+"locked in" or "guaranteed". If a price rule changes between the two calls,
+the confirmation screen shows the real amount from the `201` response, and
+if it differs from the quote it says so explicitly ("El precio se actualizó
+al crear la reserva. Este es el importe registrado en el hold.") — never
+silently, and never with an automatic rollback (there is no resident-facing
+cancellation endpoint to roll back to; see "Known gaps" below). Changing
+the use type invalidates a previous quote (it priced a different use type);
+changing the date range does not, since the current backend pricing model
+does not vary by duration (`Base` component only — this client never
+multiplies price by hours).
+
+### What the client sends and shows
+
+The create request is exactly:
+
+```ts
+{ buildingId, amenityId, useType, startsAtUtc, endsAtUtc }
+```
+
+Never `membershipId` (resolved server-side from the authenticated caller),
+never a price/currency/status field, and never `addOnAmenityIds` (Event
+only). The confirmation view renders only fields the `201`
+`ReservationResponse` actually returned — `status`, `totalAmount`,
+`currency`, `expiresAtUtc` — none of them assumed or computed client-side.
+In particular, the hold's expiry is shown as the literal `expiresAtUtc`
+timestamp; this client never assumes or displays a fixed hold duration
+(e.g. "30 minutes"), because that duration is a backend configuration value
+that can change.
+
+### Errors and network uncertainty
+
+- `400` (invalid range/use type) and `422` (outside availability,
+  amenity/use-type mismatch, no active price rule) show the backend's own
+  safe `ApiError` title/detail — this client does not assume a single cause
+  for `422`.
+- `409` (an incompatible reservation already occupies that time) shows a
+  clear "the time range is no longer available" message and leaves no
+  partial/phantom reservation state.
+- `403` shows an access-denied message; it never signs the resident out
+  (only the global `401` interceptor does that).
+- A network failure (`ApiError.status === 0`) during **create** is shown as
+  an explicitly uncertain result ("No pudimos confirmar el resultado de la
+  creación. Evitá repetir inmediatamente la operación.") — the client
+  cannot tell whether the server never received the request or created the
+  hold and lost the response, so it never claims the reservation definitely
+  was not created. A quote failure, by contrast, is safely retryable (`GET`,
+  no state created), and the UI offers a manual retry there.
+
+### No double submit, no automatic retry
+
+`POST /api/reservations` has no idempotency key, and two identical
+`SharedLeisure` requests are both individually valid (Shared+Shared is
+compatible), so a duplicate submit could create two separate holds. The
+submit button is disabled while a create request is in flight, and
+`create()` itself also guards against a second call while one is already
+pending. There is no `retry`/`retryWhen` anywhere in the create path —
+after a `400`/`409`/`422`, the resident edits the form and resubmits
+manually; after a network failure, resubmitting is the resident's own
+explicit choice, made with the uncertainty above visible.
+
+### Race conditions and confirmed holds
+
+The quote request is re-issued only on an explicit "Get quote" click, so it
+never fires on every keystroke. Switching to a different amenity (parent
+swaps `[amenity]`) or building (parent tears the whole selected-amenity
+section down) clears any in-progress quote/creation state immediately —
+a stale quote or hold confirmation for a resource the resident navigated
+away from is never left on screen. Once a hold is confirmed, the
+confirmation view is the only thing rendered until the resident takes the
+explicit "Create another reservation" action; an incidental form edit can
+never reinterpret an already-created hold as something else.
+
+### Time zone (same documented gap as #46)
+
+Like `/amenities`, this flow renders `<input type="datetime-local">` in the
+browser/device's local time zone and converts to UTC via
+`Date.toISOString()` — no custom offset math, and no hardcoded
+`America/Argentina/Buenos_Aires`. The range control reuses
+`features/resident/amenities/availability-range.ts` (end-after-start, 62-day
+maximum, mirroring `AmenityAvailabilityCalculator.MaxQueryRange`, which
+`ReservationScheduleValidator` also reuses server-side) instead of
+duplicating that logic. The building's authoritative time zone is still not
+exposed to this client — see the gap already documented under "Resident
+context and amenity/availability browsing" above.
+
+### Known contract gaps (not solved client-side)
+
+- **No creation idempotency key.** `POST /api/reservations` cannot
+  distinguish a genuine retry from a new request; this client compensates
+  only at the UX level (disabled submit, no auto-retry), which reduces but
+  does not eliminate the double-hold risk under a real network failure.
+- **The quote is not bound to the create.** Nothing locks the price
+  between the two requests; this is a deliberate simplification of the
+  current backend and is surfaced to the resident rather than hidden.
+- **No resident-facing cancellation.** If a `201` hold's price differs from
+  its quote, there is no endpoint this client can call to cancel it, so the
+  UI cannot offer a rollback action even if it wanted to.
+- **Building time zone** — unchanged gap from #46.
+- **No "my reservations" view yet (#50).** This flow does not attempt to
+  list or look up existing reservations; the `201` response is the only
+  source of truth this screen ever shows.
 
 ## `/health` vs `/api`
 

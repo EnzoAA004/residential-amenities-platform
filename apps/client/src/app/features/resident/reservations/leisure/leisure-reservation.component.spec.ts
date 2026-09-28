@@ -190,22 +190,33 @@ describe('LeisureReservationComponent', () => {
     expect(fixture.nativeElement.textContent).toContain(component.formatAmount(5000, 'ARS'));
   });
 
-  it('shows a safe error message when the quote fails with 422 (no active price rule)', async () => {
+  it('shows the real title and detail when the quote fails with 422 (no active price rule)', async () => {
     createFixture(sharedOnlyAmenity);
     component.requestQuote();
 
     httpMock
       .expectOne((req) => req.url === '/api/pricing/quote')
       .flush(
-        { status: 422, title: 'Unable to calculate a price quote.' },
+        {
+          status: 422,
+          title: 'Unable to calculate a price quote.',
+          detail: 'No active Base price rule.'
+        },
         { status: 422, statusText: 'Unprocessable Entity' }
       );
     await fixture.whenStable();
+    fixture.detectChanges();
 
     expect(component.quoteState()).toEqual({
       status: 'error',
-      error: { status: 422, title: 'Unable to calculate a price quote.' }
+      error: {
+        status: 422,
+        title: 'Unable to calculate a price quote.',
+        detail: 'No active Base price rule.'
+      }
     });
+    expect(fixture.nativeElement.textContent).toContain('Unable to calculate a price quote.');
+    expect(fixture.nativeElement.textContent).toContain('No active Base price rule.');
   });
 
   it('shows a safe error message when the quote fails with 403 (invalid context)', async () => {
@@ -321,8 +332,11 @@ describe('LeisureReservationComponent', () => {
       { status: 422, statusText: 'Unprocessable Entity' }
     );
     await fixture.whenStable();
+    fixture.detectChanges();
 
     expect(component.createState().status).toBe('error');
+    expect(fixture.nativeElement.textContent).toContain('Unable to create this reservation.');
+    expect(fixture.nativeElement.textContent).toContain('Outside availability.');
   });
 
   it('shows a clear 400 invalid-range message on create', async () => {
@@ -337,8 +351,11 @@ describe('LeisureReservationComponent', () => {
       { status: 400, statusText: 'Bad Request' }
     );
     await fixture.whenStable();
+    fixture.detectChanges();
 
     expect(component.createState().status).toBe('error');
+    expect(fixture.nativeElement.textContent).toContain('Unable to create this reservation.');
+    expect(fixture.nativeElement.textContent).toContain('End must be after start.');
   });
 
   it('shows a clear 403 message on create without signing the user out', async () => {
@@ -376,6 +393,38 @@ describe('LeisureReservationComponent', () => {
       'No pudimos confirmar el resultado de la creación. Evitá repetir inmediatamente la operación.'
     );
   });
+
+  it(
+    'blocks a second POST after an uncertain (network) result: quote 200 → create → status 0 → ' +
+      'unknown → create() again sends nothing, and no enabled confirm button remains',
+    async () => {
+      createFixture(sharedOnlyAmenity);
+      component.requestQuote();
+      httpMock.expectOne((req) => req.url === '/api/pricing/quote').flush(quote);
+      await fixture.whenStable();
+
+      component.create();
+      const firstRequest = httpMock.expectOne('/api/reservations');
+      firstRequest.error(new ProgressEvent('error'), { status: 0, statusText: 'Unknown Error' });
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      expect(component.createState()).toEqual({ status: 'unknown' });
+
+      // A second, explicit attempt to create must not fire another POST —
+      // this is the behavior, not just the internal state, that matters:
+      // the button in the DOM must actually be disabled, not just the
+      // guard in create() (defense at both levels).
+      const buttons = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('ion-button'));
+      const confirmButton = buttons.find((button) => button.textContent?.includes('Confirm reservation'));
+      expect(confirmButton?.disabled).toBe(true);
+
+      component.create();
+
+      httpMock.expectNone('/api/reservations');
+      expect(component.createState()).toEqual({ status: 'unknown' });
+    }
+  );
 
   it('disables further submits while creating and never sends a second POST for one click storm', async () => {
     createFixture(sharedOnlyAmenity);

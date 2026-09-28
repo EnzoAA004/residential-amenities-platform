@@ -211,6 +211,10 @@ const USE_TYPE_LABELS: Record<LeisureUseType, string> = {
             @case ('error') {
               <p role="alert">
                 <ion-text color="danger">{{ quoteErrorTitle() }}</ion-text>
+                @if (quoteErrorDetail(); as detail) {
+                  <br />
+                  <ion-text color="danger">{{ detail }}</ion-text>
+                }
               </p>
               <ion-button type="button" fill="clear" (click)="requestQuote()">Retry</ion-button>
             }
@@ -230,7 +234,7 @@ const USE_TYPE_LABELS: Record<LeisureUseType, string> = {
             <ion-button
               type="button"
               (click)="create()"
-              [disabled]="createStatus.status === 'creating'"
+              [disabled]="createStatus.status === 'creating' || createStatus.status === 'unknown'"
             >
               {{ createStatus.status === 'creating' ? 'Creating…' : 'Confirm reservation' }}
             </ion-button>
@@ -239,6 +243,10 @@ const USE_TYPE_LABELS: Record<LeisureUseType, string> = {
           @if (createStatus.status === 'error') {
             <p role="alert">
               <ion-text color="danger">{{ createErrorTitle() }}</ion-text>
+              @if (createErrorDetail(); as detail) {
+                <br />
+                <ion-text color="danger">{{ detail }}</ion-text>
+              }
             </p>
           }
 
@@ -381,9 +389,19 @@ export class LeisureReservationComponent {
     return state.status === 'error' ? state.error.title : '';
   }
 
+  quoteErrorDetail(): string | null {
+    const state = this.quoteState();
+    return state.status === 'error' ? (state.error.detail ?? null) : null;
+  }
+
   createErrorTitle(): string {
     const state = this.createState();
     return state.status === 'error' ? state.error.title : '';
+  }
+
+  createErrorDetail(): string | null {
+    const state = this.createState();
+    return state.status === 'error' ? (state.error.detail ?? null) : null;
   }
 
   priceChanged(state: { reservation: Reservation; quotedAt: PriceQuote | null }): boolean {
@@ -434,7 +452,16 @@ export class LeisureReservationComponent {
     // somehow bypassed — the create POST has no idempotency key, and
     // Shared+Shared reservations are compatible, so two identical requests
     // could otherwise produce two separate holds.
-    if (this.createState().status === 'creating') {
+    // create() may only run from an explicitly safe state. In particular,
+    // once a create attempt ends in `unknown` (a network failure where the
+    // client cannot tell whether the server ever received/created the
+    // reservation), a second POST is never allowed for this same flow —
+    // Shared+Shared reservations are compatible and the endpoint has no
+    // idempotency key, so a retry here could produce a second, distinct
+    // hold rather than deduplicating the first one.
+    const currentStatus = this.createState().status;
+
+    if (currentStatus !== 'idle' && currentStatus !== 'error') {
       return;
     }
 

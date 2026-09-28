@@ -1,7 +1,7 @@
 import { HttpErrorResponse, provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { firstValueFrom } from 'rxjs';
+import { Observable, firstValueFrom } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { API_BASE_URL } from '../config/api-base-url.token';
@@ -34,54 +34,77 @@ describe('ApiClient', () => {
     id: string;
   }
 
+  // Observables are cold: expectOne() only sees a request once something has
+  // subscribed. firstValueFrom(...) subscribes synchronously, so the request
+  // is already registered with HttpTestingController by the time we call
+  // expectOne() right after it — but only if we call it before awaiting.
+  async function expectAndFlush<T>(
+    result$: Observable<T>,
+    url: string,
+    flush: (request: ReturnType<HttpTestingController['expectOne']>) => void
+  ): Promise<T> {
+    const promise = firstValueFrom(result$);
+    flush(httpMock.expectOne(url));
+    return promise;
+  }
+
   it('resolves a GET against the configured base URL', async () => {
-    const result$ = client.get<Widget>('/widgets/1');
+    const result = await expectAndFlush<Widget>(
+      client.get<Widget>('/widgets/1'),
+      '/api/widgets/1',
+      (request) => {
+        expect(request.request.method).toBe('GET');
+        request.flush({ id: '1' });
+      }
+    );
 
-    const request = httpMock.expectOne('/api/widgets/1');
-    expect(request.request.method).toBe('GET');
-    request.flush({ id: '1' });
-
-    await expect(firstValueFrom(result$)).resolves.toEqual({ id: '1' });
+    expect(result).toEqual({ id: '1' });
   });
 
   it('normalizes a path without a leading slash the same as one with it', () => {
     client.get<Widget>('widgets/1').subscribe();
-    httpMock.expectOne('/api/widgets/1');
+    httpMock.expectOne('/api/widgets/1').flush({ id: '1' });
 
     client.get<Widget>('/widgets/1').subscribe();
-    httpMock.expectOne('/api/widgets/1');
+    httpMock.expectOne('/api/widgets/1').flush({ id: '1' });
   });
 
   it('sends a POST with its body', async () => {
-    const result$ = client.post<Widget, { name: string }>('/widgets', { name: 'sum' });
+    const result = await expectAndFlush<Widget>(
+      client.post<Widget, { name: string }>('/widgets', { name: 'sum' }),
+      '/api/widgets',
+      (request) => {
+        expect(request.request.method).toBe('POST');
+        expect(request.request.body).toEqual({ name: 'sum' });
+        request.flush({ id: '1' });
+      }
+    );
 
-    const request = httpMock.expectOne('/api/widgets');
-    expect(request.request.method).toBe('POST');
-    expect(request.request.body).toEqual({ name: 'sum' });
-    request.flush({ id: '1' });
-
-    await expect(firstValueFrom(result$)).resolves.toEqual({ id: '1' });
+    expect(result).toEqual({ id: '1' });
   });
 
   it('sends a PUT with its body', async () => {
-    const result$ = client.put<Widget, { name: string }>('/widgets/1', { name: 'renamed' });
+    const result = await expectAndFlush<Widget>(
+      client.put<Widget, { name: string }>('/widgets/1', { name: 'renamed' }),
+      '/api/widgets/1',
+      (request) => {
+        expect(request.request.method).toBe('PUT');
+        expect(request.request.body).toEqual({ name: 'renamed' });
+        request.flush({ id: '1' });
+      }
+    );
 
-    const request = httpMock.expectOne('/api/widgets/1');
-    expect(request.request.method).toBe('PUT');
-    expect(request.request.body).toEqual({ name: 'renamed' });
-    request.flush({ id: '1' });
-
-    await expect(firstValueFrom(result$)).resolves.toEqual({ id: '1' });
+    expect(result).toEqual({ id: '1' });
   });
 
   it('sends a DELETE', async () => {
-    const result$ = client.delete<void>('/widgets/1');
+    const promise = firstValueFrom(client.delete<null>('/widgets/1'));
 
     const request = httpMock.expectOne('/api/widgets/1');
     expect(request.request.method).toBe('DELETE');
     request.flush(null);
 
-    await expect(firstValueFrom(result$)).resolves.toBeNull();
+    await expect(promise).resolves.toBeNull();
   });
 
   it('appends query parameters, repeating array values and skipping null/undefined', () => {
@@ -102,7 +125,7 @@ describe('ApiClient', () => {
   it.each([400, 401, 403, 404, 409, 422, 500])(
     'maps a %i ProblemDetails response to a structured ApiError',
     async (status) => {
-      const result$ = client.get<Widget>('/widgets/1');
+      const promise = firstValueFrom(client.get<Widget>('/widgets/1'));
       const request = httpMock.expectOne('/api/widgets/1');
 
       request.flush(
@@ -110,7 +133,7 @@ describe('ApiClient', () => {
         { status, statusText: 'Error' }
       );
 
-      const error = await result$.toPromise().catch((caught: ApiError) => caught);
+      const error = await promise.catch((caught: ApiError) => caught);
 
       expect(error).toEqual({
         status,
@@ -123,7 +146,7 @@ describe('ApiClient', () => {
   );
 
   it('falls back to a safe generic error when the body is not ProblemDetails', async () => {
-    const result$ = client.get<Widget>('/widgets/1');
+    const promise = firstValueFrom(client.get<Widget>('/widgets/1'));
     const request = httpMock.expectOne('/api/widgets/1');
 
     request.flush('<html>Internal Server Error</html>', {
@@ -131,7 +154,7 @@ describe('ApiClient', () => {
       statusText: 'Internal Server Error'
     });
 
-    const error = await result$.toPromise().catch((caught: ApiError) => caught);
+    const error = await promise.catch((caught: ApiError) => caught);
 
     expect(error).toEqual({ status: 500, title: 'Something went wrong. Please try again.' });
     // Never leaks the raw body into the error the UI would render.
@@ -139,12 +162,12 @@ describe('ApiClient', () => {
   });
 
   it('maps a network failure (status 0) to a safe connectivity error, never the raw event', async () => {
-    const result$ = client.get<Widget>('/widgets/1');
+    const promise = firstValueFrom(client.get<Widget>('/widgets/1'));
     const request = httpMock.expectOne('/api/widgets/1');
 
     request.error(new ProgressEvent('error'), { status: 0, statusText: 'Unknown Error' });
 
-    const error = await result$.toPromise().catch((caught: ApiError) => caught);
+    const error = await promise.catch((caught: ApiError) => caught);
 
     expect(error).toEqual({
       status: 0,
@@ -153,11 +176,11 @@ describe('ApiClient', () => {
   });
 
   it('never rejects with the raw HttpErrorResponse', async () => {
-    const result$ = client.get<Widget>('/widgets/1');
+    const promise = firstValueFrom(client.get<Widget>('/widgets/1'));
     const request = httpMock.expectOne('/api/widgets/1');
     request.flush({ title: 'x' }, { status: 400, statusText: 'Bad Request' });
 
-    const error = await result$.toPromise().catch((caught: unknown) => caught);
+    const error = await promise.catch((caught: unknown) => caught);
 
     expect(error).not.toBeInstanceOf(HttpErrorResponse);
   });

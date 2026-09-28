@@ -139,3 +139,9 @@ Still to be addressed/refined in later issues:
 - container scanning;
 - audit-event policy;
 - incident response procedure.
+
+Cash (issue #25): declaring cash is limited to the reservation's creator (or
+an Administrator); confirming receipt is `Administrator`-only — provisional
+until OQ-013 defines who receives cash — with the actor always taken from the
+authenticated session and stored on the payment (`CashConfirmedByUserId`,
+`CashConfirmedAtUtc`). The resident-facing payment view never exposes that id.

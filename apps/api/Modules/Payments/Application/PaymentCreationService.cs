@@ -64,6 +64,11 @@ public sealed class PaymentCreationService(
 
         var payment = await FindActivePaymentAsync(reservation.ReservationId, cancellationToken);
 
+        if (payment is not null && payment.Method != PaymentMethod.MercadoPago)
+        {
+            throw OtherMethodActive(payment.Method);
+        }
+
         if (payment is { Status: PaymentStatus.Approved })
         {
             throw new PaymentRequestException(
@@ -85,13 +90,17 @@ public sealed class PaymentCreationService(
             reservation.ExpiresAtUtc);
     }
 
+    private static PaymentRequestException OtherMethodActive(PaymentMethod method) =>
+        new(
+            $"This reservation already has an active {method} payment; payment-method switching is not supported.",
+            StatusCodes.Status409Conflict);
+
     private Task<Payment?> FindActivePaymentAsync(
         Guid reservationId,
         CancellationToken cancellationToken) =>
         dbContext.Payments.SingleOrDefaultAsync(
             candidate =>
                 candidate.ReservationId == reservationId &&
-                candidate.Method == PaymentMethod.MercadoPago &&
                 (candidate.Status == PaymentStatus.Created ||
                  candidate.Status == PaymentStatus.Pending ||
                  candidate.Status == PaymentStatus.Approved),
@@ -110,10 +119,9 @@ public sealed class PaymentCreationService(
         var wholeSeconds = Math.Max(1, (long)Math.Floor(remaining.TotalSeconds));
         var expirationTime = XmlConvert.ToString(TimeSpan.FromSeconds(wholeSeconds));
 
-        var payment = new Payment(
+        var payment = Payment.CreateMercadoPago(
             Guid.NewGuid(),
             reservation.ReservationId,
-            PaymentMethod.MercadoPago,
             reservation.TotalAmount,
             reservation.Currency!,
             Guid.NewGuid().ToString("D"),
@@ -133,7 +141,14 @@ public sealed class PaymentCreationService(
             // attempt first: resume that one instead of forking.
             dbContext.ChangeTracker.Clear();
 
-            return await FindActivePaymentAsync(reservation.ReservationId, cancellationToken)
+            var concurrent = await FindActivePaymentAsync(reservation.ReservationId, cancellationToken);
+
+            if (concurrent is not null && concurrent.Method != PaymentMethod.MercadoPago)
+            {
+                throw OtherMethodActive(concurrent.Method);
+            }
+
+            return concurrent
                 ?? throw new PaymentRequestException(
                     "Could not start a payment attempt; please retry.",
                     StatusCodes.Status409Conflict);
@@ -153,8 +168,8 @@ public sealed class PaymentCreationService(
                     payment.ExternalReference,
                     payment.Amount,
                     $"Amenity reservation {payment.ReservationId:N}",
-                    payment.RequestedExpirationTime),
-                payment.IdempotencyKey,
+                    payment.RequestedExpirationTime!),
+                payment.IdempotencyKey!,
                 cancellationToken);
         }
         catch (MercadoPagoUnavailableException)

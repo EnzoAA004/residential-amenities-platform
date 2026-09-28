@@ -32,6 +32,7 @@ public interface IReservationPaymentContract
 public sealed record PayableReservation(
     Guid ReservationId,
     Guid BuildingId,
+    Guid CreatedByMembershipId,
     ReservationStatus Status,
     DateTimeOffset ExpiresAtUtc,
     decimal TotalAmount,

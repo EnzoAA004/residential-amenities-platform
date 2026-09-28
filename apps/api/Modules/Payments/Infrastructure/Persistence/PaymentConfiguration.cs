@@ -31,12 +31,10 @@ public sealed class PaymentConfiguration : IEntityTypeConfiguration<Payment>
             .IsRequired();
 
         builder.Property(payment => payment.IdempotencyKey)
-            .HasMaxLength(64)
-            .IsRequired();
+            .HasMaxLength(64);
 
         builder.Property(payment => payment.RequestedExpirationTime)
-            .HasMaxLength(40)
-            .IsRequired();
+            .HasMaxLength(40);
 
         builder.Property(payment => payment.ProviderOrderId)
             .HasMaxLength(100);
@@ -55,12 +53,19 @@ public sealed class PaymentConfiguration : IEntityTypeConfiguration<Payment>
             .HasMaxLength(40)
             .IsRequired();
 
+        // Cash-only facts; NULL for other methods.
+        builder.Property(payment => payment.CashDeclaredAtUtc);
+        builder.Property(payment => payment.CashConfirmedAtUtc);
+        builder.Property(payment => payment.CashConfirmedByUserId);
+
         builder.Property(payment => payment.CreatedAtUtc).IsRequired();
         builder.Property(payment => payment.UpdatedAtUtc).IsRequired();
 
         builder.Ignore(payment => payment.ExternalReference);
         builder.Ignore(payment => payment.RequiresManualReview);
 
+        // Unique when present (NULLs are distinct in PostgreSQL, so cash payments
+        // — which have no key — never collide).
         builder.HasIndex(payment => payment.IdempotencyKey).IsUnique();
 
         // PostgreSQL treats NULLs as distinct, so many not-yet-created

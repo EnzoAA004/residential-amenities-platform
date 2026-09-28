@@ -1,10 +1,10 @@
-# Data Dictionary — v0.8
+# Data Dictionary — v0.9
 
 The model now includes the building/membership foundation, ASP.NET Core Identity
 persistence, the Amenities & Availability foundation (issue #19), the Pricing
 foundation (issue #22), Shared/Exclusive Leisure Reservations (issue #20),
 Event Reservations + add-on amenities (issue #21), and reservation
-concurrency/hold management (issue #23), and Mercado Pago payments (issue #24).
+concurrency/hold management (issue #23), Mercado Pago payments (issue #24), and cash payments (issue #25).
 
 ## Buildings
 
@@ -236,18 +236,23 @@ Reservations' tables. See
 | --- | --- | --- | --- |
 | Id | uuid | No | Primary key. Its `N` format is the `external_reference` sent to Mercado Pago and re-validated on every reconciliation. |
 | ReservationId | uuid | No | Reservation being paid. |
-| Method | varchar(30) | No | `MercadoPago` (cash arrives with #25). |
+| Method | varchar(30) | No | `MercadoPago` or `Cash` (issue #25). Same table, same model. |
 | Status | varchar(20) | No | Provider-neutral: `Created`, `Pending`, `Approved`, `Rejected`, `Cancelled`. |
 | Amount | numeric(18,2) | No | Copied from the `ReservationPriceLines` snapshot when the attempt is created; never from the client or current rules. |
 | Currency | varchar(3) | No | Same source; validated against the provider's order. |
-| IdempotencyKey | varchar(64) | No | Sent as `X-Idempotency-Key`; persisted **before** the HTTP call and reused by every retry of this attempt. Unique. |
-| RequestedExpirationTime | varchar(40) | No | The exact ISO-8601 `expiration_time` sent, persisted so retries send an identical body. |
+| IdempotencyKey | varchar(64) | Yes | **Mercado Pago only** (NULL for cash). Sent as `X-Idempotency-Key`; persisted **before** the HTTP call and reused by every retry of this attempt. Unique when present. |
+| RequestedExpirationTime | varchar(40) | Yes | **Mercado Pago only** (NULL for cash). The exact ISO-8601 `expiration_time` sent, persisted so retries send an identical body. |
 | ProviderOrderId | varchar(100) | Yes | Mercado Pago order id. Unique (NULLs are distinct, so many not-yet-created attempts coexist). |
 | CheckoutUrl | varchar(2048) | Yes | Checkout Pro URL returned by the provider. |
 | ProviderStatus / ProviderStatusDetail | varchar(100) | Yes | Provider's raw strings, kept apart from the neutral `Status`. |
 | ReservationOutcome | varchar(40) | No | `None`, `ReservationConfirmed`, `ApprovedAfterExpiry`, `ApprovedForCancelledReservation`, `ApprovedForMissingReservation`. The last three mean money was taken but the reservation was not confirmed → manual review. |
 | CreatedAtUtc / UpdatedAtUtc | timestamptz | No | |
 | ApprovedAtUtc | timestamptz | Yes | Set once, when the provider verifiably credited it. |
+| CashDeclaredAtUtc | timestamptz | Yes | **Cash only.** When the resident declared they would pay in cash. |
+| CashConfirmedAtUtc | timestamptz | Yes | **Cash only.** When an authorized actor confirmed physical receipt. Set once; never overwritten. |
+| CashConfirmedByUserId | uuid | Yes | **Cash only.** The authenticated `UserAccount.Id` who confirmed receipt. Historical id, no FK (module boundary). Set once. |
+
+Provider-specific columns (`IdempotencyKey`, `RequestedExpirationTime`, `ProviderOrderId`, `CheckoutUrl`, `ProviderStatus`, `ProviderStatusDetail`) are NULL for cash and cash columns are NULL for Mercado Pago; the unique indexes ignore NULLs.
 
 Indexes: unique `IdempotencyKey`; unique `ProviderOrderId`; **filtered unique
 `UX_Payments_ActivePerReservation`** on `ReservationId WHERE Status IN

@@ -1,4 +1,4 @@
-# Domain Model — v0.8
+# Domain Model — v0.9
 
 ## Implemented foundation
 
@@ -463,7 +463,7 @@ no resource, hold or price line for that Event persists partially.
 ### What #23 did not do
 
 - No Mercado Pago/cash integration and no `Pending → Confirmed` transition
-  (Mercado Pago and the transition arrived in #24; cash is #25).
+  (Mercado Pago and the transition arrived in #24; cash in #25).
 - No admin cancel/reschedule of a hold.
 - Hold duration remains configuration, not a decided business value
   (OQ-010).
@@ -500,7 +500,7 @@ the attempt is created. `Status` is provider-neutral —
 own strings live separately in `ProviderStatus`/`ProviderStatusDetail`.
 `Refunded` is intentionally **not** modelled: refund logic is out of scope
 and a member with no behaviour behind it would be dead surface.
-`PaymentMethod` has only `MercadoPago` for the same reason (cash is #25).
+`PaymentMethod` gained `Cash` in #25 (see [Cash payments](#cash-payments-issue-25)); it is the same `Payment` model.
 
 `ExternalReference` (sent to the provider and re-validated on every
 reconciliation) is the payment's own id. `ReservationOutcome` records what
@@ -649,9 +649,130 @@ handler), and avoids a dependency of unverified coverage.
 
 ### Not in #24
 
-Refunds and automatic compensation of late payments, cash (#25),
+Refunds and automatic compensation of late payments,
 payer/customer data, admin views of payments needing review (#26), audit
 (#27), and any frontend.
+
+## Cash payments (issue #25)
+
+Covers RF-015, RF-016, RB-012.
+
+```text
+Cash declared  → Payment(Cash, Pending)   → Reservation stays Pending (hold unchanged)
+Cash received  → Payment Approved         → Reservations decides Pending → Confirmed
+Cash received after expiry
+               → Payment Approved + ApprovedAfterExpiry (manual review)
+               → Reservation stays Expired
+```
+
+### One `Payment` model, provider-neutral
+
+`Payment` no longer assumes a provider. General concepts live on every
+payment (id, reservation, method, status, amount, currency, outcome,
+timestamps). Method-specific data is nullable and set only by that method's
+factory:
+
+| Data | Mercado Pago (`CreateMercadoPago`) | Cash (`CreateCash`) |
+| --- | --- | --- |
+| `IdempotencyKey`, `RequestedExpirationTime` | required | NULL |
+| `ProviderOrderId`, `CheckoutUrl`, `ProviderStatus`, `ProviderStatusDetail` | set as the provider answers | NULL (mutators throw) |
+| `CashDeclaredAtUtc`, `CashConfirmedAtUtc`, `CashConfirmedByUserId` | NULL | set by declaration / confirmation |
+| initial `Status` | `Created` | `Pending` |
+
+No placeholder values are stored for the fields a method does not use. The
+unique indexes on `IdempotencyKey` and `ProviderOrderId` keep working because
+PostgreSQL treats NULLs as distinct. `PaymentMethod` is `MercadoPago | Cash`.
+
+### Declaring cash means "I want to pay in cash", not "cash received"
+
+`POST /api/reservations/{id}/payments/cash` creates `Method=Cash,
+Status=Pending`. `Pending` for cash means an authorized person has not
+confirmed receipt yet. There is **no** `PendingCashConfirmation`
+`ReservationStatus`: the reservation stays `Pending` and the difference lives
+inside Payments, which keeps the module boundary clean. Declaring does not
+touch `Reservation.ExpiresAtUtc` — the real hold duration is still OQ-010 /
+issue #2.
+
+Amount and currency come only from the `ReservationPriceLines` snapshot.
+
+### Who may declare
+
+The caller needs building access and must be the membership that **created**
+the reservation (`PayableReservation.CreatedByMembershipId`, exposed through
+the Reservations contract — Payments never reads Reservation tables). An
+Administrator keeps privileged access. No user/membership/amount/status
+value is accepted from the request. This is stricter than Mercado Pago
+initiation, which is unchanged.
+
+### One active payment per reservation, no method switching
+
+`UX_Payments_ActivePerReservation` (`Created`/`Pending`/`Approved`) is
+unchanged, so Mercado Pago and cash can never be active together on a
+reservation. A cash declaration while a Mercado Pago payment is active — or
+the reverse — answers `409`. Switching method is not implemented; it can be
+modelled if it becomes a requirement.
+
+Declaring twice returns the **same** payment (no `X-Idempotency-Key` needed):
+the service looks up the active payment first, and the unique index is the
+safety net for concurrent requests (the loser re-reads and reuses the
+winner's payment).
+
+### Confirming cash: Administrator until OQ-013 is answered
+
+`POST /api/payments/{id}/cash/confirm` requires the `Administrator` policy.
+**Administrator is the initial authorized actor until OQ-013 (who receives
+cash, issue #2) is resolved.** No `CashManager`/`PaymentManager`/`Concierge`
+role or policy is introduced without that stakeholder decision; when it
+arrives we will evaluate whether Administrator stays correct or a new
+role/policy is needed. A Resident gets `403`. The confirming actor is taken
+from the authenticated session (`UserManager.GetUserAsync`); nothing about
+who confirmed is read from the request.
+
+The payment records the answer to "who confirmed receiving the money and
+when": `CashConfirmedByUserId`, `CashConfirmedAtUtc` (plus
+`CashDeclaredAtUtc`), next to `Amount`, `ReservationId` and
+`ReservationOutcome`. `CashConfirmedByUserId` is a historical id, not a
+foreign key to Identity. The resident-facing `GET /api/payments/{id}` shows
+the confirmation time but **not** the administrator's id; the administrator's
+confirm response includes it. The cross-cutting `AuditLog` for administrative
+actions remains issue #27; this issue makes the cash confirmation
+intrinsically traceable without building that module.
+
+### Confirmation flow, idempotency and the reservation contract
+
+1. Under a short transaction with `SELECT ... FOR UPDATE` on the payment row,
+   `Payment.ConfirmCashReceived(actor, now)` moves `Pending → Approved` and
+   stamps actor/time (no external call is made in this transaction). A second
+   click waits for the lock, sees `Approved`, and changes nothing — the
+   original actor and timestamps are kept.
+2. Payments calls the existing
+   `IReservationPaymentContract.ConfirmPaidReservationAsync`. There is no
+   cash-specific contract method: Reservations only learns "a trusted payment
+   succeeded" and never whether it was Mercado Pago or cash.
+3. The result is mapped (shared with Mercado Pago, `PaymentReservationOutcomeMapper`)
+   and recorded once. If a crash left `Approved` with outcome `None`, repeating
+   the confirmation completes it.
+
+### Cash vs. expiration, and cash received late
+
+The race reuses the #24 mechanism unchanged: the reservation row lock
+(`FOR UPDATE`) versus the atomic conditional expiration `UPDATE`. Exactly one
+wins. A concurrent test (100 cash-confirmation/expiration pairs on real
+PostgreSQL) plus a deterministic lock-holding test assert that a reservation
+is never both, and that the payment outcome always matches.
+
+"Confirm cash" asserts the money **was** received, so the payment is
+`Approved` in every case. If Reservations answers `RejectedExpired` the
+outcome is `ApprovedAfterExpiry`; for a `Cancelled` reservation it is
+`ApprovedForCancelledReservation`. Both set `RequiresManualReview`, and the
+reservation is never revived. There is no automatic refund — for cash the
+compensation is likely a manual return.
+
+### Not in #25
+
+Refunds, the central `AuditLog` (#27), the admin dashboard/DTOs (#26),
+cancellation/reschedule, payment-method switching, notifications, receipts,
+accounting/reconciliation reports, and any frontend.
 
 ## Identity boundary
 

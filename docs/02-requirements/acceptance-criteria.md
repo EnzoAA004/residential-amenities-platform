@@ -216,6 +216,16 @@ Details: `docs/04-data/domain-model.md#cash-payments-issue-25`.
 
 Related: RF-017 through RF-021, RB-013, RB-014 — issues #26, #27.
 
+Implemented (issue #27): the audit half of this criterion. Important facts are
+recorded in the append-only `AuditLogs` table with actor (user, system or
+external provider), timestamp, action, target, building and allowlisted safe
+metadata, atomically with the transition they describe; repeated/idempotent
+operations do not duplicate them. Administrators query it with
+`GET /api/admin/audit`. The administrative operations themselves (cancel,
+reschedule, configuration) and the mandatory reason (RB-014) arrive with #26,
+which only has to record through `IAuditRecorder`.
+See `docs/04-data/domain-model.md#audit-trail-issue-27`.
+
 ---
 
 ## AC-11 — Responsive cross-platform client

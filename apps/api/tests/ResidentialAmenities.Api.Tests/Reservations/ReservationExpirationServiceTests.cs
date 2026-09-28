@@ -76,7 +76,7 @@ public sealed class ReservationExpirationServiceTests : IAsyncLifetime
             $"UPDATE \"Reservations\" SET \"Status\" = 'Confirmed' WHERE \"Id\" = {alreadyConfirmed.Id}",
             TestContext.Current.CancellationToken);
 
-        var service = new ReservationExpirationService(dbContext, clock);
+        var service = TestServices.Expiration(dbContext, clock);
         var expiredCount = await service.ExpirePastHoldsAsync(
             TestContext.Current.CancellationToken);
 
@@ -108,7 +108,7 @@ public sealed class ReservationExpirationServiceTests : IAsyncLifetime
         dbContext.Reservations.Add(pastDue);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        var service = new ReservationExpirationService(dbContext, clock);
+        var service = TestServices.Expiration(dbContext, clock);
 
         var firstRun = await service.ExpirePastHoldsAsync(
             TestContext.Current.CancellationToken);
@@ -151,10 +151,10 @@ public sealed class ReservationExpirationServiceTests : IAsyncLifetime
         await using var scopeA = _factory.Services.CreateAsyncScope();
         await using var scopeB = _factory.Services.CreateAsyncScope();
 
-        var serviceA = new ReservationExpirationService(
+        var serviceA = TestServices.Expiration(
             scopeA.ServiceProvider.GetRequiredService<AppDbContext>(),
             new ManualTimeProvider(now));
-        var serviceB = new ReservationExpirationService(
+        var serviceB = TestServices.Expiration(
             scopeB.ServiceProvider.GetRequiredService<AppDbContext>(),
             new ManualTimeProvider(now));
 

@@ -600,7 +600,7 @@ public sealed class CashPaymentFlowTests : IAsyncLifetime
             {
                 await using var scope = _factory.Services.CreateAsyncScope();
 
-                await new ReservationExpirationService(
+                await TestServices.Expiration(
                         scope.ServiceProvider.GetRequiredService<AppDbContext>(),
                         expirationClock)
                     .ExpirePastHoldsAsync(TestContext.Current.CancellationToken);
@@ -729,11 +729,7 @@ public sealed class CashPaymentFlowTests : IAsyncLifetime
     private sealed record CreatedReservation(Guid Id);
 
     private static CashPaymentService NewCashService(AppDbContext db, TimeProvider clock) =>
-        new(
-            db,
-            new ReservationPaymentContract(db, clock),
-            clock,
-            NullLogger<CashPaymentService>.Instance);
+        TestServices.Cash(db, clock);
 
     private static Task<HttpResponseMessage> DeclareAsync(HttpClient client, Guid reservationId) =>
         client.PostAsync(

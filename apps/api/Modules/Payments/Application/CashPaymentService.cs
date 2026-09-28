@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 using ResidentialAmenities.Api.Infrastructure.Persistence;
+using ResidentialAmenities.Api.Modules.Audit.Application;
+using ResidentialAmenities.Api.Modules.Audit.Domain;
 using ResidentialAmenities.Api.Modules.Payments.Domain;
 using ResidentialAmenities.Api.Modules.Payments.Infrastructure.Persistence;
 using ResidentialAmenities.Api.Modules.Reservations.Application;
@@ -29,11 +30,13 @@ public sealed record CashDeclaration(Guid PaymentId, bool AlreadyDeclared);
 public sealed class CashPaymentService(
     AppDbContext dbContext,
     IReservationPaymentContract reservations,
-    TimeProvider timeProvider,
-    ILogger<CashPaymentService> logger)
+    PaymentOutcomeRecorder outcomeRecorder,
+    IAuditRecorder auditRecorder,
+    TimeProvider timeProvider)
 {
     public async Task<CashDeclaration> DeclareAsync(
         PayableReservation reservation,
+        Guid actorUserId,
         CancellationToken cancellationToken)
     {
         var nowUtc = timeProvider.GetUtcNow();
@@ -70,6 +73,21 @@ public sealed class CashPaymentService(
             nowUtc);
 
         dbContext.Payments.Add(payment);
+
+        // Recorded only here, when the declaration is really created; an
+        // idempotent repeat returns above without auditing again.
+        auditRecorder.Record(AuditRecord.ByUser(
+            actorUserId,
+            AuditAction.CashPaymentDeclared,
+            AuditTargetType.Payment,
+            payment.Id,
+            reservation.BuildingId,
+            AuditMetadata.PaymentInitiated(
+                payment.ReservationId,
+                payment.Amount,
+                payment.Currency,
+                payment.Method.ToString())));
+
 
         try
         {
@@ -111,20 +129,8 @@ public sealed class CashPaymentService(
                 payment.ReservationId,
                 cancellationToken);
 
-            var outcome = PaymentReservationOutcomeMapper.Map(result);
-
-            payment.RecordReservationOutcome(outcome, timeProvider.GetUtcNow());
-            await dbContext.SaveChangesAsync(cancellationToken);
-
-            if (payment.RequiresManualReview)
-            {
-                logger.LogWarning(
-                    "Cash for payment {PaymentId} was received but reservation " +
-                    "{ReservationId} could not be confirmed ({Outcome}); manual review required.",
-                    payment.Id,
-                    payment.ReservationId,
-                    outcome);
-            }
+            // Records the outcome once, with its audit facts, atomically.
+            await outcomeRecorder.RecordAsync(payment, result, cancellationToken);
         }
 
         return payment;

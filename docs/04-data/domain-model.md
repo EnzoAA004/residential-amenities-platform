@@ -1,4 +1,4 @@
-# Domain Model — v0.9
+# Domain Model — v0.10
 
 ## Implemented foundation
 
@@ -773,6 +773,153 @@ compensation is likely a manual return.
 Refunds, the central `AuditLog` (#27), the admin dashboard/DTOs (#26),
 cancellation/reschedule, payment-method switching, notifications, receipts,
 accounting/reconciliation reports, and any frontend.
+
+## Audit trail (issue #27)
+
+Covers RF-021, RNF-007, RB-014 (the "reason" part is enforced by #26).
+
+Audit records **business facts**: who did what, when, to which object, in
+which building. It is not technical logging and does not replace Application
+Insights. It is never an authority: no availability, payment or authorization
+decision reads it; the operational tables remain the source of truth.
+
+### `AuditLog` (append-only)
+
+`Id`, `OccurredAtUtc`, `BuildingId?`, `ActorType`, `ActorUserId?`, `Action`,
+`TargetType`, `TargetId?`, `CorrelationId?`, `MetadataJson?` (jsonb).
+
+- **Append-only.** No public mutator, no PUT/PATCH/DELETE endpoint, and
+  `AppDbContext` throws if a tracked `AuditLog` is modified or deleted. A
+  correction is a new event. (No cryptographic tamper-proofing yet.)
+- **No foreign keys** to Identity/Reservations/Payments: history survives
+  changes to operational data; ids are plain historical references.
+- `BuildingId` is set whenever the object belongs to a building and is NULL
+  otherwise (e.g. a failed login); it is never invented.
+- `CorrelationId` reuses the ASP.NET Core trace id for request-driven events;
+  background jobs have none.
+
+### Actor model
+
+| `ActorType` | `ActorUserId` | Examples |
+| --- | --- | --- |
+| `User` | required | resident creates a reservation; admin confirms cash |
+| `System` | NULL | expiration job; Reservations confirming through the trusted-payment contract; a failed login (no resolvable user) |
+| `ExternalProvider` | NULL | Mercado Pago approving/rejecting a payment |
+
+The invariant is enforced by the `AuditLog` constructor and stated at call
+sites by `AuditRecord.ByUser / BySystem / ByExternalProvider`.
+
+### Event catalog (`AuditAction`)
+
+Actions are a closed enum, never free strings; a new audited fact means a new
+member. Stored by name.
+
+| Area | Action | Actor | Target | Recorded when |
+| --- | --- | --- | --- | --- |
+| Identity | `AuthenticationSucceeded` | User | User | successful login |
+| Identity | `AuthenticationFailed` | System | User (no id) | failed login; metadata has only a general `failure` category |
+| Identity | `Logout` | User | User | logout |
+| Reservations | `ReservationCreated` | User | Reservation | reservation persisted |
+| Reservations | `ReservationConfirmed` | System | Reservation | the real `Pending → Confirmed` transition (not on a repeat) |
+| Reservations | `ReservationExpired` | System | Reservation | each real `Pending → Expired` transition |
+| Reservations | `ReservationCancelled` | none yet | Reservation | **prepared for #26**; nothing emits it yet |
+| Payments | `MercadoPagoPaymentInitiated` | User | Payment | attempt created (not on a resumed attempt) |
+| Payments | `CashPaymentDeclared` | User | Payment | declaration created (not on an idempotent repeat) |
+| Payments | `CashPaymentConfirmed` | User (the confirmer) | Payment | outcome recorded after cash confirmation |
+| Payments | `PaymentApproved` | ExternalProvider | Payment | Mercado Pago approval, outcome recorded |
+| Payments | `PaymentRejected` / `PaymentCancelled` | ExternalProvider | Payment | real status transition only |
+| Payments | `PaymentRequiresManualReview` | as the payment (User for cash, provider for Mercado Pago) | Payment | outcome `ApprovedAfterExpiry` / `ApprovedForCancelledReservation` / `ApprovedForMissingReservation` |
+| Provider | `MercadoPagoWebhookProcessed` | ExternalProvider | Payment | once per processed webhook event (metadata: result category) |
+
+`ReservationConfirmed` is attributed to the system deliberately: Reservations
+only learns that "a trusted payment succeeded" and never a provider or
+method. The real actor is on the Payments event (`CashPaymentConfirmed` names
+the administrator; `PaymentApproved` names the provider). Targets are ids
+(`TargetType` + `TargetId`), never human text.
+
+### Metadata policy
+
+Metadata is small, structured, server-built and allowlisted. `AuditMetadata`
+has no public constructor and exposes only typed factories (ids, enums,
+amounts, currency, instants). There is no way to pass a `Dictionary` or
+`object`, and all keys come from `AuditMetadata.AllowedKeys`: `useType`,
+`startsAtUtc`, `endsAtUtc`, `resourceCount`, `status`, `originalExpiresAtUtc`,
+`reason`, `reservationId`, `amount`, `currency`, `method`, `reservationOutcome`,
+`outcome`, `result`, `failure`.
+
+Never audited: passwords, tokens (access/refresh), cookies, Authorization
+headers, secrets (Mercado Pago access token, webhook secret), `x-signature`,
+connection strings, checkout URLs, idempotency keys, request/response
+bodies, card data, payer personal data, and the e-mail submitted at login.
+There is no middleware that stores requests. `reason` (for the cancel and
+reschedule of #26) is truncated to 500 characters.
+
+### Atomicity
+
+`IAuditRecorder.Record` only **adds** the entry to the current
+`AppDbContext`; the use case that owns the transition calls `SaveChanges`, so
+the transition and its audit entry persist together or not at all:
+
+- `ReservationCreated`: same `SaveChanges`/transaction as the reservation.
+- `ReservationConfirmed`: inside the `FOR UPDATE` transaction of
+  `ConfirmPaidReservationAsync`, only when this call made the transition.
+- `ReservationExpired`: see below.
+- `MercadoPagoPaymentInitiated`, `CashPaymentDeclared`: with the `Payment` insert.
+- Payment outcome facts (`PaymentApproved` / `CashPaymentConfirmed` /
+  `PaymentRequiresManualReview`): with the outcome update, in one transaction.
+- `PaymentRejected/Cancelled`, `MercadoPagoWebhookProcessed`: with the local
+  state change / the event being marked processed.
+
+No transaction is opened around external HTTP: the provider is fetched first
+and only the resulting local transitions are audited when they are persisted.
+There is no outbox and no distributed transaction. Login/logout audit is
+best-effort (a failure to write it is logged and does not break the request,
+since audit is history, not authority). Tests force a failing audit write on
+real PostgreSQL and check the confirmation and the expiration roll back too.
+
+### Expiration audit
+
+`ReservationExpirationService` remains one set-based statement, now
+`UPDATE ... WHERE Status = 'Pending' AND ExpiresAtUtc <= now RETURNING Id,
+BuildingId, ExpiresAtUtc` in a transaction with the audit inserts. `RETURNING`
+yields exactly the rows this statement transitioned; under READ COMMITTED a
+concurrent run (or a confirmation) that already resolved a row makes the
+`WHERE` no longer match it, so that row is neither returned nor audited. Each
+`Pending → Expired` transition therefore produces exactly one
+`ReservationExpired`, without a per-row loop.
+
+### No duplicate facts
+
+Audit entries are only created for real transitions: a repeated webhook, a
+repeated cash confirmation or declaration, an already-confirmed reservation,
+and concurrent expiration workers do not add entries. The payment outcome is
+written with `UPDATE ... WHERE ReservationOutcome = 'None'`; only the caller
+that changed the row audits it. Known residual: `PaymentRejected/Cancelled`
+is detected from the tracked state, so two truly simultaneous, different
+webhook events for the same order could both record it (no row lock there yet).
+
+### Administrative query
+
+`GET /api/admin/audit` (`Administrator` policy; a Resident gets 403). Filters:
+`buildingId`, `actorUserId`, `action`, `targetType`, `targetId`, `fromUtc`
+(inclusive), `toUtc` (exclusive), `page`, `pageSize`. Newest first; default
+page size 50, capped at 100. Returns id, occurred-at, building, actor type and
+id, action, target type and id, correlation id and the metadata object. It
+does not join Identity for names or e-mails. It is read-only.
+
+### Retention
+
+Not implemented: for the MVP audit entries are kept indefinitely. The
+retention/archival policy is deferred to production/FinOps.
+
+### For #26
+
+`AuditAction.ReservationCancelled` and `AuditMetadata.ReservationCancelled(reason)`
+exist. #26 records admin operations (cancel, reschedule, price/availability/
+slot changes, cash confirmation from the admin workflow) through
+`IAuditRecorder` in the same transaction as the change, and enforces the
+mandatory reason (RB-014). Each needs a new `AuditAction` member. Payments
+needing manual review are queryable with `action=PaymentRequiresManualReview`.
 
 ## Identity boundary
 

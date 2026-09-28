@@ -57,7 +57,7 @@ public sealed class PaymentReservationRaceTests : IAsyncLifetime
             tasks.Add(Task.Run<ReservationConfirmationOutcome?>(async () =>
             {
                 await using var scope = _factory.Services.CreateAsyncScope();
-                var contract = new ReservationPaymentContract(
+                var contract = TestServices.Contract(
                     scope.ServiceProvider.GetRequiredService<AppDbContext>(),
                     confirmationClock);
 
@@ -68,7 +68,7 @@ public sealed class PaymentReservationRaceTests : IAsyncLifetime
             tasks.Add(Task.Run<ReservationConfirmationOutcome?>(async () =>
             {
                 await using var scope = _factory.Services.CreateAsyncScope();
-                var expiration = new ReservationExpirationService(
+                var expiration = TestServices.Expiration(
                     scope.ServiceProvider.GetRequiredService<AppDbContext>(),
                     expirationClock);
 
@@ -144,7 +144,7 @@ public sealed class PaymentReservationRaceTests : IAsyncLifetime
         var confirmation = Task.Run(async () =>
         {
             await using var scope = _factory.Services.CreateAsyncScope();
-            var contract = new ReservationPaymentContract(
+            var contract = TestServices.Contract(
                 scope.ServiceProvider.GetRequiredService<AppDbContext>(),
                 new ManualTimeProvider(Deadline.AddSeconds(-1)));
 
@@ -188,7 +188,7 @@ public sealed class PaymentReservationRaceTests : IAsyncLifetime
         var expiration = Task.Run(async () =>
         {
             await using var scope = _factory.Services.CreateAsyncScope();
-            return await new ReservationExpirationService(
+            return await TestServices.Expiration(
                     scope.ServiceProvider.GetRequiredService<AppDbContext>(),
                     new ManualTimeProvider(Deadline.AddSeconds(1)))
                 .ExpirePastHoldsAsync(TestContext.Current.CancellationToken);
@@ -223,13 +223,13 @@ public sealed class PaymentReservationRaceTests : IAsyncLifetime
         await using var scope = _factory.Services.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-        var contract = new ReservationPaymentContract(
+        var contract = TestServices.Contract(
             dbContext, new ManualTimeProvider(Deadline.AddSeconds(-1)));
         Assert.Equal(
             ReservationConfirmationOutcome.Confirmed,
             await contract.ConfirmPaidReservationAsync(id, TestContext.Current.CancellationToken));
 
-        var expiredCount = await new ReservationExpirationService(
+        var expiredCount = await TestServices.Expiration(
             dbContext, new ManualTimeProvider(Deadline.AddHours(1)))
             .ExpirePastHoldsAsync(TestContext.Current.CancellationToken);
 
@@ -248,13 +248,13 @@ public sealed class PaymentReservationRaceTests : IAsyncLifetime
         await using var scope = _factory.Services.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-        await new ReservationExpirationService(
+        await TestServices.Expiration(
             dbContext, new ManualTimeProvider(Deadline.AddSeconds(1)))
             .ExpirePastHoldsAsync(TestContext.Current.CancellationToken);
 
         // Even with a clock that (wrongly) thinks it is before the deadline,
         // the persisted Expired state wins: no revival.
-        var outcome = await new ReservationPaymentContract(
+        var outcome = await TestServices.Contract(
             dbContext, new ManualTimeProvider(Deadline.AddSeconds(-1)))
             .ConfirmPaidReservationAsync(id, TestContext.Current.CancellationToken);
 
@@ -270,7 +270,7 @@ public sealed class PaymentReservationRaceTests : IAsyncLifetime
     public async Task ConfirmingAnUnknownReservation_ReportsNotFound()
     {
         await using var scope = _factory.Services.CreateAsyncScope();
-        var contract = new ReservationPaymentContract(
+        var contract = TestServices.Contract(
             scope.ServiceProvider.GetRequiredService<AppDbContext>(),
             new ManualTimeProvider(Deadline));
 

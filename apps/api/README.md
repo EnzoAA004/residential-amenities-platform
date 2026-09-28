@@ -283,6 +283,42 @@ but reports `reservationOutcome: "ApprovedAfterExpiry"` (or
 reservation is not revived. `GET /api/payments/{id}` now also returns `method`
 and, for cash, `cashConfirmedAtUtc`.
 
+### Audit trail (issue #27)
+
+```http
+GET /api/admin/audit
+```
+
+Administrator only (a Resident gets `403`). Read-only: the trail is append-only
+and has no write endpoints. Query parameters (all optional): `buildingId`,
+`actorUserId`, `action`, `targetType`, `targetId`, `fromUtc` (inclusive),
+`toUtc` (exclusive), `page` (default 1), `pageSize` (default 50, max 100).
+Results are newest first:
+
+```json
+{
+  "items": [
+    {
+      "id": "...", "occurredAtUtc": "...", "buildingId": "...",
+      "actorType": "User", "actorUserId": "...",
+      "action": "CashPaymentConfirmed",
+      "targetType": "Payment", "targetId": "...",
+      "correlationId": "...",
+      "metadata": { "method": "Cash", "amount": 5000, "currency": "ARS", "reservationOutcome": "ReservationConfirmed" }
+    }
+  ],
+  "page": 1, "pageSize": 50, "totalCount": 1
+}
+```
+
+Recorded: login/logout, reservation created/confirmed/expired, Mercado Pago
+initiated/approved/rejected/cancelled, cash declared/confirmed, payments
+requiring manual review and processed webhooks. Each is written atomically with
+the transition it describes and never duplicated by an idempotent repeat.
+Payments needing manual review: `?action=PaymentRequiresManualReview`. Metadata
+is allowlisted and never contains secrets, tokens or e-mails. Retention is not
+implemented yet. Design: `docs/04-data/domain-model.md#audit-trail-issue-27`.
+
 Tests use an in-memory fake provider; no credentials or network are needed.
 Design, race handling and signature algorithm:
 `docs/04-data/domain-model.md#payments-and-mercado-pago-issue-24`.

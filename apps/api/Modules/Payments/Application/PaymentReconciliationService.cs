@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using ResidentialAmenities.Api.Infrastructure.Persistence;
+using ResidentialAmenities.Api.Modules.Audit.Application;
+using ResidentialAmenities.Api.Modules.Audit.Domain;
 using ResidentialAmenities.Api.Modules.Payments.Domain;
 using ResidentialAmenities.Api.Modules.Payments.Infrastructure.Persistence;
 using ResidentialAmenities.Api.Modules.Reservations.Application;
@@ -39,6 +41,8 @@ public sealed class PaymentReconciliationService(
     AppDbContext dbContext,
     IMercadoPagoClient mercadoPagoClient,
     IReservationPaymentContract reservations,
+    PaymentOutcomeRecorder outcomeRecorder,
+    IAuditRecorder auditRecorder,
     TimeProvider timeProvider,
     ILogger<PaymentReconciliationService> logger)
 {
@@ -76,6 +80,10 @@ public sealed class PaymentReconciliationService(
             return NotificationProcessingOutcome.UnknownOrder;
         }
 
+        var buildingId = (await reservations.GetPayableReservationAsync(
+            payment.ReservationId,
+            cancellationToken))?.BuildingId;
+
         // A provider outage propagates: the event stays unprocessed and the
         // endpoint answers non-2xx so Mercado Pago redelivers.
         var order = await mercadoPagoClient.GetOrderAsync(providerOrderId, cancellationToken);
@@ -93,12 +101,14 @@ public sealed class PaymentReconciliationService(
                 payment.Id,
                 mismatch);
 
-            await CompleteEventAsync(providerEvent, PaymentEventResult.Mismatch, cancellationToken);
+            await CompleteEventAsync(
+                providerEvent, PaymentEventResult.Mismatch, payment, buildingId, cancellationToken);
             return NotificationProcessingOutcome.Mismatch;
         }
 
         var nowUtc = timeProvider.GetUtcNow();
         var outcome = PaymentStatusMapper.Map(order!.Status, order.StatusDetail);
+        var statusBefore = payment.Status;
 
         // An approved payment is final for this module: a late/stale event
         // must not overwrite its provider status or downgrade it.
@@ -121,10 +131,12 @@ public sealed class PaymentReconciliationService(
 
             case ProviderOutcome.Rejected:
                 payment.MarkRejected(nowUtc);
+                AuditTransition(payment, statusBefore, AuditAction.PaymentRejected, buildingId);
                 break;
 
             case ProviderOutcome.Cancelled:
                 payment.MarkCancelled(nowUtc);
+                AuditTransition(payment, statusBefore, AuditAction.PaymentCancelled, buildingId);
                 break;
 
             case ProviderOutcome.Unmapped:
@@ -132,12 +144,15 @@ public sealed class PaymentReconciliationService(
                 await CompleteEventAsync(
                     providerEvent,
                     PaymentEventResult.UnmappedStatus,
+                    payment,
+                    buildingId,
                     cancellationToken);
                 return NotificationProcessingOutcome.Processed;
         }
 
         await dbContext.SaveChangesAsync(cancellationToken);
-        await CompleteEventAsync(providerEvent, PaymentEventResult.Reconciled, cancellationToken);
+        await CompleteEventAsync(
+            providerEvent, PaymentEventResult.Reconciled, payment, buildingId, cancellationToken);
         return NotificationProcessingOutcome.Processed;
     }
 
@@ -152,19 +167,30 @@ public sealed class PaymentReconciliationService(
             payment.ReservationId,
             cancellationToken);
 
-        var reservationOutcome = PaymentReservationOutcomeMapper.Map(result);
+        // Records the outcome once, with its audit facts (PaymentApproved and,
+        // when needed, PaymentRequiresManualReview) in one transaction.
+        await outcomeRecorder.RecordAsync(payment, result, cancellationToken);
+    }
 
-        if (reservationOutcome != PaymentReservationOutcome.ReservationConfirmed)
+    // Only a real state change is audited, in the same SaveChanges as that
+    // change; a duplicate delivery that changes nothing records nothing.
+    private void AuditTransition(
+        Payment payment,
+        PaymentStatus statusBefore,
+        AuditAction action,
+        Guid? buildingId)
+    {
+        if (payment.Status == statusBefore)
         {
-            logger.LogWarning(
-                "Payment {PaymentId} was approved by the provider but reservation " +
-                "{ReservationId} could not be confirmed ({Outcome}); manual review required.",
-                payment.Id,
-                payment.ReservationId,
-                reservationOutcome);
+            return;
         }
 
-        payment.RecordReservationOutcome(reservationOutcome, timeProvider.GetUtcNow());
+        auditRecorder.Record(AuditRecord.ByExternalProvider(
+            action,
+            AuditTargetType.Payment,
+            payment.Id,
+            buildingId,
+            AuditMetadata.PaymentTransition(payment.Method.ToString(), payment.ReservationId)));
     }
 
     private async Task<PaymentProviderEvent> RegisterEventAsync(
@@ -206,9 +232,21 @@ public sealed class PaymentReconciliationService(
     private async Task CompleteEventAsync(
         PaymentProviderEvent providerEvent,
         PaymentEventResult result,
+        Payment payment,
+        Guid? buildingId,
         CancellationToken cancellationToken)
     {
         providerEvent.MarkProcessed(result, timeProvider.GetUtcNow());
+
+        // Once per event: a re-delivery of a processed event returns earlier.
+        // Saved together with the event being marked processed.
+        auditRecorder.Record(AuditRecord.ByExternalProvider(
+            AuditAction.MercadoPagoWebhookProcessed,
+            AuditTargetType.Payment,
+            payment.Id,
+            buildingId,
+            AuditMetadata.WebhookProcessed(result.ToString())));
+
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 }

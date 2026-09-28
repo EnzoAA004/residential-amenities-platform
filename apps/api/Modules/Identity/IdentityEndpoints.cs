@@ -5,6 +5,8 @@ using Microsoft.AspNetCore.Identity.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using ResidentialAmenities.Api.Infrastructure.Persistence;
+using ResidentialAmenities.Api.Modules.Audit.Application;
+using ResidentialAmenities.Api.Modules.Audit.Domain;
 using ResidentialAmenities.Api.Modules.Buildings.Domain;
 using ResidentialAmenities.Api.Modules.Identity.Domain;
 
@@ -55,7 +57,12 @@ public static class IdentityEndpoints
         LoginRequest login,
         bool? useCookies,
         bool? useSessionCookies,
-        SignInManager<UserAccount> signInManager)
+        SignInManager<UserAccount> signInManager,
+        UserManager<UserAccount> userManager,
+        AppDbContext dbContext,
+        IAuditRecorder auditRecorder,
+        ILogger<AuditLog> logger,
+        CancellationToken cancellationToken)
     {
         var useCookieScheme =
             useCookies == true || useSessionCookies == true;
@@ -93,11 +100,79 @@ public static class IdentityEndpoints
             }
         }
 
-        return result.Succeeded
-            ? Results.Empty
-            : Results.Problem(
-                title: "Authentication failed.",
-                statusCode: StatusCodes.Status401Unauthorized);
+        // The response is identical for every failure (no user enumeration);
+        // the audit entry keeps only a general category — never the submitted
+        // e-mail or password.
+        if (result.Succeeded)
+        {
+            var user = await userManager.FindByEmailAsync(login.Email);
+
+            await TryAuditAsync(
+                dbContext,
+                auditRecorder,
+                logger,
+                user is null
+                    ? null
+                    : AuditRecord.ByUser(
+                        user.Id,
+                        AuditAction.AuthenticationSucceeded,
+                        AuditTargetType.User,
+                        user.Id,
+                        buildingId: null),
+                cancellationToken);
+
+            return Results.Empty;
+        }
+
+        var failure = result.IsLockedOut ? "LockedOut"
+            : result.IsNotAllowed ? "NotAllowed"
+            : result.RequiresTwoFactor ? "TwoFactorRequired"
+            : "InvalidCredentials";
+
+        await TryAuditAsync(
+            dbContext,
+            auditRecorder,
+            logger,
+            AuditRecord.BySystem(
+                AuditAction.AuthenticationFailed,
+                AuditTargetType.User,
+                targetId: null,
+                buildingId: null,
+                AuditMetadata.AuthenticationFailure(failure)),
+            cancellationToken);
+
+        return Results.Problem(
+            title: "Authentication failed.",
+            statusCode: StatusCodes.Status401Unauthorized);
+    }
+
+    // Authentication has already happened; a failure to write the audit entry
+    // must not turn a valid login/logout into an error (audit is history, not
+    // authority), so it is logged (no personal data) and swallowed.
+    private static async Task TryAuditAsync(
+        AppDbContext dbContext,
+        IAuditRecorder auditRecorder,
+        ILogger<AuditLog> logger,
+        AuditRecord? record,
+        CancellationToken cancellationToken)
+    {
+        if (record is null)
+        {
+            return;
+        }
+
+        try
+        {
+            auditRecorder.Record(record);
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (Exception error) when (error is not OperationCanceledException)
+        {
+            logger.LogError(
+                error,
+                "Could not record audit action {Action}.",
+                record.Action);
+        }
     }
 
     private static async Task<IResult> RefreshAsync(
@@ -131,9 +206,32 @@ public static class IdentityEndpoints
     }
 
     private static async Task<IResult> LogoutAsync(
-        SignInManager<UserAccount> signInManager)
+        ClaimsPrincipal principal,
+        SignInManager<UserAccount> signInManager,
+        AppDbContext dbContext,
+        IAuditRecorder auditRecorder,
+        ILogger<AuditLog> logger,
+        CancellationToken cancellationToken)
     {
+        // Resolved before the sign-out, while the caller is still identified.
+        var userId = principal.GetUserId();
+
         await signInManager.SignOutAsync();
+
+        await TryAuditAsync(
+            dbContext,
+            auditRecorder,
+            logger,
+            userId is { } id
+                ? AuditRecord.ByUser(
+                    id,
+                    AuditAction.Logout,
+                    AuditTargetType.User,
+                    id,
+                    buildingId: null)
+                : null,
+            cancellationToken);
+
         return Results.NoContent();
     }
 

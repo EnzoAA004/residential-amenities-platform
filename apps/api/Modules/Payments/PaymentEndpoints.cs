@@ -63,6 +63,13 @@ public static class PaymentEndpoints
         PaymentCreationService creationService,
         CancellationToken cancellationToken)
     {
+        var actorUserId = principal.GetUserId();
+
+        if (actorUserId is null)
+        {
+            return Results.Unauthorized();
+        }
+
         var reservation = await reservations.GetPayableReservationAsync(
             reservationId,
             cancellationToken);
@@ -86,6 +93,7 @@ public static class PaymentEndpoints
         {
             var initiated = await creationService.InitiateMercadoPagoAsync(
                 reservation,
+                actorUserId.Value,
                 cancellationToken);
 
             return Results.Ok(new InitiatePaymentResponse(
@@ -111,6 +119,13 @@ public static class PaymentEndpoints
         CashPaymentService cashService,
         CancellationToken cancellationToken)
     {
+        var actorUserId = principal.GetUserId();
+
+        if (actorUserId is null)
+        {
+            return Results.Unauthorized();
+        }
+
         var reservation = await reservations.GetPayableReservationAsync(
             reservationId,
             cancellationToken);
@@ -149,7 +164,10 @@ public static class PaymentEndpoints
 
         try
         {
-            var declaration = await cashService.DeclareAsync(reservation, cancellationToken);
+            var declaration = await cashService.DeclareAsync(
+                reservation,
+                actorUserId.Value,
+                cancellationToken);
 
             return Results.Ok(new DeclareCashResponse(
                 declaration.PaymentId,

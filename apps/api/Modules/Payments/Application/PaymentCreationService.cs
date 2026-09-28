@@ -1,6 +1,8 @@
 using System.Xml;
 using Microsoft.EntityFrameworkCore;
 using ResidentialAmenities.Api.Infrastructure.Persistence;
+using ResidentialAmenities.Api.Modules.Audit.Application;
+using ResidentialAmenities.Api.Modules.Audit.Domain;
 using ResidentialAmenities.Api.Modules.Payments.Domain;
 using ResidentialAmenities.Api.Modules.Payments.Infrastructure.Persistence;
 using ResidentialAmenities.Api.Modules.Reservations.Application;
@@ -37,10 +39,12 @@ public sealed record InitiatedPayment(
 public sealed class PaymentCreationService(
     AppDbContext dbContext,
     IMercadoPagoClient mercadoPagoClient,
+    IAuditRecorder auditRecorder,
     TimeProvider timeProvider)
 {
     public async Task<InitiatedPayment> InitiateMercadoPagoAsync(
         PayableReservation reservation,
+        Guid actorUserId,
         CancellationToken cancellationToken)
     {
         var nowUtc = timeProvider.GetUtcNow();
@@ -76,7 +80,7 @@ public sealed class PaymentCreationService(
                 StatusCodes.Status409Conflict);
         }
 
-        payment ??= await CreatePaymentAsync(reservation, nowUtc, cancellationToken);
+        payment ??= await CreatePaymentAsync(reservation, actorUserId, nowUtc, cancellationToken);
 
         if (payment.ProviderOrderId is null || payment.CheckoutUrl is null)
         {
@@ -108,6 +112,7 @@ public sealed class PaymentCreationService(
 
     private async Task<Payment> CreatePaymentAsync(
         PayableReservation reservation,
+        Guid actorUserId,
         DateTimeOffset nowUtc,
         CancellationToken cancellationToken)
     {
@@ -129,6 +134,22 @@ public sealed class PaymentCreationService(
             nowUtc);
 
         dbContext.Payments.Add(payment);
+
+        // Audited with the creation of the attempt (once); retries that reuse
+        // the existing payment never reach this point. No checkout URL,
+        // token or idempotency key is recorded.
+        auditRecorder.Record(AuditRecord.ByUser(
+            actorUserId,
+            AuditAction.MercadoPagoPaymentInitiated,
+            AuditTargetType.Payment,
+            payment.Id,
+            reservation.BuildingId,
+            AuditMetadata.PaymentInitiated(
+                payment.ReservationId,
+                payment.Amount,
+                payment.Currency,
+                payment.Method.ToString())));
+
 
         try
         {

@@ -127,6 +127,7 @@ public sealed class PaymentCreationService(
         var payment = Payment.CreateMercadoPago(
             Guid.NewGuid(),
             reservation.ReservationId,
+            reservation.BuildingId,
             reservation.TotalAmount,
             reservation.Currency!,
             Guid.NewGuid().ToString("D"),

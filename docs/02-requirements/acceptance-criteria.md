@@ -216,6 +216,17 @@ Details: `docs/04-data/domain-model.md#cash-payments-issue-25`.
 
 Related: RF-017 through RF-021, RB-013, RB-014 — issues #26, #27.
 
+Implemented (issue #26): the administrative operations, all under `/api/admin/...`
+(Administrator only) and delegating to the owning modules: reservation list and
+detail with payments (`requiresFinancialReview` computed, `requiresManualReview`
+filter on `/api/admin/payments`), cancel and reschedule with a mandatory reason,
+price rules (effective-dated, never edited), availability windows and
+maintenance periods, and Event slots. Cancelling a paid reservation never
+changes or refunds the payment (OQ-011 stays open). Reschedule keeps resources,
+price snapshot and hold. Every change is audited atomically. Still open in issue
+#2: definitive prices and hours, refund policy, full-day, definitive cash actor.
+See `docs/04-data/domain-model.md#administrative-operations-issue-26`.
+
 Implemented (issue #27): the audit half of this criterion. Important facts are
 recorded in the append-only `AuditLogs` table with actor (user, system or
 external provider), timestamp, action, target, building and allowlisted safe

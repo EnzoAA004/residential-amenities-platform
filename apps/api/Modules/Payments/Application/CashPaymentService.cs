@@ -68,6 +68,7 @@ public sealed class CashPaymentService(
         var payment = Payment.CreateCash(
             Guid.NewGuid(),
             reservation.ReservationId,
+            reservation.BuildingId,
             reservation.TotalAmount,
             reservation.Currency,
             nowUtc);

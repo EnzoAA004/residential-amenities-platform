@@ -75,4 +75,43 @@ public sealed class EventSlotDefinition
 
     public bool Matches(TimeOnly startTime, TimeOnly endTime) =>
         IsActive && StartTime == startTime && EndTime == endTime;
+
+    /// <summary>
+    /// Administrative change of the name and/or times. Same invariants as
+    /// creation (no overnight). Existing reservations are unaffected.
+    /// </summary>
+    public void Update(string name, TimeOnly startTime, TimeOnly endTime)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            throw new ArgumentException("Name is required.", nameof(name));
+        }
+
+        if (endTime <= startTime)
+        {
+            throw new ArgumentException(
+                "End time must be after start time. Overnight/full-day slots are not supported yet.",
+                nameof(endTime));
+        }
+
+        Name = name.Trim();
+        StartTime = startTime;
+        EndTime = endTime;
+    }
+
+    /// <returns>true when this call changed the state.</returns>
+    public bool Deactivate()
+    {
+        var changed = IsActive;
+        IsActive = false;
+        return changed;
+    }
+
+    /// <returns>true when this call changed the state.</returns>
+    public bool Activate()
+    {
+        var changed = !IsActive;
+        IsActive = true;
+        return changed;
+    }
 }

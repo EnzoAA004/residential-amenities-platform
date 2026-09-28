@@ -28,6 +28,7 @@ public sealed class Payment
     private Payment(
         Guid id,
         Guid reservationId,
+        Guid buildingId,
         PaymentMethod method,
         PaymentStatus initialStatus,
         decimal amount,
@@ -44,6 +45,11 @@ public sealed class Payment
             throw new ArgumentException("Reservation id is required.", nameof(reservationId));
         }
 
+        if (buildingId == Guid.Empty)
+        {
+            throw new ArgumentException("Building id is required.", nameof(buildingId));
+        }
+
         if (amount <= 0)
         {
             throw new ArgumentOutOfRangeException(nameof(amount), "Amount must be positive.");
@@ -56,6 +62,7 @@ public sealed class Payment
 
         Id = id;
         ReservationId = reservationId;
+        BuildingId = buildingId;
         Method = method;
         Status = initialStatus;
         Amount = amount;
@@ -68,6 +75,7 @@ public sealed class Payment
     public static Payment CreateMercadoPago(
         Guid id,
         Guid reservationId,
+        Guid buildingId,
         decimal amount,
         string currency,
         string idempotencyKey,
@@ -89,6 +97,7 @@ public sealed class Payment
         return new Payment(
             id,
             reservationId,
+            buildingId,
             PaymentMethod.MercadoPago,
             PaymentStatus.Created,
             amount,
@@ -108,12 +117,14 @@ public sealed class Payment
     public static Payment CreateCash(
         Guid id,
         Guid reservationId,
+        Guid buildingId,
         decimal amount,
         string currency,
         DateTimeOffset declaredAtUtc) =>
         new(
             id,
             reservationId,
+            buildingId,
             PaymentMethod.Cash,
             PaymentStatus.Pending,
             amount,
@@ -126,6 +137,9 @@ public sealed class Payment
     public Guid Id { get; private set; }
 
     public Guid ReservationId { get; private set; }
+
+    /// <summary>The reservation building, copied when the payment is created (admin building scope).</summary>
+    public Guid BuildingId { get; private set; }
 
     public PaymentMethod Method { get; private set; }
 

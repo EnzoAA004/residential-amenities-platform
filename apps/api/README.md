@@ -283,6 +283,43 @@ but reports `reservationOutcome: "ApprovedAfterExpiry"` (or
 reservation is not revived. `GET /api/payments/{id}` now also returns `method`
 and, for cash, `cashConfirmedAtUtc`.
 
+### Administrative operations (issue #26)
+
+All under `/api/admin/...`, `Administrator` only (Resident 403); the actor comes
+from the session. Administration delegates to the module that owns the data.
+Page size defaults to 50, max 100.
+
+```http
+GET  /api/admin/reservations?buildingId=&status=&useType=&fromUtc=&toUtc=&membershipId=&page=&pageSize=
+GET  /api/admin/reservations/{id}
+POST /api/admin/reservations/{id}/cancel        { "reason": "..." }
+POST /api/admin/reservations/{id}/reschedule    { "startsAtUtc": "...", "endsAtUtc": "...", "reason": "..." }
+GET  /api/admin/payments?buildingId=&method=&status=&requiresManualReview=&reservationId=&fromUtc=&toUtc=
+GET  /api/admin/pricing/rules?buildingId=&amenityId=&activeAtUtc=
+POST /api/admin/pricing/rules                    { buildingId, amenityId, componentType, useType, currency, amount, effectiveFromUtc?, effectiveToUtc? }
+GET  /api/admin/amenities/{id}/availability?buildingId=
+PUT  /api/admin/amenities/{id}/availability      { buildingId, windows: [{ dayOfWeek, startTime, endTime }] }
+POST /api/admin/amenities/{id}/unavailable-periods   { buildingId, startsAtUtc, endsAtUtc, reason? }
+DELETE /api/admin/amenities/{id}/unavailable-periods/{periodId}?buildingId=
+GET  /api/admin/buildings/{buildingId}/event-slots
+POST /api/admin/buildings/{buildingId}/event-slots  { name, startTime, endTime }
+PUT  /api/admin/event-slots/{id}                    { name, startTime, endTime }
+POST /api/admin/event-slots/{id}/deactivate | /activate
+```
+
+- **Cancel** (`Pending`/`Confirmed` only; `Expired` 409; repeating is a no-op)
+  never touches a payment: no refund exists yet (OQ-011). The reservation detail
+  shows `requiresFinancialReview` when an approved payment sits on a cancelled
+  reservation or a payment needs manual review.
+- **Reschedule** (`Confirmed`, or `Pending` with an active hold) moves only the
+  time range, validated with the same rules as creation and excluding itself;
+  resources, price snapshot and `expiresAtUtc` do not change.
+- **Price rules** are effective-dated: a new rule supersedes the open one; no
+  backdating, no ambiguous overlaps, existing reservation prices never change.
+- **Availability and Event slots** shape future bookings only; slots are
+  deactivated, never deleted. Times are `HH:mm:ss`.
+- Every change is audited in the same transaction (`GET /api/admin/audit`).
+
 ### Audit trail (issue #27)
 
 ```http

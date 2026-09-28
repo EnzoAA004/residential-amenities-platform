@@ -54,3 +54,19 @@ development/testing, not the candidate 24/48-hour values under discussion
 for OQ-010. This issue does not close OQ-010; it only makes the hold
 duration a setting rather than a hardcoded constant, so setting the real
 value once #2 answers OQ-010 requires no code change.
+
+## Implementation notes — RB-013 and RB-014 (issue #26)
+
+**RB-013** is implemented for reservations: administrative cancellation is a
+state transition to `Cancelled` (with `CancelledAtUtc` and `CancellationReason`),
+never a deletion, and payments are never deleted or edited. **RB-014** is
+implemented for administrative cancel and reschedule: the actor (from the
+session), the timestamp and a mandatory reason (trimmed, at most 500
+characters) are recorded on the audit trail in the same transaction, and the
+cancellation reason also lives on the reservation.
+
+Not decided by this implementation (still issue #2): what cancelling a
+**paid** reservation means financially. The payment stays `Approved`, nothing
+is refunded or voided, and the admin read model only flags it for review
+(OQ-011). Rescheduling does not reprice: no rule says that moving a booking
+changes its price.

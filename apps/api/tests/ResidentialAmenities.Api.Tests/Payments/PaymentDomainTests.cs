@@ -212,7 +212,7 @@ public sealed class PaymentDomainTests
     // --- cash payments (issue #25) ---------------------------------------------
 
     private static Payment CreateCashPayment() =>
-        Payment.CreateCash(Guid.NewGuid(), Guid.NewGuid(), 5_000m, "ars", Now);
+        Payment.CreateCash(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 5_000m, "ars", Now);
 
     [Fact]
     public void CashPayment_StartsPending_WithDeclarationTimestampAndNoConfirmation()
@@ -331,6 +331,7 @@ public sealed class PaymentDomainTests
 
     private static Payment CreatePayment() =>
         Payment.CreateMercadoPago(
+            Guid.NewGuid(),
             Guid.NewGuid(),
             Guid.NewGuid(),
             5_000m,

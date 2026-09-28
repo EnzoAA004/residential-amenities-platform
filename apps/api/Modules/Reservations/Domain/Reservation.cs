@@ -97,6 +97,12 @@ public sealed class Reservation
     public DateTimeOffset? CancelledAtUtc { get; private set; }
 
     /// <summary>
+    /// Why an administrator cancelled it (RB-014). The audit trail also records
+    /// it, but the current state of the reservation must not depend on audit.
+    /// </summary>
+    public string? CancellationReason { get; private set; }
+
+    /// <summary>
     /// When this hold stops blocking resources if it never becomes
     /// <see cref="ReservationStatus.Confirmed"/>. Conflict detection treats
     /// a <see cref="ReservationStatus.Pending"/> reservation as active only
@@ -145,15 +151,60 @@ public sealed class Reservation
         return line;
     }
 
-    public void Cancel(DateTimeOffset cancelledAtUtc)
+    public const int MaxCancellationReasonLength = 500;
+
+    /// <summary>
+    /// Cancels a <see cref="ReservationStatus.Pending"/> or
+    /// <see cref="ReservationStatus.Confirmed"/> reservation (never deleted).
+    /// An <see cref="ReservationStatus.Expired"/> reservation is not cancelled
+    /// and an already <see cref="ReservationStatus.Cancelled"/> one is left
+    /// untouched (its original timestamp and reason are kept). Nothing is
+    /// revived. Any payment is not touched here: refund policy is open (OQ-011).
+    /// </summary>
+    /// <returns>true only when this call made the transition.</returns>
+    public bool Cancel(DateTimeOffset cancelledAtUtc, string? reason = null)
     {
-        if (Status == ReservationStatus.Cancelled)
+        if (Status is not (ReservationStatus.Pending or ReservationStatus.Confirmed))
         {
-            return;
+            return false;
         }
 
         Status = ReservationStatus.Cancelled;
         CancelledAtUtc = cancelledAtUtc;
+        CancellationReason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
+        return true;
+    }
+
+    /// <summary>
+    /// Moves the booking to another time range (administrative reschedule).
+    /// Only a <see cref="ReservationStatus.Confirmed"/> reservation, or a
+    /// <see cref="ReservationStatus.Pending"/> one whose hold is still active,
+    /// can move. It changes neither resources, price snapshot nor
+    /// <see cref="ExpiresAtUtc"/>. Availability and conflicts are validated by
+    /// the application service before calling this.
+    /// </summary>
+    public bool TryReschedule(
+        DateTimeOffset newStartsAtUtc,
+        DateTimeOffset newEndsAtUtc,
+        DateTimeOffset nowUtc)
+    {
+        if (newEndsAtUtc <= newStartsAtUtc)
+        {
+            throw new ArgumentException("End must be after start.", nameof(newEndsAtUtc));
+        }
+
+        var reschedulable =
+            Status == ReservationStatus.Confirmed ||
+            (Status == ReservationStatus.Pending && nowUtc < ExpiresAtUtc);
+
+        if (!reschedulable)
+        {
+            return false;
+        }
+
+        StartsAtUtc = newStartsAtUtc;
+        EndsAtUtc = newEndsAtUtc;
+        return true;
     }
 
     /// <summary>

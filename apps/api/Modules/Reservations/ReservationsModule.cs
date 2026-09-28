@@ -13,6 +13,10 @@ public static class ReservationsModule
     {
         services.AddScoped<ReservationCreationService>();
         services.AddScoped<ReservationExpirationService>();
+        services.AddScoped<ReservationScheduleValidator>();
+        services.AddScoped<IReservationAdminQuery, ReservationAdminQuery>();
+        services.AddScoped<IReservationAdminContract, ReservationAdminService>();
+        services.AddScoped<IEventSlotAdminContract, EventSlotAdminService>();
         services.AddScoped<IReservationPaymentContract, ReservationPaymentContract>();
 
         services

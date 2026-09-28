@@ -31,7 +31,24 @@ public sealed class AuditMetadata
         "reservationOutcome",
         "outcome",
         "result",
-        "failure"
+        "failure",
+        "previousStartsAtUtc",
+        "previousEndsAtUtc",
+        "newStartsAtUtc",
+        "newEndsAtUtc",
+        "amenityId",
+        "componentType",
+        "effectiveFromUtc",
+        "effectiveToUtc",
+        "operation",
+        "count",
+        "name",
+        "startTime",
+        "endTime",
+        "previousName",
+        "previousStartTime",
+        "previousEndTime",
+        "active"
     };
 
     private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web);
@@ -80,6 +97,89 @@ public sealed class AuditMetadata
         new(new()
         {
             ["reason"] = reason is { Length: > MaxReasonLength } ? reason[..MaxReasonLength] : reason
+        });
+
+    /// <summary>Administrative reschedule: only the time range moves.</summary>
+    public static AuditMetadata ReservationRescheduled(
+        DateTimeOffset previousStartsAtUtc,
+        DateTimeOffset previousEndsAtUtc,
+        DateTimeOffset newStartsAtUtc,
+        DateTimeOffset newEndsAtUtc,
+        string reason) =>
+        new(new()
+        {
+            ["previousStartsAtUtc"] = previousStartsAtUtc.ToUniversalTime(),
+            ["previousEndsAtUtc"] = previousEndsAtUtc.ToUniversalTime(),
+            ["newStartsAtUtc"] = newStartsAtUtc.ToUniversalTime(),
+            ["newEndsAtUtc"] = newEndsAtUtc.ToUniversalTime(),
+            ["reason"] = reason.Length > MaxReasonLength ? reason[..MaxReasonLength] : reason
+        });
+
+    /// <summary>Price rule created or superseded (for a superseded rule, <paramref name="effectiveToUtc"/> is the new end).</summary>
+    public static AuditMetadata PriceRule(
+        Guid amenityId,
+        string useType,
+        string componentType,
+        string currency,
+        decimal amount,
+        DateTimeOffset effectiveFromUtc,
+        DateTimeOffset? effectiveToUtc) =>
+        new(new()
+        {
+            ["amenityId"] = amenityId,
+            ["useType"] = useType,
+            ["componentType"] = componentType,
+            ["currency"] = currency,
+            ["amount"] = amount,
+            ["effectiveFromUtc"] = effectiveFromUtc.ToUniversalTime(),
+            ["effectiveToUtc"] = effectiveToUtc?.ToUniversalTime()
+        });
+
+    /// <summary>Availability configuration change: which operation and how many rows, never the rows.</summary>
+    public static AuditMetadata AmenityAvailability(string operation, int count, string? reason = null) =>
+        new(new()
+        {
+            ["operation"] = operation,
+            ["count"] = count,
+            ["reason"] = reason is { Length: > MaxReasonLength } ? reason[..MaxReasonLength] : reason
+        });
+
+    public static AuditMetadata EventSlotCreated(
+        string name,
+        TimeOnly startTime,
+        TimeOnly endTime) =>
+        new(new()
+        {
+            ["name"] = name,
+            ["startTime"] = startTime.ToString("HH:mm"),
+            ["endTime"] = endTime.ToString("HH:mm"),
+            ["active"] = true
+        });
+
+    public static AuditMetadata EventSlotUpdated(
+        string previousName,
+        TimeOnly previousStartTime,
+        TimeOnly previousEndTime,
+        string name,
+        TimeOnly startTime,
+        TimeOnly endTime,
+        bool active) =>
+        new(new()
+        {
+            ["previousName"] = previousName,
+            ["previousStartTime"] = previousStartTime.ToString("HH:mm"),
+            ["previousEndTime"] = previousEndTime.ToString("HH:mm"),
+            ["name"] = name,
+            ["startTime"] = startTime.ToString("HH:mm"),
+            ["endTime"] = endTime.ToString("HH:mm"),
+            ["active"] = active
+        });
+
+    public static AuditMetadata EventSlotState(string name, bool active) =>
+        new(new()
+        {
+            ["name"] = name,
+            ["active"] = active
         });
 
     public static AuditMetadata PaymentInitiated(

@@ -166,3 +166,18 @@ authenticated session and stored on the payment (`CashConfirmedByUserId`,
   decision depends on it.
 - Known gaps: no cryptographic tamper-proofing, no retention policy yet, and
   no rate limiting on failed-login events.
+
+## Administrative operations (issue #26)
+
+- Every `/api/admin/...` route is under the `Administrator` policy (anonymous
+  401, Resident 403); the actor is always the authenticated session user, and a
+  client-sent role or actor id is ignored.
+- Administration owns no data and has no direct table access: commands go
+  through the owning module's contract, so its invariants (state, availability,
+  conflicts, locking) still apply to administrators.
+- Nothing is hard-deleted: cancellation is a state transition (RB-013); price
+  rules are superseded, never edited; Event slots are deactivated.
+- Cancel and reschedule require a reason (RB-014); every administrative change
+  is audited atomically with the change (`AuditLogs`, see the audit section).
+- Admin payment views never expose the access token, webhook secret, idempotency
+  key, checkout URL, provider order id or provider payloads.

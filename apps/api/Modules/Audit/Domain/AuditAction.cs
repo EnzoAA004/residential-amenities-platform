@@ -17,8 +17,11 @@ public enum AuditAction
     ReservationConfirmed = 11,
     ReservationExpired = 12,
 
-    /// <summary>Prepared for issue #26 (admin cancellation); nothing emits it yet.</summary>
+    /// <summary>Administrative cancellation (issue #26).</summary>
     ReservationCancelled = 13,
+
+    /// <summary>Administrative move to another time range (issue #26).</summary>
+    ReservationRescheduled = 14,
 
     // Payments
     MercadoPagoPaymentInitiated = 20,
@@ -28,6 +31,18 @@ public enum AuditAction
     CashPaymentDeclared = 24,
     CashPaymentConfirmed = 25,
     PaymentRequiresManualReview = 26,
+
+    // Pricing configuration (issue #26)
+    PriceRuleCreated = 40,
+    PriceRuleSuperseded = 41,
+
+    // Amenity availability configuration (issue #26)
+    AmenityAvailabilityChanged = 50,
+
+    // Event slot configuration (issue #26)
+    EventSlotCreated = 60,
+    EventSlotUpdated = 61,
+    EventSlotDeactivated = 62,
 
     // External provider
     MercadoPagoWebhookProcessed = 30

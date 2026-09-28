@@ -771,7 +771,7 @@ public sealed class CashPaymentFlowTests : IAsyncLifetime
                 created,
                 RaceDeadline);
             var payment = Payment.CreateCash(
-                Guid.NewGuid(), reservation.Id, 5_000m, "ARS", created);
+                Guid.NewGuid(), reservation.Id, reservation.BuildingId, 5_000m, "ARS", created);
 
             dbContext.Reservations.Add(reservation);
             dbContext.Payments.Add(payment);

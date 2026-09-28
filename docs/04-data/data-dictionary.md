@@ -1,10 +1,10 @@
-# Data Dictionary — v0.10
+# Data Dictionary — v0.11
 
 The model now includes the building/membership foundation, ASP.NET Core Identity
 persistence, the Amenities & Availability foundation (issue #19), the Pricing
 foundation (issue #22), Shared/Exclusive Leisure Reservations (issue #20),
 Event Reservations + add-on amenities (issue #21), and reservation
-concurrency/hold management (issue #23), Mercado Pago payments (issue #24), cash payments (issue #25), and the audit trail (issue #27).
+concurrency/hold management (issue #23), Mercado Pago payments (issue #24), cash payments (issue #25), the audit trail (issue #27), and administrative operations (issue #26).
 
 ## Buildings
 
@@ -193,6 +193,7 @@ live reference to `PriceRules`.
 | ExpiresAtUtc | timestamptz | No | When this hold stops blocking resources if never confirmed (RB-009). Computed at creation as `now + Reservations:Hold:DurationMinutes` (configurable, RF-011). Checked live in conflict detection — a `Pending` row past this instant no longer blocks, even before the expiration job runs. |
 | ExpiredAtUtc | timestamptz | Yes | Set by `ReservationExpirationService` when the hold is actually flipped to `Expired` (RB-010, RF-012). |
 | ConfirmedAtUtc | timestamptz | Yes | Set by `Reservation.Confirm` (issue #24) when `Pending → Confirmed` happens through the Payments contract. Confirming again is a no-op and does not change it. |
+| CancellationReason | varchar(500) | Yes | Why an administrator cancelled it (issue #26, RB-014). Set once by `Reservation.Cancel`; the audit trail also records it, but the reservation's current state does not depend on audit. |
 
 Indexes: `(BuildingId, StartsAtUtc, EndsAtUtc)` for building/time-range
 queries, `Status` for lifecycle filtering, `(Status, ExpiresAtUtc)` for the
@@ -236,6 +237,7 @@ Reservations' tables. See
 | --- | --- | --- | --- |
 | Id | uuid | No | Primary key. Its `N` format is the `external_reference` sent to Mercado Pago and re-validated on every reconciliation. |
 | ReservationId | uuid | No | Reservation being paid. |
+| BuildingId | uuid | No | Building of the reservation, copied when the payment is created (issue #26) so Payments can scope admin queries without reading Reservations' tables. No FK. Backfilled from the reservation for older rows. |
 | Method | varchar(30) | No | `MercadoPago` or `Cash` (issue #25). Same table, same model. |
 | Status | varchar(20) | No | Provider-neutral: `Created`, `Pending`, `Approved`, `Rejected`, `Cancelled`. |
 | Amount | numeric(18,2) | No | Copied from the `ReservationPriceLines` snapshot when the attempt is created; never from the client or current rules. |
@@ -257,7 +259,7 @@ Provider-specific columns (`IdempotencyKey`, `RequestedExpirationTime`, `Provide
 Indexes: unique `IdempotencyKey`; unique `ProviderOrderId`; **filtered unique
 `UX_Payments_ActivePerReservation`** on `ReservationId WHERE Status IN
 ('Created','Pending','Approved')` (one live attempt per reservation);
-non-unique `ReservationId`.
+non-unique `ReservationId`; non-unique `(BuildingId, CreatedAtUtc)` for the administrative listing.
 
 No payer data, card data, tokens, signatures or raw provider payloads are
 stored.

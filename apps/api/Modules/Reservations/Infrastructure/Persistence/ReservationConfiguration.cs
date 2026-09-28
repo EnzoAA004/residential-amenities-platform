@@ -31,6 +31,9 @@ public sealed class ReservationConfiguration : IEntityTypeConfiguration<Reservat
         builder.Property(reservation => reservation.CreatedAtUtc)
             .IsRequired();
 
+        builder.Property(reservation => reservation.CancellationReason)
+            .HasMaxLength(Reservation.MaxCancellationReasonLength);
+
         builder.Property(reservation => reservation.ExpiresAtUtc)
             .IsRequired();
 

@@ -84,5 +84,8 @@ public sealed class PaymentConfiguration : IEntityTypeConfiguration<Payment>
             .HasDatabaseName("UX_Payments_ActivePerReservation");
 
         builder.HasIndex(payment => payment.ReservationId);
+
+        // Admin listing scoped by building, newest first.
+        builder.HasIndex(payment => new { payment.BuildingId, payment.CreatedAtUtc });
     }
 }

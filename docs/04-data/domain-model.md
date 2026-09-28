@@ -1,4 +1,4 @@
-# Domain Model — v0.10
+# Domain Model — v0.11
 
 ## Implemented foundation
 
@@ -822,7 +822,11 @@ member. Stored by name.
 | Reservations | `ReservationCreated` | User | Reservation | reservation persisted |
 | Reservations | `ReservationConfirmed` | System | Reservation | the real `Pending → Confirmed` transition (not on a repeat) |
 | Reservations | `ReservationExpired` | System | Reservation | each real `Pending → Expired` transition |
-| Reservations | `ReservationCancelled` | none yet | Reservation | **prepared for #26**; nothing emits it yet |
+| Reservations | `ReservationCancelled` | User (administrator) | Reservation | admin cancellation (#26), metadata `reason` |
+| Reservations | `ReservationRescheduled` | User (administrator) | Reservation | admin reschedule (#26), previous/new range and `reason` |
+| Pricing | `PriceRuleCreated` / `PriceRuleSuperseded` | User (administrator) | PriceRule | new rule / rule closed by it (#26); amenity, use type, component, currency, amount, effective range |
+| Amenities | `AmenityAvailabilityChanged` | User (administrator) | Amenity | windows replaced, maintenance period added/removed (#26); operation and count only |
+| Reservations | `EventSlotCreated` / `EventSlotUpdated` / `EventSlotDeactivated` | User (administrator) | EventSlot | Event slot configuration (#26); name, times, active flag |
 | Payments | `MercadoPagoPaymentInitiated` | User | Payment | attempt created (not on a resumed attempt) |
 | Payments | `CashPaymentDeclared` | User | Payment | declaration created (not on an idempotent repeat) |
 | Payments | `CashPaymentConfirmed` | User (the confirmer) | Payment | outcome recorded after cash confirmation |
@@ -912,14 +916,181 @@ does not join Identity for names or e-mails. It is read-only.
 Not implemented: for the MVP audit entries are kept indefinitely. The
 retention/archival policy is deferred to production/FinOps.
 
-### For #26
+### Admin operations (#26)
 
-`AuditAction.ReservationCancelled` and `AuditMetadata.ReservationCancelled(reason)`
-exist. #26 records admin operations (cancel, reschedule, price/availability/
-slot changes, cash confirmation from the admin workflow) through
-`IAuditRecorder` in the same transaction as the change, and enforces the
-mandatory reason (RB-014). Each needs a new `AuditAction` member. Payments
+Issue #26 (admin operations) now records cancel, reschedule, price rule, availability and Event slot changes through `IAuditRecorder` in the same transaction as the change, with a mandatory reason for cancel and reschedule (RB-014). Payments
 needing manual review are queryable with `action=PaymentRequiresManualReview`.
+
+## Administrative operations (issue #26)
+
+Covers RF-017, RF-018, RF-019, RF-020, RB-013, RB-014.
+
+### Administration is an orchestrator
+
+The Administration module only authenticates, maps HTTP and composes read
+models. It has no repositories and touches no other module's tables: every
+command is a contract implemented by the module that owns the data, which
+enforces its own invariants.
+
+| Contract | Owner | Use |
+| --- | --- | --- |
+| `IReservationAdminQuery` | Reservations | admin reservation list / detail (read model) |
+| `IReservationAdminContract` | Reservations | cancel, reschedule |
+| `IEventSlotAdminContract` | Reservations | Event slot configuration |
+| `IPaymentAdminQuery` | Payments | admin payment list, payments per reservation (read-only) |
+| `IPricingAdminContract` | Pricing | list / create price rules |
+| `IAmenityAdminContract` | Amenities | availability windows, maintenance periods, amenity lookup |
+
+Every route lives under `/api/admin/...` (group policy `Administrator`; a
+Resident gets 403, an anonymous caller 401). The actor is always the session
+user; a client-sent role or actor id is ignored. The audit query is
+`GET /api/admin/audit` (#27) and cash confirmation is
+`POST /api/payments/{id}/cash/confirm` (#25); neither is duplicated.
+
+### Read models
+
+Projections with `AsNoTracking`, no aggregate loading, two queries per page
+(reservations with resources and totals in SQL, then all payments of the page
+in one query). Page size defaults to 50 and is capped at 100.
+
+- `GET /api/admin/reservations` — filters `buildingId`, `status`, `useType`,
+  `fromUtc`/`toUtc` (on the start of the booking), `membershipId`, `page`,
+  `pageSize`. Newest created first (so a dashboard shows recent activity; the
+  time filters answer "what is coming up"). Each item carries lifecycle
+  timestamps, `cancellationReason`, creator membership, resources, total,
+  currency and the reservation's payments.
+- `GET /api/admin/reservations/{id}` — the same plus the price snapshot lines.
+- `GET /api/admin/payments` — filters `buildingId`, `method`, `status`,
+  `requiresManualReview`, `reservationId`, `fromUtc`/`toUtc`, `page`,
+  `pageSize`. `requiresManualReview=true` lists the payments whose outcome is
+  `ApprovedAfterExpiry`, `ApprovedForCancelledReservation` or
+  `ApprovedForMissingReservation`. Read-only: no refund, no "resolve review",
+  no editing.
+
+Payment views never expose the access token, webhook secret, idempotency key,
+checkout URL, provider order id or any provider payload. `Payment.BuildingId`
+(copied from the reservation when a payment is created) gives Payments its own
+building scope without reading Reservations' tables.
+
+`requiresFinancialReview` is computed by Administration (never stored, never
+changing the payment): true when a payment is flagged for manual review, or
+when an **approved** payment sits on a **cancelled** reservation.
+
+### Cancel semantics
+
+`POST /api/admin/reservations/{id}/cancel` with a mandatory `reason`
+(trimmed, non-empty, at most 500 characters — `AuditMetadata.MaxReasonLength`).
+
+| Current state | Result |
+| --- | --- |
+| `Pending`, `Confirmed` | → `Cancelled`; `CancelledAtUtc` and `CancellationReason` stored on the reservation |
+| `Cancelled` | idempotent 200; original timestamp/reason kept; no second audit entry |
+| `Expired` | 409, nothing changes (Expired is terminal) |
+
+`CancellationReason` lives on the reservation as well as in the audit entry:
+the current state must not depend on audit. Nothing is deleted (RB-013).
+**A payment is never touched by a cancellation**: an approved payment stays
+`Approved`, is not marked rejected and nothing is refunded. Cancellation and
+refund policy is still open (OQ-011, issue #2). The `ReservationCancelled`
+audit entry is written in the same transaction (actor = the administrator,
+metadata `reason`).
+
+### Reschedule semantics
+
+`POST /api/admin/reservations/{id}/reschedule` with `startsAtUtc`, `endsAtUtc`
+and a mandatory `reason`. Only the time range moves — never building, use
+type, resources, price snapshot, payment or `ExpiresAtUtc`.
+
+| Current state | Result |
+| --- | --- |
+| `Confirmed` | allowed |
+| `Pending` with an active hold | allowed (the hold is **not** extended) |
+| `Pending` past its hold | 409 |
+| `Expired`, `Cancelled` | 409 |
+
+The new range must satisfy the same invariants as creation — valid range,
+availability windows, maintenance periods, Event slot match (for Event, against
+the slots active now), and shared/exclusive conflicts — through the shared
+`ReservationScheduleValidator` (creation uses it too; nothing is duplicated).
+The reservation is excluded from its own conflict check. Moving to the exact
+same range is a no-op (no audit).
+
+Concurrency, inside one transaction: (1) lock the reservation row
+(`FOR UPDATE`, the lock payment confirmation and expiration also contend on);
+(2) take the per-Amenity advisory locks in ascending order (the same locks
+creation uses); (3) re-read and check the state; (4) validate; (5) conflict
+check excluding itself; (6) change the range; (7) record `ReservationRescheduled`
+(previous and new range and the reason); (8) commit. The order reservation row →
+advisory locks cannot deadlock: creation takes only advisory locks, and
+confirmation/cancellation only the row lock.
+
+**Pricing is not recalculated** on reschedule: the historical snapshot stays. No
+stakeholder rule says moving the date reprices; if one is decided it needs its
+own business rule/ADR.
+
+### Price rules
+
+`GET/POST /api/admin/pricing/rules`. Rules stay effective-dated and immutable:
+the amount of an existing rule is never edited. Creating a rule for a
+building + amenity + component + use type:
+
+- takes effect at `effectiveFromUtc` (default now); backdating is refused
+  (422) so the history of which price applied is never rewritten;
+- supersedes (closes at the new start) the rule of the same combination that is
+  still open at that instant;
+- is rejected with 409 if another rule of the same combination starts at or
+  after the new start and would overlap it (never two active rules);
+- validates amount > 0, a 3-letter currency, known component/use type, and
+  that the amenity belongs to the building (looked up through
+  `IAmenityAdminContract`, 404 otherwise).
+
+It runs under the amenity advisory lock (also ordering it against reservation
+creation) and records `PriceRuleCreated` / `PriceRuleSuperseded` in the same
+transaction. Existing reservation snapshots never change. No price is final
+until issue #2 confirms it; nothing is hardcoded.
+
+### Availability
+
+- `GET /api/admin/amenities/{id}/availability?buildingId=` — current windows and
+  maintenance periods.
+- `PUT /api/admin/amenities/{id}/availability` `{ buildingId, windows[] }` —
+  replaces the weekly windows: 1–28 windows, each ending after it starts (no
+  overnight), no overlapping or duplicate windows on a day (422). To close an
+  amenity use a maintenance period instead of an empty list.
+- `POST /api/admin/amenities/{id}/unavailable-periods` and
+  `DELETE .../unavailable-periods/{periodId}?buildingId=` — add or remove a
+  maintenance/blackout period (an identical duplicate is a 409).
+
+The amenity must belong to the given building (404 otherwise). A change only
+shapes **future** availability: existing reservations are never modified or
+cancelled (an administrator can reschedule or cancel them explicitly). Each
+operation runs under the amenity advisory lock and records one
+`AmenityAvailabilityChanged` entry (operation and count, plus the reason for a
+period — never the window list).
+
+### Event slots
+
+`GET/POST /api/admin/buildings/{buildingId}/event-slots`,
+`PUT /api/admin/event-slots/{id}`, `POST .../deactivate`, `POST .../activate`.
+Slots are activated/deactivated, never deleted. Invariants are the creation
+ones: start before end, no overnight, no full-day (pending issue #2); exact
+times stay configurable and the seeded slots remain placeholders. A duplicate
+`(building, start, end)` is a 409. A deactivated slot stops matching new Event
+reservations and reschedules; existing reservations are untouched. Audit:
+`EventSlotCreated`, `EventSlotUpdated` (also used for re-activation, with the
+active flag), `EventSlotDeactivated`; only real changes are audited.
+
+### Atomicity
+
+Every command writes its audit entry in the same `SaveChanges`/transaction as
+the change (tests force a failing audit write on real PostgreSQL and check the
+change rolls back for cancel, reschedule and price rules).
+
+### Still open (issue #2)
+
+Definitive prices, final Event/operating hours, cancellation and refund policy
+(OQ-011), full-day, the definitive cash-confirming actor (OQ-013), the real
+hold duration, and cleaning. Nothing in this issue decides them.
 
 ## Identity boundary
 

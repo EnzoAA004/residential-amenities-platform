@@ -48,3 +48,13 @@ stateDiagram-v2
   with an explicit `ApprovedAfterExpiry` outcome requiring manual review.
 - `PendingCashConfirmation` arrives with #25; `Draft`/`Completed` are not
   implemented.
+
+## Administrative transitions (issue #26)
+
+- `Pending → Cancelled` and `Confirmed → Cancelled` happen through the
+  administrative cancel (mandatory reason). `Expired` is never cancelled and a
+  second cancel is a no-op. Cancelling never changes a payment: an approved
+  payment on a cancelled reservation stays approved and is only flagged for
+  financial review (refund policy is OQ-011, issue #2).
+- Reschedule (`Confirmed`, or `Pending` with an active hold) keeps the status,
+  resources, price snapshot and `ExpiresAtUtc`; only the time range moves.

@@ -36,7 +36,8 @@ public sealed class ReservationCreationService(
     AppDbContext dbContext,
     TimeProvider timeProvider,
     IOptions<ReservationHoldOptions> holdOptions,
-    IAuditRecorder auditRecorder)
+    IAuditRecorder auditRecorder,
+    ReservationScheduleValidator scheduleValidator)
 {
     private static readonly HashSet<AmenityKind> AllowedEventAddOnKinds =
     [
@@ -85,7 +86,11 @@ public sealed class ReservationCreationService(
 
         foreach (var resource in resources)
         {
-            EnsureWithinAvailability(resource, building.TimeZoneId, command);
+            scheduleValidator.EnsureWithinAvailability(
+                resource.Amenity,
+                building.TimeZoneId,
+                command.StartsAtUtc,
+                command.EndsAtUtc);
         }
 
         // Everything from here on — the conflict check and the insert —
@@ -102,7 +107,19 @@ public sealed class ReservationCreationService(
 
         var nowUtc = timeProvider.GetUtcNow();
 
-        await EnsureNoConflictAsync(command, resources, nowUtc, cancellationToken);
+        await scheduleValidator.EnsureNoConflictAsync(
+            command.BuildingId,
+            resources
+                .Select(resource => new ScheduledResource(
+                    resource.Amenity.Id,
+                    resource.Amenity.Name,
+                    resource.IsExclusive))
+                .ToList(),
+            command.StartsAtUtc,
+            command.EndsAtUtc,
+            nowUtc,
+            excludeReservationId: null,
+            cancellationToken);
 
         var rules = await dbContext.PriceRules
             .AsNoTracking()
@@ -318,47 +335,14 @@ public sealed class ReservationCreationService(
             resources.Add(new PlannedResource(addOn, IsExclusive: true));
         }
 
-        await EnsureValidEventSlotAsync(command, timeZoneId, cancellationToken);
+        await scheduleValidator.EnsureValidEventSlotAsync(
+            command.BuildingId,
+            timeZoneId,
+            command.StartsAtUtc,
+            command.EndsAtUtc,
+            cancellationToken);
 
         return resources;
-    }
-
-    private async Task EnsureValidEventSlotAsync(
-        CreateReservationCommand command,
-        string timeZoneId,
-        CancellationToken cancellationToken)
-    {
-        var timeZone = TimeZoneInfo.FindSystemTimeZoneById(timeZoneId);
-
-        var localStart = TimeZoneInfo.ConvertTime(command.StartsAtUtc, timeZone);
-        var localEnd = TimeZoneInfo.ConvertTime(command.EndsAtUtc, timeZone);
-
-        if (localStart.Date != localEnd.Date)
-        {
-            throw new ReservationRequestException(
-                "Event reservations may not cross midnight in the " +
-                "building's local time zone yet.",
-                StatusCodes.Status422UnprocessableEntity);
-        }
-
-        var startTime = TimeOnly.FromDateTime(localStart.DateTime);
-        var endTime = TimeOnly.FromDateTime(localEnd.DateTime);
-
-        var slots = await dbContext.EventSlotDefinitions
-            .AsNoTracking()
-            .Where(slot => slot.BuildingId == command.BuildingId)
-            .ToListAsync(cancellationToken);
-
-        var hasMatchingSlot = slots.Any(slot => slot.Matches(startTime, endTime));
-
-        if (!hasMatchingSlot)
-        {
-            throw new ReservationRequestException(
-                "The requested range does not match a configured Event " +
-                "slot for this building. Exact Event slot times remain " +
-                "configurable/TBD pending issue #2.",
-                StatusCodes.Status422UnprocessableEntity);
-        }
     }
 
     private async Task<Amenity?> LoadAmenityAsync(
@@ -381,98 +365,6 @@ public sealed class ReservationCreationService(
             throw new ReservationRequestException(
                 $"Amenity '{amenity.Name}' is not currently active.",
                 StatusCodes.Status422UnprocessableEntity);
-        }
-    }
-
-    private static void EnsureWithinAvailability(
-        PlannedResource resource,
-        string timeZoneId,
-        CreateReservationCommand command)
-    {
-        IReadOnlyList<AvailabilityInterval> openIntervals;
-
-        try
-        {
-            openIntervals = AmenityAvailabilityCalculator.CalculateOpenIntervals(
-                resource.Amenity.AvailabilityWindows,
-                resource.Amenity.UnavailablePeriods,
-                timeZoneId,
-                command.StartsAtUtc,
-                command.EndsAtUtc);
-        }
-        catch (ArgumentException error)
-        {
-            throw new ReservationRequestException(
-                error.Message,
-                StatusCodes.Status400BadRequest);
-        }
-
-        var requestedDuration = command.EndsAtUtc - command.StartsAtUtc;
-        var coveredDuration = openIntervals.Aggregate(
-            TimeSpan.Zero,
-            (total, interval) => total + (interval.EndUtc - interval.StartUtc));
-
-        if (coveredDuration < requestedDuration)
-        {
-            throw new ReservationRequestException(
-                $"'{resource.Amenity.Name}' is outside its configured " +
-                "availability or falls within a maintenance/unavailable " +
-                "period for the requested range.",
-                StatusCodes.Status422UnprocessableEntity);
-        }
-    }
-
-    private async Task EnsureNoConflictAsync(
-        CreateReservationCommand command,
-        IReadOnlyList<PlannedResource> resources,
-        DateTimeOffset nowUtc,
-        CancellationToken cancellationToken)
-    {
-        var amenityIds = resources.Select(resource => resource.Amenity.Id).ToList();
-
-        // Only a cheap prefilter runs in SQL (resource ids + building +
-        // status/expiry); the actual compatibility decision always goes
-        // through the single centralized ReservationCompatibility
-        // .ConflictsWith rule so it is never duplicated between endpoints or
-        // resources. A Pending hold blocks exactly like Confirmed while it
-        // has not yet passed its own ExpiresAtUtc (RB-009/RB-010) — checked
-        // here at query time so a hold stops blocking the instant it is
-        // past due, even if the expiration job has not run yet.
-        var candidates = await dbContext.ReservationResources
-            .AsNoTracking()
-            .Where(resource =>
-                amenityIds.Contains(resource.AmenityId) &&
-                resource.Reservation.BuildingId == command.BuildingId &&
-                (resource.Reservation.Status == ReservationStatus.Confirmed ||
-                 (resource.Reservation.Status == ReservationStatus.Pending &&
-                  resource.Reservation.ExpiresAtUtc > nowUtc)))
-            .Select(resource => new
-            {
-                resource.AmenityId,
-                resource.IsExclusive,
-                resource.Reservation.StartsAtUtc,
-                resource.Reservation.EndsAtUtc
-            })
-            .ToListAsync(cancellationToken);
-
-        foreach (var resource in resources)
-        {
-            var hasConflict = candidates
-                .Where(candidate => candidate.AmenityId == resource.Amenity.Id)
-                .Any(candidate => ReservationCompatibility.ConflictsWith(
-                    candidate.IsExclusive,
-                    resource.IsExclusive,
-                    candidate.StartsAtUtc,
-                    candidate.EndsAtUtc,
-                    command.StartsAtUtc,
-                    command.EndsAtUtc));
-
-            if (hasConflict)
-            {
-                throw new ReservationConflictException(
-                    $"The requested time range conflicts with an existing " +
-                    $"incompatible reservation for '{resource.Amenity.Name}'.");
-            }
         }
     }
 

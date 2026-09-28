@@ -5,6 +5,8 @@ public static class AdministrationModule
     public static IServiceCollection AddAdministrationModule(
         this IServiceCollection services)
     {
+        services.AddScoped<AdminReservationReadService>();
+
         return services;
     }
 }

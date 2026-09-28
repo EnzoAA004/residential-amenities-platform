@@ -308,6 +308,10 @@ Events/actions emitted by modules such as:
 
 Audit recording should not become the business authority for another module.
 
+### Administration (issue #26)
+
+Administration is an orchestrator: it exposes `/api/admin/...` and composes read models but owns no data and never touches another module's tables. Commands go through explicit contracts implemented by the owning module (`IReservationAdminContract`, `IEventSlotAdminContract`, `IPricingAdminContract`, `IAmenityAdminContract`; read side `IReservationAdminQuery`, `IPaymentAdminQuery`), so each module keeps its own invariants. See `docs/04-data/domain-model.md#administrative-operations-issue-26`.
+
 ### Implementation (issue #27)
 
 Modules call Audit; Audit calls no module. The public surface is

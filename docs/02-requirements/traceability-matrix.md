@@ -22,10 +22,10 @@ This matrix connects MVP requirements to implementation work and expected verifi
 | RF-014 Update state from trusted provider confirmation | #24 | `MercadoPagoSignatureVerifierTests`, `PaymentFlowTests` (signed webhook + server-side re-fetch), `PaymentReservationRaceTests` |
 | RF-015 Declare cash payment method | #25 | `CashPaymentFlowTests` (declaration, snapshot amount, idempotent/concurrent declaration, method exclusivity), `PaymentDomainTests` |
 | RF-016 Authorized cash confirmation | #25 | `CashPaymentFlowTests` (Administrator-only 403/401, actor from session, idempotent confirmation, cash-vs-expiration race, late cash) |
-| RF-017 Admin views reservation/payment detail | #26 | Admin query/API tests |
-| RF-018 Admin cancel/reschedule | #26 | Admin command + audit tests |
-| RF-019 Configure prices/effective periods | #22, #26 | Pricing configuration tests |
-| RF-020 Configure reservable windows/rules | #19, #26 | Availability configuration tests |
+| RF-017 Admin views reservation/payment detail | #26 | `AdminQueryTests` (pagination, filters, detail, manual-review filter, building scope, no secrets) |
+| RF-018 Admin cancel/reschedule | #26 | `AdminReservationOperationsTests` (states, mandatory reason, idempotency, availability/conflict/Event slot, concurrency, atomic audit), `AdminDomainTests` |
+| RF-019 Configure prices/effective periods | #22, #26 | `AdminPricingTests` (effective-dated supersede, validation, no ambiguity, snapshots untouched, audit) |
+| RF-020 Configure reservable windows/rules | #19, #26 | `AdminConfigurationTests` (availability windows, maintenance periods, Event slots) |
 | RF-021 Auditable transition history | #27 | `AuditTrailTests` (events for reservations, cash, Mercado Pago, expiration, identity; no duplicates; atomic rollback; admin query), `AuditDomainTests` |
 | RF-022 Responsive web experience | #7 | Client component/e2e viewport checks |
 | RF-023 Android/iOS packageable client | #7 | Capacitor build/config validation |

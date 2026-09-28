@@ -279,12 +279,26 @@ stale/edge-case scenario the amenities list explicitly handles).
 The active selection is **in-memory only** — never written to
 `localStorage`/`sessionStorage`/IndexedDB/Capacitor Preferences. A reload
 with a single membership reconstructs itself from `/auth/me`; a reload with
-several asks the resident to choose again. `activeMembership` is fully
-derived from the current `memberships()` signal, so login, logout, switching
-user and the `/auth/me` restore after reload all resolve correctly without
-any explicit reset: a previously selected building id that no longer
-belongs to the current session's memberships simply stops resolving to a
-membership.
+several asks the resident to choose again.
+
+A selection is scoped to the identity of the user who made it, not just to
+a `buildingId`: internally it is stored as `{ userId, buildingId }`, and
+`activeMembership` only reads it back when `selection.userId` matches the
+currently signed-in user's id. This makes it impossible by construction for
+one user's selection to reactivate for a different user, even if both
+happen to hold a membership with the same `buildingId` — storing the raw
+`buildingId` alone would not guarantee that. `activeMembership` is fully
+derived from `memberships()` plus that identity-scoped selection, so login,
+logout, switching user and the `/auth/me` restore after reload all resolve
+correctly without any explicit reset:
+
+- a previously selected building id that no longer belongs to the current
+  memberships simply stops resolving to a membership;
+- a selection made by a *different* user never resolves for the current
+  one — logging out and a different user logging back in always requires a
+  fresh, explicit selection when they have more than one membership, even
+  if the previous user had selected a building the new user also belongs
+  to.
 
 ### Amenities and availability
 

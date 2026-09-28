@@ -1,4 +1,4 @@
-# Domain Model — v0.7
+# Domain Model — v0.8
 
 ## Implemented foundation
 
@@ -19,8 +19,8 @@ Issue #9 introduces the first persisted domain slice. The model is deliberately 
 | EventSlotDefinition | Implemented (issue #21) | Configured, bookable time-of-day window for Event reservations. |
 | PriceRule | Implemented (issue #22) | Configurable, effective-dated pricing rule. |
 | ReservationPriceLine | Implemented (issues #20, #21) | Historical snapshot of a `PriceQuoteLine`, copied onto a reservation at booking time; one row per priced component (base + each add-on). |
-| Payment | Planned | Payment attempt/record and method/status. |
-| PaymentEvent | Planned | Idempotent provider/payment lifecycle event where useful. |
+| Payment | Implemented (issue #24, Mercado Pago only) | One payment attempt for a reservation: provider-neutral status, amount/currency copied from the reservation's price snapshot, persisted idempotency key, provider order id. |
+| PaymentProviderEvent | Implemented (issue #24) | Identifier-only record of a signature-verified provider notification; the unique key that makes webhook processing idempotent. |
 | Message | Post-MVP | Reservation-scoped communication. |
 | Notification | Post-MVP | Notification intent/delivery record. |
 | AuditLog | Planned | Important administrative/security/domain actions. |
@@ -407,10 +407,10 @@ stateDiagram-v2
   conflict-detection query time, not only when the expiration job has run —
   and transitions to **`Expired`** (RB-010) via
   `ReservationExpirationService`.
-- There is still **no `Pending` → `Confirmed` transition**. That requires a
-  trusted payment confirmation, which is #24 (Mercado Pago) / #25 (cash) —
-  intentionally not simulated here, per the issue's explicit instruction not
-  to build a payment workflow ahead of those issues.
+- As of #23 there was **no `Pending` → `Confirmed` transition**; issue #24
+  adds it, driven only by a trusted Mercado Pago confirmation (see
+  [Payments and Mercado Pago](#payments-and-mercado-pago-issue-24)). Cash
+  confirmation (#25) is still to come.
 - `Confirmed` and `Cancelled` are otherwise unchanged from #20.
 
 The hold duration default (30 minutes) is an explicit placeholder for local
@@ -460,13 +460,198 @@ happen before a single `SaveChanges` + `Commit`. If any resource fails its
 conflict check, the transaction is rolled back by disposing it uncommitted —
 no resource, hold or price line for that Event persists partially.
 
-### What #23 does not do
+### What #23 did not do
 
 - No Mercado Pago/cash integration and no `Pending → Confirmed` transition
-  (that's #24/#25).
+  (Mercado Pago and the transition arrived in #24; cash is #25).
 - No admin cancel/reschedule of a hold.
 - Hold duration remains configuration, not a decided business value
   (OQ-010).
+
+## Payments and Mercado Pago (issue #24)
+
+Covers RF-013, RF-014, RNF-003, RNF-006, RB-011. Payments depends on
+Reservations, never the reverse.
+
+### Ownership and the Payments → Reservations contract
+
+**Payments owns** `Payment`, `PaymentProviderEvent`, the Mercado Pago
+integration, provider order ids/statuses, webhook processing and
+idempotency. **Reservations owns** the reservation and its lifecycle
+(`Pending`/`Confirmed`/`Expired`/`Cancelled`) and its price snapshot.
+
+Payments never reads or writes Reservation tables. It talks to Reservations
+through `IReservationPaymentContract`:
+
+- `GetPayableReservationAsync` — status, hold deadline, total and currency,
+  derived **only from `ReservationPriceLine`** (the historical snapshot,
+  RB-008) — never from current `PriceRule`s and never from the client.
+- `ConfirmPaidReservationAsync` — Payments reports a trusted payment;
+  Reservations decides whether `Pending → Confirmed` is still valid and
+  answers `Confirmed`, `AlreadyConfirmed`, `RejectedExpired`,
+  `RejectedCancelled` or `NotFound`. No Mercado Pago DTO or status string
+  appears on this contract or anywhere in `Modules/Reservations`.
+
+### Payment model
+
+`Payment` = one attempt. Amount/currency are copied from the snapshot when
+the attempt is created. `Status` is provider-neutral —
+`Created`, `Pending`, `Approved`, `Rejected`, `Cancelled` — and the provider's
+own strings live separately in `ProviderStatus`/`ProviderStatusDetail`.
+`Refunded` is intentionally **not** modelled: refund logic is out of scope
+and a member with no behaviour behind it would be dead surface.
+`PaymentMethod` has only `MercadoPago` for the same reason (cash is #25).
+
+`ExternalReference` (sent to the provider and re-validated on every
+reconciliation) is the payment's own id. `ReservationOutcome` records what
+Reservations decided when an approval was reported (see "Late payment").
+
+### Checkout Pro via the Orders API
+
+Verified against Mercado Pago's current documentation when implemented:
+`POST /v1/orders` with `type=online`, `processing_mode=manual`,
+`total_amount` (decimal **string**), `external_reference`,
+`expiration_time` (ISO-8601 duration), one item, and
+`config.back_urls`; headers `Authorization: Bearer <access token>` and
+`X-Idempotency-Key`. The response carries `id`, `status`, `status_detail`,
+`checkout_url`, `currency`. The Preferences API is **not** used. Note that
+`currency` is determined by the seller's country and is **not** sent on
+creation, so it is validated against the local snapshot rather than trusted.
+
+`expiration_time` is computed from the **remaining** hold time
+(`Reservation.ExpiresAtUtc - now`, whole seconds), never a hardcoded
+duration; `ExpiresAtUtc` stays the source of truth for availability, and
+opening Mercado Pago never extends the hold. It is persisted on the
+`Payment` so retries send an identical body.
+
+### Idempotent creation across the DB / HTTP boundary
+
+There is deliberately no DB transaction around the external call:
+
+1. The `Payment` — with its `IdempotencyKey` and the exact
+   `expiration_time` to send — is **committed first**.
+2. Mercado Pago is then called with that persisted key.
+3. The response (order id, checkout URL) is saved in a later commit.
+
+If the connection drops after Mercado Pago created the order but before we
+saved the answer, the row is still there. The user's retry finds a `Payment`
+with no provider order, and calls Mercado Pago again with the **same key and
+the same body**, so the provider returns the existing order instead of
+creating another. A filtered unique index
+(`UX_Payments_ActivePerReservation`, over `Created`/`Pending`/`Approved`)
+allows one live attempt per reservation, so concurrent requests cannot fork
+into two attempts. Technical retry ≠ new attempt: a `Rejected`/`Cancelled`
+attempt drops out of that index, and the next request (while the hold lasts)
+creates a **new** `Payment` with a **new** key.
+
+### Webhook: authenticity, then server-side truth
+
+`POST /api/webhooks/mercadopago` is public (no user cookie/token — Mercado
+Pago calls it) but is authenticated by verifying `x-signature` (HMAC-SHA256;
+algorithm below). An invalid signature stores nothing, fetches nothing and
+returns 401. The signature does **not** cover the body, so the order id is
+taken from the signed `data.id` **query** parameter only; body or query
+status claims are never trusted.
+
+After verification the order is re-fetched with `GET /v1/orders/{id}` using
+the private token and cross-checked against the local payment: order id,
+`external_reference`, `total_amount`, `currency`. Any mismatch changes
+nothing. The fetch happens before any state change and outside any
+transaction.
+
+Approval is `status = processed` **and** `status_detail = accredited`
+(current official Orders API model). `created`/`processing`/`action_required`
+stay `Pending`; `failed` → `Rejected`; `canceled`/`expired` → `Cancelled`;
+anything else (refunds, chargebacks, other `processed` details) is recorded
+but never treated as approval.
+
+### Webhook idempotency
+
+`PaymentProviderEvent` has a unique `(Provider, ProviderEventId)` key (the
+signed `x-request-id`) and stores identifiers only — no payload, payer data
+or signature. Re-delivering a processed event returns immediately. Even if
+a duplicate slips through (different `x-request-id`, concurrent delivery, or
+a crash mid-way), every step is state-based and idempotent: a payment moves
+to `Approved` once, and `Confirmed → Confirmed` is a no-op, so repeated
+notifications cannot duplicate any effect. An event whose processing failed
+(e.g. provider outage) stays unprocessed and answers 503 so Mercado Pago
+redelivers; an unknown order is acknowledged and left unprocessed.
+
+### The critical race: payment vs expiration
+
+`ReservationExpirationService` does `Pending → Expired` (one atomic
+`UPDATE ... WHERE Status = 'Pending' AND ExpiresAtUtc <= now`), while a
+webhook wants `Pending → Confirmed`. They must never both win. Chosen
+mechanism: a **row-level lock**. `ConfirmPaidReservationAsync` runs
+`SELECT ... FOR UPDATE` on the reservation row inside a transaction and then
+applies `Reservation.Confirm` on the freshly-read state. PostgreSQL
+serializes it with the expiration UPDATE on that row:
+
+- confirmation first → the expiration UPDATE waits, re-evaluates its `WHERE`
+  and skips the now-`Confirmed` row;
+- expiration first → the confirmation waits, reads `Expired`, and `Confirm`
+  refuses to revive it.
+
+`Confirm` also refuses a `Pending` reservation already past
+`ExpiresAtUtc` even if the job has not swept it: conflict detection stopped
+counting that hold at its deadline, so its resources may already be booked
+by someone else. Row lock chosen over an advisory lock (the contended
+resource *is* the row) and over a conditional UPDATE (it lets the domain
+method stay the single source of truth for what "can be confirmed" means).
+
+Proven with a deliberate RED/GREEN cycle: with `FOR UPDATE` removed, a
+deterministic test (a test transaction holds the row lock while a
+confirmation is in flight, then commits an expiration) shows the
+confirmation **reviving an `Expired` reservation**; with the lock restored it
+returns `RejectedExpired`.
+
+### Late payment (approved after expiry)
+
+`Expired` + a late approved payment **≠** `Confirmed`. The provider really
+did take the money, so the `Payment` is recorded `Approved`, but the
+reservation stays `Expired`, is not re-booked, and no other resident's
+reservation is touched. `Payment.ReservationOutcome` says why:
+`ApprovedAfterExpiry` (or `ApprovedForCancelledReservation` /
+`ApprovedForMissingReservation`), and `RequiresManualReview` is true so the
+inconsistency is explicit and queryable for later compensation/refund.
+Automatic refund is out of scope for #24.
+
+### Browser return URLs never confirm anything
+
+`config.back_urls` (`MercadoPago:SuccessUrl`/`PendingUrl`/`FailureUrl`) are
+UX only (RB-011). The return screen asks `GET /api/payments/{id}`, which
+reports backend state; there is no code path where a URL or query string
+confirms a reservation.
+
+### `x-signature` verification
+
+Per the official documentation and the official SDKs' validators (e.g.
+`mercadopago/sdk-go` `pkg/webhook`): header `ts=<ts>,v1=<hex>`; manifest
+`id:<data.id lowercased>;request-id:<x-request-id>;ts:<ts>;` (a pair whose
+value is absent is omitted); `v1 = hex(HMAC-SHA256(webhook secret, manifest))`
+compared in constant time. `ts` may be seconds or milliseconds. A timestamp
+tolerance (`MercadoPago:WebhookToleranceSeconds`, default 600) is defence in
+depth only — replays are harmless because processing is idempotent and always
+re-fetches. Tested with an independent `openssl` reference vector, plus
+invalid/missing/malformed/manipulated cases.
+
+### SDK vs typed HTTP client
+
+The official `mercadopago-sdk` (3.x, .NET 8+) has an Orders client, but this
+integration needs exact control of the persisted `X-Idempotency-Key`,
+persisted `expiration_time`, `config.back_urls` and the `checkout_url`
+response field, and those specifics could not be confirmed from the SDK's
+published surface. The needed surface is two endpoints plus a small HMAC
+check, so a small typed `HttpClient` (`IMercadoPagoClient` in
+Payments.Application, `MercadoPagoHttpClient` in Payments.Infrastructure)
+keeps the request explicit, keeps tests offline (fake client / fake
+handler), and avoids a dependency of unverified coverage.
+
+### Not in #24
+
+Refunds and automatic compensation of late payments, cash (#25),
+payer/customer data, admin views of payments needing review (#26), audit
+(#27), and any frontend.
 
 ## Identity boundary
 

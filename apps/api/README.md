@@ -184,8 +184,9 @@ server-side — a client cannot influence them by sending extra fields.
 ### Holds and concurrency (issue #23)
 
 Every reservation is created as a `Pending` **hold** (RB-009) — there is no
-payment step yet, so `Pending` is the only state a fresh reservation can
-start in. The response's `status` field will read `"Pending"`, not
+payment yet at creation time, so `Pending` is the only state a fresh
+reservation can start in (it becomes `Confirmed` through a verified payment,
+see below). The response's `status` field will read `"Pending"`, not
 `"Confirmed"`, and includes `expiresAtUtc`. A hold blocks its resources
 exactly like a `Confirmed` reservation until that instant, then stops
 blocking automatically — a background service releases past-due holds
@@ -216,6 +217,50 @@ conflicts, serializing concurrent attempts on the same resource. See
 `docs/04-data/domain-model.md#concurrency-and-holds-issue-23` for why this
 approach was chosen over a database exclusion constraint or `Serializable`
 isolation.
+
+### Payments — Mercado Pago (issue #24)
+
+```http
+POST /api/reservations/{reservationId}/payments/mercadopago   (resident, building member)
+GET  /api/payments/{paymentId}                                  (resident, building member)
+POST /api/webhooks/mercadopago                                  (public; x-signature verified)
+```
+
+`POST .../payments/mercadopago` creates a Checkout Pro order through the
+Mercado Pago **Orders API** and returns `{ paymentId, providerOrderId,
+checkoutUrl, reservationExpiresAtUtc }`. The client sends **no** amount or
+currency: both come from the reservation's price snapshot. The reservation
+must still be `Pending` and inside its hold. A retry while an attempt is live
+returns the same attempt (same idempotency key); after a rejected/cancelled
+attempt a new one can be started while the hold lasts.
+
+The reservation only becomes `Confirmed` when Mercado Pago's webhook is
+verified **and** the order re-fetched from Mercado Pago is `processed` +
+`accredited`. The browser return URLs never confirm anything; the client
+should poll `GET /api/payments/{paymentId}`. A payment approved after the
+hold expired leaves the reservation `Expired` and is reported with
+`reservationOutcome: "ApprovedAfterExpiry"` and `requiresManualReview: true`.
+
+Configuration names (values are **never** committed; use User Secrets or
+environment variables):
+
+```text
+MercadoPago:AccessToken          (secret)
+MercadoPago:WebhookSecret        (secret)
+MercadoPago:ApiBaseUrl           (default https://api.mercadopago.com)
+MercadoPago:SuccessUrl / PendingUrl / FailureUrl
+MercadoPago:WebhookToleranceSeconds   (default 600)
+MercadoPago:RequestTimeoutSeconds     (default 15)
+```
+
+```bash
+dotnet user-secrets set "MercadoPago:AccessToken" "<test access token>" --project apps/api/ResidentialAmenities.Api.csproj
+dotnet user-secrets set "MercadoPago:WebhookSecret" "<webhook secret>" --project apps/api/ResidentialAmenities.Api.csproj
+```
+
+Tests use an in-memory fake provider; no credentials or network are needed.
+Design, race handling and signature algorithm:
+`docs/04-data/domain-model.md#payments-and-mercado-pago-issue-24`.
 
 ## Run
 

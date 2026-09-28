@@ -5,6 +5,7 @@ using ResidentialAmenities.Api.Modules.Amenities.Domain;
 using ResidentialAmenities.Api.Modules.Buildings.Domain;
 using ResidentialAmenities.Api.Modules.Identity.Domain;
 using ResidentialAmenities.Api.Modules.Identity.Infrastructure.Persistence;
+using ResidentialAmenities.Api.Modules.Payments.Domain;
 using ResidentialAmenities.Api.Modules.Pricing.Domain;
 using ResidentialAmenities.Api.Modules.Reservations.Domain;
 
@@ -43,6 +44,11 @@ public sealed class AppDbContext(
 
     public DbSet<EventSlotDefinition> EventSlotDefinitions =>
         Set<EventSlotDefinition>();
+
+    public DbSet<Payment> Payments => Set<Payment>();
+
+    public DbSet<PaymentProviderEvent> PaymentProviderEvents =>
+        Set<PaymentProviderEvent>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -4,7 +4,7 @@ The model now includes the building/membership foundation, ASP.NET Core Identity
 persistence, the Amenities & Availability foundation (issue #19), the Pricing
 foundation (issue #22), Shared/Exclusive Leisure Reservations (issue #20),
 Event Reservations + add-on amenities (issue #21), and reservation
-concurrency/hold management (issue #23).
+concurrency/hold management (issue #23), and Mercado Pago payments (issue #24).
 
 ## Buildings
 
@@ -192,6 +192,7 @@ live reference to `PriceRules`.
 | CancelledAtUtc | timestamptz | Yes | Set by `Reservation.Cancel`; no HTTP endpoint calls it yet. |
 | ExpiresAtUtc | timestamptz | No | When this hold stops blocking resources if never confirmed (RB-009). Computed at creation as `now + Reservations:Hold:DurationMinutes` (configurable, RF-011). Checked live in conflict detection — a `Pending` row past this instant no longer blocks, even before the expiration job runs. |
 | ExpiredAtUtc | timestamptz | Yes | Set by `ReservationExpirationService` when the hold is actually flipped to `Expired` (RB-010, RF-012). |
+| ConfirmedAtUtc | timestamptz | Yes | Set by `Reservation.Confirm` (issue #24) when `Pending → Confirmed` happens through the Payments contract. Confirming again is a no-op and does not change it. |
 
 Indexes: `(BuildingId, StartsAtUtc, EndsAtUtc)` for building/time-range
 queries, `Status` for lifecycle filtering, `(Status, ExpiresAtUtc)` for the
@@ -223,6 +224,55 @@ Index: `(AmenityId, ReservationId)`, used by the conflict-detection query.
 
 A reservation's total is `SUM(ReservationPriceLines.Amount)` for its id —
 this never requires reading current `PriceRules`.
+
+## Payments
+
+Owned by the Payments module (issue #24). One row per payment **attempt**.
+`ReservationId` is a plain reference — no FK, Payments does not own
+Reservations' tables. See
+[Domain Model](domain-model.md#payments-and-mercado-pago-issue-24).
+
+| Column | Type | Null | Notes |
+| --- | --- | --- | --- |
+| Id | uuid | No | Primary key. Its `N` format is the `external_reference` sent to Mercado Pago and re-validated on every reconciliation. |
+| ReservationId | uuid | No | Reservation being paid. |
+| Method | varchar(30) | No | `MercadoPago` (cash arrives with #25). |
+| Status | varchar(20) | No | Provider-neutral: `Created`, `Pending`, `Approved`, `Rejected`, `Cancelled`. |
+| Amount | numeric(18,2) | No | Copied from the `ReservationPriceLines` snapshot when the attempt is created; never from the client or current rules. |
+| Currency | varchar(3) | No | Same source; validated against the provider's order. |
+| IdempotencyKey | varchar(64) | No | Sent as `X-Idempotency-Key`; persisted **before** the HTTP call and reused by every retry of this attempt. Unique. |
+| RequestedExpirationTime | varchar(40) | No | The exact ISO-8601 `expiration_time` sent, persisted so retries send an identical body. |
+| ProviderOrderId | varchar(100) | Yes | Mercado Pago order id. Unique (NULLs are distinct, so many not-yet-created attempts coexist). |
+| CheckoutUrl | varchar(2048) | Yes | Checkout Pro URL returned by the provider. |
+| ProviderStatus / ProviderStatusDetail | varchar(100) | Yes | Provider's raw strings, kept apart from the neutral `Status`. |
+| ReservationOutcome | varchar(40) | No | `None`, `ReservationConfirmed`, `ApprovedAfterExpiry`, `ApprovedForCancelledReservation`, `ApprovedForMissingReservation`. The last three mean money was taken but the reservation was not confirmed → manual review. |
+| CreatedAtUtc / UpdatedAtUtc | timestamptz | No | |
+| ApprovedAtUtc | timestamptz | Yes | Set once, when the provider verifiably credited it. |
+
+Indexes: unique `IdempotencyKey`; unique `ProviderOrderId`; **filtered unique
+`UX_Payments_ActivePerReservation`** on `ReservationId WHERE Status IN
+('Created','Pending','Approved')` (one live attempt per reservation);
+non-unique `ReservationId`.
+
+No payer data, card data, tokens, signatures or raw provider payloads are
+stored.
+
+## PaymentProviderEvents
+
+Idempotency ledger for webhook deliveries. Identifiers only.
+
+| Column | Type | Null | Notes |
+| --- | --- | --- | --- |
+| Id | uuid | No | Primary key. |
+| Provider | varchar(30) | No | e.g. `MercadoPago`. |
+| ProviderEventId | varchar(200) | No | The signed `x-request-id` (fallback derived from order id/type/`ts`). |
+| ProviderOrderId | varchar(100) | No | Order id from the signed `data.id` query parameter. |
+| EventType | varchar(100) | No | The notification `action`, defaulting to `order`. |
+| ReceivedAtUtc | timestamptz | No | |
+| ProcessedAtUtc | timestamptz | Yes | Null while unprocessed (redelivery completes it). |
+| ProcessingResult | varchar(30) | No | Outcome of reconciliation. |
+
+Indexes: unique `(Provider, ProviderEventId)`; non-unique `ProviderOrderId`.
 
 ## Concurrency: PostgreSQL advisory locks (issue #23)
 

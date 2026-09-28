@@ -91,6 +91,25 @@ The check endpoints exist to prove policy enforcement during the foundation phas
 - Make payment-event processing idempotent.
 - Do not confirm a booking solely from a client redirect.
 
+Implemented in issue #24:
+
+- `POST /api/webhooks/mercadopago` is anonymous by necessity but every call
+  must carry a valid `x-signature` (HMAC-SHA256 over
+  `id:<data.id>;request-id:<x-request-id>;ts:<ts>;`, constant-time compare,
+  timestamp tolerance). Invalid → 401, nothing stored, nothing fetched.
+- The signature does not cover the body, so the order id comes only from the
+  signed `data.id` query; the order is then re-fetched with the private token
+  and its id, `external_reference`, amount and currency are validated against
+  the local payment.
+- Amount and currency come from the reservation's price snapshot, never from
+  the client.
+- Idempotency: persisted `X-Idempotency-Key`, unique provider order/event ids,
+  state-based reconciliation.
+- Approval after the hold expired never revives the reservation; it is
+  flagged for manual review.
+- Never logged/stored: access token, webhook secret, full `x-signature`,
+  `Authorization`, payer data.
+
 ## Data
 
 - Minimize personal data.

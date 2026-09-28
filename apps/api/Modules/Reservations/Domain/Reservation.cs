@@ -109,6 +109,8 @@ public sealed class Reservation
 
     public DateTimeOffset? ExpiredAtUtc { get; private set; }
 
+    public DateTimeOffset? ConfirmedAtUtc { get; private set; }
+
     public IReadOnlyCollection<ReservationResource> Resources => _resources;
 
     public IReadOnlyCollection<ReservationPriceLine> PriceLines => _priceLines;
@@ -152,6 +154,37 @@ public sealed class Reservation
 
         Status = ReservationStatus.Cancelled;
         CancelledAtUtc = cancelledAtUtc;
+    }
+
+    /// <summary>
+    /// Trusted-payment transition <see cref="ReservationStatus.Pending"/> →
+    /// <see cref="ReservationStatus.Confirmed"/> (RB-009, RB-011). Returns
+    /// whether the reservation is <see cref="ReservationStatus.Confirmed"/>
+    /// after the call.
+    ///
+    /// Idempotent (<c>Confirmed → Confirmed</c> is a safe no-op) and never
+    /// revives anything: an <see cref="ReservationStatus.Expired"/> or
+    /// <see cref="ReservationStatus.Cancelled"/> reservation stays as it is,
+    /// and so does a <see cref="ReservationStatus.Pending"/> hold that is
+    /// already past <see cref="ExpiresAtUtc"/> — its resources may already
+    /// have been booked by someone else, because conflict detection stops
+    /// counting a hold the instant it is past due.
+    /// </summary>
+    public bool Confirm(DateTimeOffset nowUtc)
+    {
+        if (Status == ReservationStatus.Confirmed)
+        {
+            return true;
+        }
+
+        if (Status != ReservationStatus.Pending || nowUtc >= ExpiresAtUtc)
+        {
+            return false;
+        }
+
+        Status = ReservationStatus.Confirmed;
+        ConfirmedAtUtc = nowUtc;
+        return true;
     }
 
     /// <summary>

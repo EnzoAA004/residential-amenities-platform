@@ -127,6 +127,10 @@ see `docs/04-data/domain-model.md#concurrency-and-holds-issue-23`. The
 30-minute default duration is an explicit placeholder, not the real value
 under discussion for OQ-010 (24/48 hours).
 
+Since issue #24 a `Pending` hold can also move to `Confirmed`, but only via a
+server-verified payment (AC-08); the hold expiring first always wins over a
+late payment (the reservation stays `Expired`).
+
 ---
 
 ## AC-08 — Mercado Pago
@@ -145,6 +149,20 @@ under discussion for OQ-010 (24/48 hours).
 **Then** processing is idempotent and produces no duplicate payment/confirmation effect.
 
 Related: RF-013, RF-014, RNF-003, RNF-006, RB-011 — issue #24.
+
+Implemented (issue #24): `POST /api/reservations/{id}/payments/mercadopago`
+creates a Checkout Pro order through the Orders API (amount/currency from the
+`ReservationPriceLines` snapshot only); `POST /api/webhooks/mercadopago`
+verifies `x-signature`, re-fetches the order server-side and validates order
+id / `external_reference` / amount / currency before anything changes. Only an
+order that is `processed` + `accredited` approves a payment, and only then does
+Payments call Reservations' `ConfirmPaidReservationAsync`. Duplicate
+deliveries are no-ops. Payment-vs-expiration is serialized with a row lock;
+an approval after expiry never revives the reservation and is recorded as
+`ApprovedAfterExpiry` (manual review). Tested with a fake provider — CI never
+calls Mercado Pago. Details:
+`docs/04-data/domain-model.md#payments-and-mercado-pago-issue-24`.
+Refunds are out of scope.
 
 ---
 

@@ -18,8 +18,8 @@ This matrix connects MVP requirements to implementation work and expected verifi
 | RF-010 Prevent incompatible overlaps | #23 | Concurrency/integration tests |
 | RF-011 Configurable payment hold | #23 | Hold creation tests |
 | RF-012 Release expired unpaid holds | #23 | Expiration/idempotency tests |
-| RF-013 Initiate Mercado Pago payment | #24 | Payment adapter integration tests |
-| RF-014 Update state from trusted provider confirmation | #24 | Verified webhook tests |
+| RF-013 Initiate Mercado Pago payment | #24 | `PaymentFlowTests`, `MercadoPagoHttpClientTests`, `PaymentDomainTests` (fake provider, no network) |
+| RF-014 Update state from trusted provider confirmation | #24 | `MercadoPagoSignatureVerifierTests`, `PaymentFlowTests` (signed webhook + server-side re-fetch), `PaymentReservationRaceTests` |
 | RF-015 Declare cash payment method | #25 | Cash-flow integration tests |
 | RF-016 Authorized cash confirmation | #25 | RBAC + idempotency tests |
 | RF-017 Admin views reservation/payment detail | #26 | Admin query/API tests |
@@ -39,7 +39,7 @@ This matrix connects MVP requirements to implementation work and expected verifi
 | RNF-003 No private credentials in client | #13, #24 |
 | RNF-004 Backend is authority for price/availability/payment | #19, #22, #24 |
 | RNF-005 Reservation concurrency correctness | #23 |
-| RNF-006 Idempotent payment/webhook processing | #24, #25 |
+| RNF-006 Idempotent payment/webhook processing | #24 (persisted idempotency key, unique provider event/order ids, state-based reconciliation — `PaymentFlowTests`, `PaymentReservationRaceTests`), #25 (cash) |
 | RNF-007 Auditable important transitions | #27 |
 | RNF-008 Understandable for varied digital familiarity | #7, future usability validation |
 | RNF-009 Mainstream browser support | #7 |

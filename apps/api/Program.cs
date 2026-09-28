@@ -51,7 +51,7 @@ builder.Services
     .AddAmenitiesModule()
     .AddReservationsModule(builder.Configuration)
     .AddPricingModule()
-    .AddPaymentsModule()
+    .AddPaymentsModule(builder.Configuration)
     .AddAdministrationModule()
     .AddAuditModule()
     .AddNotificationsModule()
@@ -75,6 +75,7 @@ app.MapIdentityEndpoints();
 app.MapAmenityEndpoints();
 app.MapPricingEndpoints();
 app.MapReservationEndpoints();
+app.MapPaymentEndpoints();
 app.MapHealthEndpoints();
 app.MapGet("/", () => Results.Redirect("/health"));
 

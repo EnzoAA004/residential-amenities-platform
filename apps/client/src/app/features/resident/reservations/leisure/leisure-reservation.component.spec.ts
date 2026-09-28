@@ -247,6 +247,44 @@ describe('LeisureReservationComponent', () => {
     expect(component.quoteState()).toEqual({ status: 'idle' });
   });
 
+  it('discards a stale quote for a use type the resident already changed away from', async () => {
+    createFixture(bothAmenity);
+    component.selectUseType('SharedLeisure');
+    component.requestQuote();
+    const sharedRequest = httpMock.expectOne((req) => req.url === '/api/pricing/quote');
+
+    component.selectUseType('ExclusiveLeisure');
+    expect(component.quoteState()).toEqual({ status: 'idle' });
+
+    // The late Shared quote response must never resurrect as a usable
+    // quote for the now-selected Exclusive use type.
+    sharedRequest.flush(quote);
+    await fixture.whenStable();
+
+    expect(component.quoteState()).toEqual({ status: 'idle' });
+
+    // And "Confirm reservation" must not be usable off that stale quote.
+    component.create();
+    httpMock.expectNone((req) => req.url === '/api/reservations');
+  });
+
+  it('discards a stale quote for an amenity the resident has already switched away from', async () => {
+    createFixture(sharedOnlyAmenity);
+    component.requestQuote();
+    const staleRequest = httpMock.expectOne((req) => req.url === '/api/pricing/quote');
+
+    // The resident picks a different amenity while amenity A's quote is
+    // still in flight — LeisureReservationComponent is not destroyed here,
+    // Angular just rebinds the [amenity] input on the same instance.
+    component.amenity = exclusiveOnlyAmenity;
+    expect(component.quoteState()).toEqual({ status: 'idle' });
+
+    staleRequest.flush(quote);
+    await fixture.whenStable();
+
+    expect(component.quoteState()).toEqual({ status: 'idle' });
+  });
+
   it('does not allow create without a successful quote first', () => {
     createFixture(sharedOnlyAmenity);
 
@@ -474,6 +512,38 @@ describe('LeisureReservationComponent', () => {
     expect(component.quoteState()).toEqual({ status: 'idle' });
     expect(component.createState()).toEqual({ status: 'idle' });
   });
+
+  it(
+    'never shows a late 201 for amenity A as a confirmed reservation once the resident has ' +
+      'switched to amenity B (the component is reused, not destroyed)',
+    async () => {
+      createFixture(sharedOnlyAmenity);
+      component.requestQuote();
+      httpMock.expectOne((req) => req.url === '/api/pricing/quote').flush(quote);
+      await fixture.whenStable();
+
+      component.create();
+      const staleCreateRequest = httpMock.expectOne('/api/reservations');
+      expect(component.createState().status).toBe('creating');
+
+      // The resident switches amenity while amenity A's POST is still in
+      // flight. The setter resets to idle; a subsequent, unrelated request
+      // for B is not made automatically — create stays an explicit action.
+      component.amenity = exclusiveOnlyAmenity;
+      expect(component.createState()).toEqual({ status: 'idle' });
+      httpMock.expectNone((req) => req.url === '/api/reservations');
+
+      // Amenity A's 201 finally arrives. It must never surface as a
+      // confirmed hold for B — the client cannot undo A's creation
+      // server-side, but it must not misattribute it to B either.
+      staleCreateRequest.flush(reservationWith({ buildingId: 'building-a', totalAmount: 5000 }));
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      expect(component.createState()).toEqual({ status: 'idle' });
+      expect(fixture.nativeElement.textContent).not.toContain('Reservation hold created');
+    }
+  );
 
   it('never sends addOnAmenityId/membershipId query params on quote', () => {
     createFixture(sharedOnlyAmenity);

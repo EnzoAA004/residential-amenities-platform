@@ -275,6 +275,20 @@ export class LeisureReservationComponent {
   private readonly amenitySignal = signal<AmenitySummary | null>(null);
   private currentAmenityId: string | null = null;
 
+  /**
+   * Bumped whenever the request context (amenity or use type) changes.
+   * `LeisureReservationComponent` is not destroyed when the resident picks
+   * a different amenity under the same building — Angular reuses this same
+   * instance and just rebinds `[amenity]` — so a quote/create request
+   * already in flight for the *previous* amenity/use type can still
+   * resolve after the switch. `takeUntilDestroyed` alone does not help
+   * here (the component is still alive); each request instead captures the
+   * version it started with and its `next`/`error` handler discards the
+   * result if the version has since moved on, so a stale response can
+   * never be shown under a context it does not belong to.
+   */
+  private contextVersion = 0;
+
   readonly eligibleUseTypes = computed<LeisureUseType[]>(() => {
     const amenity = this.amenitySignal();
 
@@ -334,6 +348,8 @@ export class LeisureReservationComponent {
     // change invalidates it, so the resident can never confirm a stale
     // amount against a different use type.
     this.form.controls.useType.valueChanges.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
+      this.contextVersion++;
+
       if (this.createState().status !== 'created') {
         this.quoteState.set({ status: 'idle' });
       }
@@ -347,6 +363,7 @@ export class LeisureReservationComponent {
     }
 
     this.currentAmenityId = value.id;
+    this.contextVersion++;
     this.amenitySignal.set(value);
     this.quoteState.set({ status: 'idle' });
     this.createState.set({ status: 'idle' });
@@ -438,20 +455,29 @@ export class LeisureReservationComponent {
     this.rangeError.set(null);
     this.quoteState.set({ status: 'loading' });
 
+    const requestVersion = this.contextVersion;
+
     this.leisureService
       .getQuote(buildingId, amenity.id, useType)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: (quote) => this.quoteState.set({ status: 'success', quote }),
-        error: (error: ApiError) => this.quoteState.set({ status: 'error', error })
+        next: (quote) => {
+          // The amenity or use type changed while this quote was in
+          // flight — it no longer describes the current context, so it
+          // must never appear as if it did.
+          if (requestVersion === this.contextVersion) {
+            this.quoteState.set({ status: 'success', quote });
+          }
+        },
+        error: (error: ApiError) => {
+          if (requestVersion === this.contextVersion) {
+            this.quoteState.set({ status: 'error', error });
+          }
+        }
       });
   }
 
   create(): void {
-    // Guards against a double submit even if the disabled button is
-    // somehow bypassed — the create POST has no idempotency key, and
-    // Shared+Shared reservations are compatible, so two identical requests
-    // could otherwise produce two separate holds.
     // create() may only run from an explicitly safe state. In particular,
     // once a create attempt ends in `unknown` (a network failure where the
     // client cannot tell whether the server ever received/created the
@@ -487,6 +513,7 @@ export class LeisureReservationComponent {
     this.createState.set({ status: 'creating' });
 
     const quotedAt = quoteState.quote;
+    const requestVersion = this.contextVersion;
 
     this.leisureService
       .create({
@@ -498,8 +525,24 @@ export class LeisureReservationComponent {
       })
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: (reservation) => this.createState.set({ status: 'created', reservation, quotedAt }),
+        next: (reservation) => {
+          // The resident switched to a different amenity/use type while
+          // this POST was in flight. We cannot know whether the backend
+          // actually created this reservation — unsubscribing/ignoring is
+          // a client-side view decision only, never a server-side
+          // cancellation, and we never fire a compensating request. We
+          // only make sure this late 201 is never shown as a confirmation
+          // under a context the resident has already moved away from; #50
+          // is the future way to find a reservation created this way.
+          if (requestVersion === this.contextVersion) {
+            this.createState.set({ status: 'created', reservation, quotedAt });
+          }
+        },
         error: (error: ApiError) => {
+          if (requestVersion !== this.contextVersion) {
+            return;
+          }
+
           // status 0: the request never reached the server, or it did and
           // the response was lost — the client cannot tell which. Never
           // claim the reservation was not created.

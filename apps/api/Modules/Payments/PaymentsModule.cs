@@ -25,6 +25,7 @@ public static class PaymentsModule
             });
 
         services.AddScoped<PaymentCreationService>();
+        services.AddScoped<CashPaymentService>();
         services.AddScoped<PaymentReconciliationService>();
 
         return services;

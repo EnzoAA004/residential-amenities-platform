@@ -1,15 +1,23 @@
 namespace ResidentialAmenities.Api.Modules.Payments.Domain;
 
 /// <summary>
-/// One payment attempt for a reservation. The amount and currency are copied
-/// from the reservation's historical price snapshot when the attempt is
-/// created (never recomputed from current price rules, never client-sent).
+/// One payment attempt for a reservation, whatever the method. The amount and
+/// currency are copied from the reservation's historical price snapshot when
+/// the attempt is created (never recomputed from current price rules, never
+/// client-sent).
 ///
-/// <see cref="IdempotencyKey"/> is generated and persisted BEFORE the
-/// provider is called and reused verbatim for every technical retry of the
-/// same attempt, so a lost response can never create a second remote order.
+/// Only general concepts live on every payment. Method-specific data is
+/// nullable and only set by that method's factory:
+/// <list type="bullet">
+/// <item><see cref="CreateMercadoPago"/>: <see cref="IdempotencyKey"/>,
+/// <see cref="RequestedExpirationTime"/>, provider order/checkout/status.
+/// The key is generated and persisted BEFORE the provider is called and
+/// reused verbatim for every technical retry of the same attempt.</item>
+/// <item><see cref="CreateCash"/>: none of those; instead the cash
+/// declaration/confirmation facts (who confirmed receipt, and when).</item>
+/// </list>
 /// A genuinely new attempt by the user (after a rejection/cancellation) is a
-/// new <see cref="Payment"/> with a new key.
+/// new <see cref="Payment"/>.
 /// </summary>
 public sealed class Payment
 {
@@ -17,14 +25,13 @@ public sealed class Payment
     {
     }
 
-    public Payment(
+    private Payment(
         Guid id,
         Guid reservationId,
         PaymentMethod method,
+        PaymentStatus initialStatus,
         decimal amount,
         string currency,
-        string idempotencyKey,
-        string requestedExpirationTime,
         DateTimeOffset createdAtUtc)
     {
         if (id == Guid.Empty)
@@ -47,22 +54,74 @@ public sealed class Payment
             throw new ArgumentException("Currency must be a 3-letter ISO code.", nameof(currency));
         }
 
+        Id = id;
+        ReservationId = reservationId;
+        Method = method;
+        Status = initialStatus;
+        Amount = amount;
+        Currency = currency.ToUpperInvariant();
+        CreatedAtUtc = createdAtUtc;
+        UpdatedAtUtc = createdAtUtc;
+    }
+
+    /// <summary>A Mercado Pago attempt; starts <c>Created</c> (no provider order yet).</summary>
+    public static Payment CreateMercadoPago(
+        Guid id,
+        Guid reservationId,
+        decimal amount,
+        string currency,
+        string idempotencyKey,
+        string requestedExpirationTime,
+        DateTimeOffset createdAtUtc)
+    {
         if (string.IsNullOrWhiteSpace(idempotencyKey))
         {
             throw new ArgumentException("Idempotency key is required.", nameof(idempotencyKey));
         }
 
-        Id = id;
-        ReservationId = reservationId;
-        Method = method;
-        Status = PaymentStatus.Created;
-        Amount = amount;
-        Currency = currency.ToUpperInvariant();
-        IdempotencyKey = idempotencyKey;
-        RequestedExpirationTime = requestedExpirationTime;
-        CreatedAtUtc = createdAtUtc;
-        UpdatedAtUtc = createdAtUtc;
+        if (string.IsNullOrWhiteSpace(requestedExpirationTime))
+        {
+            throw new ArgumentException(
+                "Requested expiration time is required.",
+                nameof(requestedExpirationTime));
+        }
+
+        return new Payment(
+            id,
+            reservationId,
+            PaymentMethod.MercadoPago,
+            PaymentStatus.Created,
+            amount,
+            currency,
+            createdAtUtc)
+        {
+            IdempotencyKey = idempotencyKey,
+            RequestedExpirationTime = requestedExpirationTime
+        };
     }
+
+    /// <summary>
+    /// A cash declaration ("I want to pay this in cash"). It starts
+    /// <c>Pending</c>: an authorized person has not confirmed receipt yet.
+    /// It says nothing about the money having been received.
+    /// </summary>
+    public static Payment CreateCash(
+        Guid id,
+        Guid reservationId,
+        decimal amount,
+        string currency,
+        DateTimeOffset declaredAtUtc) =>
+        new(
+            id,
+            reservationId,
+            PaymentMethod.Cash,
+            PaymentStatus.Pending,
+            amount,
+            currency,
+            declaredAtUtc)
+        {
+            CashDeclaredAtUtc = declaredAtUtc
+        };
 
     public Guid Id { get; private set; }
 
@@ -76,16 +135,16 @@ public sealed class Payment
 
     public string Currency { get; private set; } = string.Empty;
 
-    /// <summary>Sent as <c>X-Idempotency-Key</c> on every retry of this attempt.</summary>
-    public string IdempotencyKey { get; private set; } = string.Empty;
+    /// <summary>Mercado Pago only. Sent as <c>X-Idempotency-Key</c> on every retry of this attempt.</summary>
+    public string? IdempotencyKey { get; private set; }
 
     /// <summary>
-    /// The exact ISO-8601 duration sent as the order's <c>expiration_time</c>
-    /// on the first attempt. Persisted so a technical retry with the same
-    /// idempotency key sends a byte-identical request body (the remaining
-    /// hold time would otherwise differ on each retry).
+    /// Mercado Pago only. The exact ISO-8601 duration sent as the order's
+    /// <c>expiration_time</c> on the first attempt. Persisted so a technical
+    /// retry with the same idempotency key sends a byte-identical request body
+    /// (the remaining hold time would otherwise differ on each retry).
     /// </summary>
-    public string RequestedExpirationTime { get; private set; } = string.Empty;
+    public string? RequestedExpirationTime { get; private set; }
 
     public string? ProviderOrderId { get; private set; }
 
@@ -94,6 +153,18 @@ public sealed class Payment
     public string? ProviderStatus { get; private set; }
 
     public string? ProviderStatusDetail { get; private set; }
+
+    /// <summary>Cash only: when the resident declared they will pay in cash.</summary>
+    public DateTimeOffset? CashDeclaredAtUtc { get; private set; }
+
+    /// <summary>Cash only: when an authorized person confirmed receiving the money.</summary>
+    public DateTimeOffset? CashConfirmedAtUtc { get; private set; }
+
+    /// <summary>
+    /// Cash only: the authenticated <c>UserAccount.Id</c> who confirmed
+    /// receipt. A historical id, not a foreign key (module boundary).
+    /// </summary>
+    public Guid? CashConfirmedByUserId { get; private set; }
 
     public PaymentReservationOutcome ReservationOutcome { get; private set; }
 
@@ -121,6 +192,8 @@ public sealed class Payment
         string providerStatusDetail,
         DateTimeOffset nowUtc)
     {
+        EnsureMercadoPago();
+
         ProviderOrderId = providerOrderId;
         CheckoutUrl = checkoutUrl;
         RecordProviderStatus(providerStatus, providerStatusDetail, nowUtc);
@@ -136,6 +209,8 @@ public sealed class Payment
         string providerStatusDetail,
         DateTimeOffset nowUtc)
     {
+        EnsureMercadoPago();
+
         ProviderStatus = providerStatus;
         ProviderStatusDetail = providerStatusDetail;
         UpdatedAtUtc = nowUtc;
@@ -148,6 +223,35 @@ public sealed class Payment
             Status = PaymentStatus.Pending;
             UpdatedAtUtc = nowUtc;
         }
+    }
+
+    /// <summary>
+    /// Cash only: an authorized person confirms they physically received the
+    /// money. Idempotent — a repeated confirmation changes nothing and keeps
+    /// the original actor and timestamp.
+    /// </summary>
+    /// <returns>true if this call moved the payment to Approved.</returns>
+    public bool ConfirmCashReceived(Guid confirmedByUserId, DateTimeOffset nowUtc)
+    {
+        if (Method != PaymentMethod.Cash)
+        {
+            throw new InvalidOperationException("Only a cash payment can be confirmed as cash received.");
+        }
+
+        if (confirmedByUserId == Guid.Empty)
+        {
+            throw new ArgumentException("The confirming user is required.", nameof(confirmedByUserId));
+        }
+
+        if (Status != PaymentStatus.Pending)
+        {
+            // Already Approved (idempotent no-op) or otherwise not confirmable.
+            return false;
+        }
+
+        CashConfirmedByUserId = confirmedByUserId;
+        CashConfirmedAtUtc = nowUtc;
+        return MarkApproved(nowUtc);
     }
 
     /// <returns>true if this call moved the payment to Approved.</returns>
@@ -179,6 +283,14 @@ public sealed class Payment
         {
             Status = PaymentStatus.Cancelled;
             UpdatedAtUtc = nowUtc;
+        }
+    }
+
+    private void EnsureMercadoPago()
+    {
+        if (Method != PaymentMethod.MercadoPago)
+        {
+            throw new InvalidOperationException("Provider order data only applies to Mercado Pago payments.");
         }
     }
 

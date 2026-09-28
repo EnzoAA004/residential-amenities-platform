@@ -209,11 +209,130 @@ public sealed class PaymentDomainTests
         Assert.Equal(ReservationStatus.Cancelled, reservation.Status);
     }
 
+    // --- cash payments (issue #25) ---------------------------------------------
+
+    private static Payment CreateCashPayment() =>
+        Payment.CreateCash(Guid.NewGuid(), Guid.NewGuid(), 5_000m, "ars", Now);
+
+    [Fact]
+    public void CashPayment_StartsPending_WithDeclarationTimestampAndNoConfirmation()
+    {
+        var payment = CreateCashPayment();
+
+        Assert.Equal(PaymentMethod.Cash, payment.Method);
+        Assert.Equal(PaymentStatus.Pending, payment.Status);
+        Assert.Equal("ARS", payment.Currency);
+        Assert.Equal(Now, payment.CashDeclaredAtUtc);
+        Assert.Null(payment.CashConfirmedAtUtc);
+        Assert.Null(payment.CashConfirmedByUserId);
+        Assert.Null(payment.ApprovedAtUtc);
+        Assert.Equal(PaymentReservationOutcome.None, payment.ReservationOutcome);
+        Assert.False(payment.RequiresManualReview);
+    }
+
+    [Fact]
+    public void CashPayment_HasNoProviderFieldsAndNoMercadoPagoIdempotency()
+    {
+        var payment = CreateCashPayment();
+
+        Assert.Null(payment.IdempotencyKey);
+        Assert.Null(payment.RequestedExpirationTime);
+        Assert.Null(payment.ProviderOrderId);
+        Assert.Null(payment.CheckoutUrl);
+        Assert.Null(payment.ProviderStatus);
+        Assert.Null(payment.ProviderStatusDetail);
+    }
+
+    [Fact]
+    public void CashPayment_RejectsProviderOrderData()
+    {
+        var payment = CreateCashPayment();
+
+        Assert.Throws<InvalidOperationException>(() =>
+            payment.AttachProviderOrder("ORD", "https://x", "created", "created", Now));
+        Assert.Null(payment.ProviderOrderId);
+    }
+
+    [Fact]
+    public void ConfirmCashReceived_ApprovesAndRecordsActorAndTimestamp()
+    {
+        var payment = CreateCashPayment();
+        var actor = Guid.NewGuid();
+
+        Assert.True(payment.ConfirmCashReceived(actor, Now.AddHours(1)));
+
+        Assert.Equal(PaymentStatus.Approved, payment.Status);
+        Assert.Equal(actor, payment.CashConfirmedByUserId);
+        Assert.Equal(Now.AddHours(1), payment.CashConfirmedAtUtc);
+        Assert.Equal(Now.AddHours(1), payment.ApprovedAtUtc);
+    }
+
+    [Fact]
+    public void ConfirmCashReceived_Twice_IsIdempotentAndKeepsOriginalActorAndTimestamp()
+    {
+        var payment = CreateCashPayment();
+        var firstActor = Guid.NewGuid();
+
+        payment.ConfirmCashReceived(firstActor, Now.AddHours(1));
+
+        Assert.False(payment.ConfirmCashReceived(Guid.NewGuid(), Now.AddHours(2)));
+
+        Assert.Equal(PaymentStatus.Approved, payment.Status);
+        Assert.Equal(firstActor, payment.CashConfirmedByUserId);
+        Assert.Equal(Now.AddHours(1), payment.CashConfirmedAtUtc);
+        Assert.Equal(Now.AddHours(1), payment.ApprovedAtUtc);
+    }
+
+    [Fact]
+    public void ConfirmCashReceived_OnNonCashPayment_IsRefused()
+    {
+        var payment = CreatePayment();
+
+        Assert.Throws<InvalidOperationException>(() =>
+            payment.ConfirmCashReceived(Guid.NewGuid(), Now));
+        Assert.Equal(PaymentStatus.Created, payment.Status);
+    }
+
+    [Fact]
+    public void ConfirmCashReceived_RequiresAnActor()
+    {
+        Assert.Throws<ArgumentException>(() =>
+            CreateCashPayment().ConfirmCashReceived(Guid.Empty, Now));
+    }
+
+    [Theory]
+    [InlineData(PaymentReservationOutcome.ApprovedAfterExpiry, true)]
+    [InlineData(PaymentReservationOutcome.ApprovedForCancelledReservation, true)]
+    [InlineData(PaymentReservationOutcome.ReservationConfirmed, false)]
+    public void LateCash_RequiresManualReviewOnlyWhenReservationCouldNotBeConfirmed(
+        PaymentReservationOutcome outcome,
+        bool expectedReview)
+    {
+        var payment = CreateCashPayment();
+        payment.ConfirmCashReceived(Guid.NewGuid(), Now);
+        payment.RecordReservationOutcome(outcome, Now);
+
+        Assert.Equal(PaymentStatus.Approved, payment.Status);
+        Assert.Equal(expectedReview, payment.RequiresManualReview);
+    }
+
+    [Fact]
+    public void MercadoPagoPayment_StillCarriesItsProviderFieldsAndNoCashFacts()
+    {
+        var payment = CreatePayment();
+
+        Assert.Equal(PaymentMethod.MercadoPago, payment.Method);
+        Assert.Equal("key-1", payment.IdempotencyKey);
+        Assert.Equal("PT29M59S", payment.RequestedExpirationTime);
+        Assert.Null(payment.CashDeclaredAtUtc);
+        Assert.Null(payment.CashConfirmedAtUtc);
+        Assert.Null(payment.CashConfirmedByUserId);
+    }
+
     private static Payment CreatePayment() =>
-        new(
+        Payment.CreateMercadoPago(
             Guid.NewGuid(),
             Guid.NewGuid(),
-            PaymentMethod.MercadoPago,
             5_000m,
             "ARS",
             "key-1",

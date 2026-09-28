@@ -184,6 +184,22 @@ Refunds are out of scope.
 
 Related: RF-015, RF-016, RB-012 — issue #25.
 
+Implemented (issue #25): `POST /api/reservations/{id}/payments/cash` creates a
+`Cash` payment in `Pending` (amount/currency from the price snapshot; the
+reservation stays `Pending` and its hold is **not** extended).
+`POST /api/payments/{id}/cash/confirm` is restricted to `Administrator`
+— the **provisional** authorized actor until OQ-013 (issue #2) is answered; a
+Resident gets 403. Confirmation approves the payment, records who confirmed
+and when on the payment, and asks Reservations to confirm through the same
+contract used by Mercado Pago. Repeating it is a no-op that keeps the original
+actor/timestamp. If the reservation already expired or was cancelled, the
+payment is still `Approved` (the cash was received) with outcome
+`ApprovedAfterExpiry` / `ApprovedForCancelledReservation` and
+`requiresManualReview`, and the reservation is never revived.
+"Auditable" is met at payment level (actor, timestamp, payment, reservation,
+amount, outcome); the cross-cutting `AuditLog` remains issue #27.
+Details: `docs/04-data/domain-model.md#cash-payments-issue-25`.
+
 ---
 
 ## AC-10 — Administration and audit

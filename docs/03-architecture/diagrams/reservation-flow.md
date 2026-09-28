@@ -20,7 +20,7 @@ Exact states and transitions will be refined during domain modeling. This record
 
 ## Current implementation status
 
-Implemented as of issue #24. `Pending` is the payment hold (the conceptual
+Implemented as of issue #25. `Pending` is the payment hold (the conceptual
 `PendingPayment` above); `Draft` and `PendingCashConfirmation` do not exist
 yet.
 

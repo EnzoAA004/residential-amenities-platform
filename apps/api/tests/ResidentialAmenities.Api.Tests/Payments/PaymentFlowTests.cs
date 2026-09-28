@@ -183,7 +183,7 @@ public sealed class PaymentFlowTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         var payment = await LoadPaymentByReservationAsync(reservationId);
-        var duration = System.Xml.XmlConvert.ToTimeSpan(payment.RequestedExpirationTime);
+        var duration = System.Xml.XmlConvert.ToTimeSpan(payment.RequestedExpirationTime!);
 
         Assert.InRange(duration.TotalSeconds, 6 * 60, 7 * 60);
     }

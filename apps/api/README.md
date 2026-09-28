@@ -258,6 +258,31 @@ dotnet user-secrets set "MercadoPago:AccessToken" "<test access token>" --projec
 dotnet user-secrets set "MercadoPago:WebhookSecret" "<webhook secret>" --project apps/api/ResidentialAmenities.Api.csproj
 ```
 
+### Payments — cash (issue #25)
+
+```http
+POST /api/reservations/{reservationId}/payments/cash   (reservation creator, or Administrator)
+POST /api/payments/{paymentId}/cash/confirm            (Administrator only)
+```
+
+`POST .../payments/cash` means "I want to pay this in cash", **not** "cash
+received". It returns `{ paymentId, status: "Pending", reservationExpiresAtUtc }`.
+The reservation stays `Pending` and its hold is not extended. Calling it again
+returns the same payment. If a Mercado Pago payment is already active for the
+reservation (or the reverse) the answer is `409`; switching method is not
+supported. The body is empty — amount and currency come from the price
+snapshot and the actor from the session.
+
+`POST /api/payments/{id}/cash/confirm` is restricted to `Administrator`, the
+provisional authorized actor until OQ-013 (issue #2) says who receives cash; a
+Resident gets `403`. It approves the payment, records the confirming user and
+time, and asks Reservations to confirm. Repeating it changes nothing. If the
+reservation already expired or was cancelled the payment is still `Approved`
+but reports `reservationOutcome: "ApprovedAfterExpiry"` (or
+`"ApprovedForCancelledReservation"`) with `requiresManualReview: true`, and the
+reservation is not revived. `GET /api/payments/{id}` now also returns `method`
+and, for cash, `cashConfirmedAtUtc`.
+
 Tests use an in-memory fake provider; no credentials or network are needed.
 Design, race handling and signature algorithm:
 `docs/04-data/domain-model.md#payments-and-mercado-pago-issue-24`.

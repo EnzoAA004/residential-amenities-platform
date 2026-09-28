@@ -47,6 +47,7 @@ public sealed class ReservationPaymentContract(
         return new PayableReservation(
             reservation.Id,
             reservation.BuildingId,
+            reservation.CreatedByMembershipId,
             reservation.Status,
             reservation.ExpiresAtUtc,
             reservation.PriceLines.Sum(line => line.Amount),

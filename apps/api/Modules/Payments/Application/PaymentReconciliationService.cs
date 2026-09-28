@@ -152,17 +152,7 @@ public sealed class PaymentReconciliationService(
             payment.ReservationId,
             cancellationToken);
 
-        var reservationOutcome = result switch
-        {
-            ReservationConfirmationOutcome.Confirmed
-                or ReservationConfirmationOutcome.AlreadyConfirmed
-                => PaymentReservationOutcome.ReservationConfirmed,
-            ReservationConfirmationOutcome.RejectedExpired
-                => PaymentReservationOutcome.ApprovedAfterExpiry,
-            ReservationConfirmationOutcome.RejectedCancelled
-                => PaymentReservationOutcome.ApprovedForCancelledReservation,
-            _ => PaymentReservationOutcome.ApprovedForMissingReservation
-        };
+        var reservationOutcome = PaymentReservationOutcomeMapper.Map(result);
 
         if (reservationOutcome != PaymentReservationOutcome.ReservationConfirmed)
         {

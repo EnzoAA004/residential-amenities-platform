@@ -13,6 +13,7 @@ public static class ReservationsModule
     {
         services.AddScoped<ReservationCreationService>();
         services.AddScoped<ReservationExpirationService>();
+        services.AddScoped<IReservationPaymentContract, ReservationPaymentContract>();
 
         services
             .AddOptions<ReservationHoldOptions>()

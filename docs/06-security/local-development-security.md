@@ -76,13 +76,32 @@ Structured logs may contain safe identifiers such as:
 
 Sensitive-data logging in EF Core must remain disabled outside tightly controlled local debugging.
 
-## Future Mercado Pago secrets
+## Mercado Pago secrets
 
-When payments are introduced, at minimum treat these as secrets:
+Treat these as secrets:
 
-- private access token;
-- webhook verification secret/signature material;
+- private access token — `MercadoPago:AccessToken`;
+- webhook verification secret — `MercadoPago:WebhookSecret`;
 - any private application credential returned by Mercado Pago.
+
+Only the configuration **names** are in source control; the checked-in
+`appsettings*.json` never contain values. Set your own (test) credentials
+locally with User Secrets, or with environment variables
+(`MercadoPago__AccessToken`, `MercadoPago__WebhookSecret`):
+
+```bash
+dotnet user-secrets set "MercadoPago:AccessToken" "<your test access token>" --project apps/api/ResidentialAmenities.Api.csproj
+dotnet user-secrets set "MercadoPago:WebhookSecret" "<your webhook secret>" --project apps/api/ResidentialAmenities.Api.csproj
+```
+
+Non-secret settings (`MercadoPago:ApiBaseUrl`, `SuccessUrl`, `PendingUrl`,
+`FailureUrl`, `WebhookToleranceSeconds`, `RequestTimeoutSeconds`) may live in
+configuration. Tests and CI use a fake provider and need no credentials.
+
+Additionally never log: the full `x-signature`, the `Authorization` header,
+or unnecessary payer personal data. The webhook logs only the failure
+category of a rejected signature. `PaymentProviderEvents` stores identifiers,
+never payloads, payer data or signatures.
 
 Public identifiers may be configuration, but must still be documented separately from secrets.
 

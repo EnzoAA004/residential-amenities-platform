@@ -1,0 +1,5 @@
+.app-shell__content {
+  width: min(100%, var(--app-content-max-width));
+  margin-inline: auto;
+  padding-block: var(--app-space-3) var(--app-space-5);
+}

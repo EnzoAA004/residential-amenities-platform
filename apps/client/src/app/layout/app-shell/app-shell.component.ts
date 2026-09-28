@@ -20,6 +20,7 @@ import { IonContent, IonHeader, IonTitle, IonToolbar } from '@ionic/angular';
     <ion-header>
       <ion-toolbar>
         <ion-title>{{ title }}</ion-title>
+        <ng-content select="[shell-actions]"></ng-content>
       </ion-toolbar>
     </ion-header>
 

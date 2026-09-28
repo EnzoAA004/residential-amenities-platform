@@ -1,0 +1,57 @@
+// Design system foundation: a small set of CSS custom properties every
+// feature builds on instead of repeating magic numbers. This intentionally
+// stays minimal — Ionic already supplies the component library and its own
+// `--ion-color-*` variables; these tokens cover the few app-level decisions
+// (spacing, radius, content width, focus) that features share.
+//
+// No building branding is baked in here: swapping these values later is a
+// theming change, not a rewrite.
+
+:root {
+  // Spacing scale (4px base).
+  --app-space-1: 4px;
+  --app-space-2: 8px;
+  --app-space-3: 16px;
+  --app-space-4: 24px;
+  --app-space-5: 32px;
+
+  // Radius.
+  --app-radius-sm: 6px;
+  --app-radius-md: 12px;
+  --app-radius-lg: 20px;
+
+  // Typography.
+  --app-font-size-sm: 0.875rem;
+  --app-font-size-md: 1rem;
+  --app-font-size-lg: 1.25rem;
+  --app-font-size-xl: 1.75rem;
+  --app-line-height: 1.5;
+
+  // Layout.
+  --app-content-max-width: 720px;
+
+  // Surfaces and borders. Fall back to Ionic's own step colors so a
+  // component looks right even before any of our overrides load.
+  --app-surface: var(--ion-background-color, #ffffff);
+  --app-border-color: var(--ion-color-step-200, #d7d8da);
+  --app-elevation-1: 0 1px 2px rgba(0, 0, 0, 0.08);
+
+  // Focus. A visible, high-contrast ring used everywhere instead of relying
+  // on each component's own default outline.
+  --app-focus-ring: 0 0 0 3px rgba(56, 128, 255, 0.5);
+}
+
+// Respect the OS/browser preference; no manual toggle, no stored
+// preference, no theme sub-system to maintain.
+@media (prefers-color-scheme: dark) {
+  :root {
+    --app-border-color: var(--ion-color-step-750, #3a3a3c);
+    --app-elevation-1: 0 1px 2px rgba(0, 0, 0, 0.6);
+    --app-focus-ring: 0 0 0 3px rgba(94, 158, 255, 0.6);
+  }
+}
+
+:focus-visible {
+  outline: none;
+  box-shadow: var(--app-focus-ring);
+}

@@ -1,26 +1,26 @@
+import { HttpClient } from '@angular/common/http';
 import { TestBed } from '@angular/core/testing';
 import { firstValueFrom, of } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ApiClient } from '../api/api-client.service';
 import { HealthResponse, HealthService } from './health.service';
 
 describe('HealthService', () => {
-  const apiClient = {
+  const httpClient = {
     get: vi.fn()
   };
 
   let service: HealthService;
 
   beforeEach(() => {
-    apiClient.get.mockReset();
+    httpClient.get.mockReset();
 
     TestBed.configureTestingModule({
       providers: [
         HealthService,
         {
-          provide: ApiClient,
-          useValue: apiClient
+          provide: HttpClient,
+          useValue: httpClient
         }
       ]
     });
@@ -28,18 +28,18 @@ describe('HealthService', () => {
     service = TestBed.inject(HealthService);
   });
 
-  it('requests the API health endpoint and returns its response', async () => {
+  it('requests the root-level /health endpoint directly, not through the /api catalog', async () => {
     const expected: HealthResponse = {
       status: 'ok',
       database: 'ok',
       utc: '2026-09-27T20:00:00Z'
     };
 
-    apiClient.get.mockReturnValue(of(expected));
+    httpClient.get.mockReturnValue(of(expected));
 
     const result = await firstValueFrom(service.check());
 
-    expect(apiClient.get).toHaveBeenCalledExactlyOnceWith('/health');
+    expect(httpClient.get).toHaveBeenCalledExactlyOnceWith('/health');
     expect(result).toEqual(expected);
   });
 });

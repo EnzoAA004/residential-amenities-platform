@@ -41,24 +41,59 @@
 - Price/time configuration.
 - Audit views.
 
-## Phase 5 — UX extensions
+## Phase 5 — MVP client / product UI
+
+The backend MVP (Phases 1–4) is implemented, tested and merged. The Angular +
+Ionic + Capacitor client is still the Phase 1 technical scaffold (shell,
+routing stub, health check). Before any UX extension, the client needs the
+product's own screens against the existing, stable backend contracts —
+nothing here changes the backend.
+
+- Application shell, design system foundation and an authenticated HTTP/API
+  client layer.
+- Authentication, session persistence and protected routing (Resident vs
+  Administrator).
+- Building/membership context and amenity availability browsing.
+- Leisure reservation flow (shared and exclusive).
+- Event reservation flow (configured slots, pool/barbecue add-ons).
+- Payment flows: Mercado Pago checkout and cash declaration.
+- Resident reservation history and detail (status, hold countdown, payment
+  outcome).
+- Administrator shell and reservation/payment dashboards (read models).
+- Administrator reservation operations (cancel, reschedule).
+- Administrator configuration (pricing, availability, event slots).
+- Audit trail and payment-manual-review views for administrators.
+- Frontend testing, accessibility and error-handling hardening.
+
+Decisions still open in issue #2 (definitive prices, event hours, full-day,
+hold duration, cancellation/refund policy, cash confirmer) are surfaced from
+the backend as configuration/state, never hardcoded in the client. See
+[the MVP client backlog](backlog-mvp-client.md) for the issue breakdown.
+
+## Phase 6 — UX extensions
 
 - QR entry point.
 - Push notifications.
 - Reservation-scoped messaging.
-- Accessibility/usability refinement.
+- Accessibility/usability refinement beyond the MVP client baseline.
 
-## Phase 6 — Cloud/DevOps
+## Phase 7 — Cloud/DevOps
 
 - Docker production images.
-- GitHub Actions.
+- Container security.
 - Azure staging.
 - Terraform.
-- Monitoring/secrets/backups.
-- Production deployment.
+- Secrets management, observability, backups.
+- Production deployment, gated by approval.
 - Cost budgets/alerts.
 
-## Phase 7 — Productization
+Runs after (or, where independent — e.g. Terraform authoring, container
+hardening — in parallel with) Phase 5; production deployment needs a real
+client to deploy. Puppet is not introduced here artificially: it stays a
+separate infrastructure lab unless a real host/VM configuration need appears
+(see [DevOps strategy](../07-devops/devops-strategy.md)).
+
+## Phase 8 — Productization
 
 - Analytics.
 - Tenant/building onboarding.

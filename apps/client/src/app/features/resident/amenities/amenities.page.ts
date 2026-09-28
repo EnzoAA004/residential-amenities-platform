@@ -9,6 +9,7 @@ import { AppShellComponent } from '../../../layout/app-shell/app-shell.component
 import { AmenitiesService } from './amenities.service';
 import { AmenitySummary } from './amenities.models';
 import { AmenityAvailabilityComponent } from './amenity-availability.component';
+import { LeisureReservationComponent } from '../reservations/leisure/leisure-reservation.component';
 
 type AmenitiesLoadState =
   | { status: 'idle' }
@@ -28,6 +29,7 @@ type AmenitiesLoadState =
   imports: [
     AppShellComponent,
     AmenityAvailabilityComponent,
+    LeisureReservationComponent,
     IonBadge,
     IonButton,
     IonItem,
@@ -149,6 +151,7 @@ type AmenitiesLoadState =
           @if (selectedAmenity(); as amenity) {
             <h2>{{ amenity.name }}</h2>
             <app-amenity-availability [amenity]="amenity" />
+            <app-leisure-reservation [amenity]="amenity" />
           }
         }
       }

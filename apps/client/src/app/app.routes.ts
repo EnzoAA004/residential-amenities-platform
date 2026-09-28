@@ -15,6 +15,12 @@ export const routes: Routes = [
     loadComponent: () => import('./features/landing/landing.page').then((module) => module.LandingPage)
   },
   {
+    path: 'amenities',
+    canMatch: [authenticatedGuard],
+    loadComponent: () =>
+      import('./features/resident/amenities/amenities.page').then((module) => module.AmenitiesPage)
+  },
+  {
     path: 'admin',
     canMatch: [adminGuard],
     children: [

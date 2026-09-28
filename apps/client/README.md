@@ -4,12 +4,14 @@ Angular + Ionic + Capacitor client for Residential Amenities Platform.
 
 ## Status
 
-Frontend foundation plus web authentication (issues #44 and #45): a real
-application shell, a small design system, a typed API client/error
-model/endpoint catalog, cookie-backed web login/logout, session bootstrap,
-route guards and global 401 handling. Product flows for browsing,
-reservations, payment and administration arrive with issues #46 and later
-(see [`docs/12-roadmap/backlog-mvp-client.md`](../../docs/12-roadmap/backlog-mvp-client.md)).
+Frontend foundation, web authentication and resident amenity/availability
+browsing (issues #44, #45 and #46): a real application shell, a small design
+system, a typed API client/error model/endpoint catalog, cookie-backed web
+login/logout, session bootstrap, route guards, global 401 handling, a
+resident building context derived from the user's own memberships, and
+browsing of a building's amenities and their structural availability.
+Reservations and payment arrive with issues #47 and later (see
+[`docs/12-roadmap/backlog-mvp-client.md`](../../docs/12-roadmap/backlog-mvp-client.md)).
 
 ## Baseline
 
@@ -19,9 +21,13 @@ reservations, payment and administration arrive with issues #46 and later
 - Angular Router
 - Typed API client, error model and endpoint catalog (`core/api`)
 - Web authentication/session state (`core/auth`)
+- Resident building context derived from the session's own memberships
+  (`core/resident-context`)
 - A reusable page shell (`layout/app-shell`)
 - A neutral product landing page (`features/landing`)
 - A web login page (`features/login`)
+- Resident amenity listing and structural-availability browsing
+  (`features/resident/amenities`)
 - An internal `/health` diagnostic (`features/diagnostics`, `core/health`)
 
 ## Install and run
@@ -74,12 +80,15 @@ src/
 │   │   ├── api/         # ApiClient, ApiError, apiPaths, query-param helper
 │   │   ├── auth/        # web session store/service/guards/401 interceptor
 │   │   ├── config/      # API_BASE_URL token
+│   │   ├── resident-context/ # active building derived from memberships
 │   │   └── health/      # HealthService (root-level /health, not /api)
 │   ├── layout/           # reusable page chrome
 │   │   └── app-shell/    # header + content frame every page composes
 │   ├── features/         # product screens, one folder per feature
 │   │   ├── landing/       # authenticated landing page
 │   │   ├── login/         # public web login
+│   │   ├── resident/
+│   │   │   └── amenities/ # amenity listing + availability browsing (#46)
 │   │   └── diagnostics/   # internal /health check, not linked from nav
 │   ├── app.component.ts   # root: <ion-app><ion-router-outlet></ion-router-outlet></ion-app>
 │   ├── app.config.ts
@@ -91,10 +100,9 @@ src/
 └── styles.scss
 ```
 
-`core` never imports from `features`. `features/resident/` and
-`features/admin/` arrive with later product slices once there is a resident
-or administrator workflow to render — they are not created empty ahead of
-time.
+`core` never imports from `features`. `features/admin/` arrives with a later
+product slice once there is an administrator workflow to render — it is not
+created empty ahead of time.
 
 ### Adding a feature
 
@@ -238,6 +246,122 @@ refresh tokens stored in secure platform storage, but that flow is not
 implemented here. Do not treat Capacitor Android/iOS authentication as
 release-ready until a dedicated native bearer + secure-storage issue is
 planned and implemented.
+
+## Resident context and amenity/availability browsing
+
+Issue #46 lets an authenticated resident (or an Administrator who also holds
+a resident membership) explore their building's amenities and each
+amenity's structural availability. It does not create reservations — that
+arrives with #47/#48.
+
+### Active building context
+
+`core/resident-context/resident-context.store.ts` (`ResidentContextStore`)
+derives the active building **only** from `AuthSessionStore.memberships()` —
+the array already returned by `GET /api/auth/me`. It never makes a second
+request to reconstruct memberships and never invents an endpoint for it.
+
+- **0 memberships**: `activeMembership` is `null`. No amenities request is
+  made; the UI shows "No tenés una membresía residencial activa disponible."
+  — not an authentication error, since the user is genuinely signed in.
+- **1 membership**: it is auto-selected; no building selector is shown.
+- **N memberships**: nothing is picked arbitrarily. `activeMembership` stays
+  `null` (`requiresSelection()` is `true`) until the resident calls
+  `selectBuilding(buildingId)`.
+
+`selectBuilding` only accepts a `buildingId` that already appears in the
+user's own `memberships()`; anything else is rejected, the context is left
+untouched and no request is made. This is UI-level defense in depth only —
+the backend's `IBuildingMembershipAuthorizer` remains the real authority and
+can still return `403` even when the UI thought a building was valid (a
+stale/edge-case scenario the amenities list explicitly handles).
+
+The active selection is **in-memory only** — never written to
+`localStorage`/`sessionStorage`/IndexedDB/Capacitor Preferences. A reload
+with a single membership reconstructs itself from `/auth/me`; a reload with
+several asks the resident to choose again. `activeMembership` is fully
+derived from the current `memberships()` signal, so login, logout, switching
+user and the `/auth/me` restore after reload all resolve correctly without
+any explicit reset: a previously selected building id that no longer
+belongs to the current session's memberships simply stops resolving to a
+membership.
+
+### Amenities and availability
+
+- `features/resident/amenities/amenities.models.ts` — `AmenitySummary` and
+  `AvailabilityInterval`, typed exactly to the backend's
+  `AmenitySummaryResponse`/`AvailabilityIntervalResponse`
+  (`apps/api/Modules/Amenities/AmenityEndpoints.cs`). No invented fields
+  (price, capacity, image, description, next available slot, maintenance
+  reason, …) — the endpoints do not return them.
+- `features/resident/amenities/amenities.service.ts` — `AmenitiesService`
+  wraps `ApiClient` with `listForBuilding(buildingId)` and
+  `getAvailability(amenityId, fromUtc, toUtc)`, using only
+  `apiPaths.amenities.listForBuilding`/`apiPaths.amenities.availability`.
+- `features/resident/amenities/amenities.page.ts` — the routed `/amenities`
+  page: building selector (when needed), amenity list
+  (loading/empty/success/error with retry), and amenity selection.
+- `features/resident/amenities/amenity-availability.component.ts` — once an
+  amenity is selected, lets the resident pick a `fromUtc`/`toUtc` range and
+  view the backend's raw open intervals, grouped by local calendar day.
+
+**Structural availability, not a promise of a free slot.** The backend's
+`AmenityAvailabilityCalculator` only subtracts recurring windows and
+maintenance/unavailable periods — it does **not** consult existing
+reservations. This client never claims otherwise: the UI's copy says the
+schedule is "according to configuration" and that final availability is
+validated when a reservation is confirmed, and it never uses wording like
+"free slot guaranteed" or "reserve now". An empty `[]` response is rendered
+as "No hay franjas habilitadas para este rango." — not an error. A gap
+between open intervals is shown simply as not available; it is never
+labeled "Mantenimiento" (or any other cause), because the endpoint does not
+return *why* a gap exists.
+
+**No client-side availability computation.** The client only performs
+`request → response → render`; it never re-implements weekly windows,
+maintenance subtraction, timezone rules or reservation overlap in
+TypeScript — the backend remains the sole authority (RNF-004).
+
+### Query range
+
+`features/resident/amenities/availability-range.ts` mirrors the backend's
+`AmenityAvailabilityCalculator.MaxQueryRange` (62 days) and validates a
+range client-side before it is ever sent — end after start, and no more than
+62 days — purely so the UI never fires a request the backend would reject
+anyway; the backend still re-validates and remains authoritative. The
+default initial browsing window is the next 7 days, and is just a display
+starting point, not a business rule.
+
+### Time zone
+
+The backend computes structural availability using `Building.TimeZoneId`,
+but neither `/auth/me` nor the amenities endpoints expose that time zone to
+this client today, and availability responses are UTC timestamps. This
+client does **not** hardcode `America/Argentina/Buenos_Aires` or assume
+every building is in Buenos Aires. Instead, it renders availability
+timestamps using the browser/device's local time zone (`Intl.DateTimeFormat`
+with no explicit `timeZone`, `Date` parsing/formatting only — no custom
+offset math).
+
+**Known gap:** this is the device's local time zone, not necessarily the
+building's authoritative time zone, so a resident browsing from a different
+time zone than their building would see availability windows labeled by
+their own local day/time rather than the building's calendar day. Closing
+this gap correctly needs the backend to expose `Building.TimeZoneId` (e.g.
+on `/auth/me`'s membership entries or the amenity/availability responses).
+That is out of scope for #46 and is not solved with a client-side constant;
+a small, separate backend issue is recommended before a flow that depends on
+calendar-day-accurate building-local time.
+
+### Race conditions
+
+Both the amenities list and the availability lookup key their request on an
+Angular signal (`ResidentContextStore.activeBuildingId` / the selected
+amenity) piped through RxJS `switchMap`, so a late response from a request
+made against a building or amenity the user has since navigated away from
+is cancelled and never overwrites the current view. Selecting a different
+amenity or building also clears the previous selection/availability state
+immediately, before any new request is made.
 
 ## `/health` vs `/api`
 

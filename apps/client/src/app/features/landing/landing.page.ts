@@ -1,4 +1,5 @@
 import { Component, inject } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { IonButton, IonButtons, IonText } from '@ionic/angular';
 
 import { AuthSessionStore } from '../../core/auth/auth-session.store';
@@ -13,7 +14,7 @@ import { AppShellComponent } from '../../layout/app-shell/app-shell.component';
 @Component({
   selector: 'app-landing',
   standalone: true,
-  imports: [AppShellComponent, IonButton, IonButtons, IonText],
+  imports: [AppShellComponent, IonButton, IonButtons, IonText, RouterLink],
   template: `
     <app-shell title="Residential Amenities">
       @if (currentUser(); as user) {
@@ -38,7 +39,7 @@ import { AppShellComponent } from '../../layout/app-shell/app-shell.component';
         </p>
       }
       <p>
-        <ion-text color="medium">No building context is selected yet.</ion-text>
+        <ion-button routerLink="/amenities">View amenities</ion-button>
       </p>
     </app-shell>
   `,

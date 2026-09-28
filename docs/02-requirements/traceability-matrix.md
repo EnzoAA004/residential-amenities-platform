@@ -26,7 +26,7 @@ This matrix connects MVP requirements to implementation work and expected verifi
 | RF-018 Admin cancel/reschedule | #26 | Admin command + audit tests |
 | RF-019 Configure prices/effective periods | #22, #26 | Pricing configuration tests |
 | RF-020 Configure reservable windows/rules | #19, #26 | Availability configuration tests |
-| RF-021 Auditable transition history | #27 | Audit-event integration tests |
+| RF-021 Auditable transition history | #27 | `AuditTrailTests` (events for reservations, cash, Mercado Pago, expiration, identity; no duplicates; atomic rollback; admin query), `AuditDomainTests` |
 | RF-022 Responsive web experience | #7 | Client component/e2e viewport checks |
 | RF-023 Android/iOS packageable client | #7 | Capacitor build/config validation |
 
@@ -40,13 +40,13 @@ This matrix connects MVP requirements to implementation work and expected verifi
 | RNF-004 Backend is authority for price/availability/payment | #19, #22, #24 |
 | RNF-005 Reservation concurrency correctness | #23 |
 | RNF-006 Idempotent payment/webhook processing | #24 (persisted idempotency key, unique provider event/order ids, state-based reconciliation — `PaymentFlowTests`, `PaymentReservationRaceTests`), #25 (cash: one active payment per reservation, row-locked idempotent confirmation — `CashPaymentFlowTests`) |
-| RNF-007 Auditable important transitions | #27 |
+| RNF-007 Auditable important transitions | #27 (append-only `AuditLogs`, atomic with the transition — `AuditTrailTests`) |
 | RNF-008 Understandable for varied digital familiarity | #7, future usability validation |
 | RNF-009 Mainstream browser support | #7 |
 | RNF-010 Reproducible IaC | future Phase 6 Terraform issue |
 | RNF-011 Automated deployments | #12 plus future Phase 6 deployment issue |
 | RNF-012 Secrets outside source control | #13 |
-| RNF-013 Safe logging | #13, #27 |
+| RNF-013 Safe logging | #13, #27 (allowlisted audit metadata; no secrets/tokens/e-mails audited — `AuditDomainTests`, `AuditTrailTests`) |
 | RNF-014 Backup/restore before production | future Phase 6 operations issue |
 | RNF-015 Cost observability/budgets | future Phase 6 FinOps issue |
 | RNF-016 Future tenant/building isolation | #9 and ADR-009 |

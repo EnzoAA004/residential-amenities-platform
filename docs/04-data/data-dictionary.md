@@ -1,10 +1,10 @@
-# Data Dictionary — v0.9
+# Data Dictionary — v0.10
 
 The model now includes the building/membership foundation, ASP.NET Core Identity
 persistence, the Amenities & Availability foundation (issue #19), the Pricing
 foundation (issue #22), Shared/Exclusive Leisure Reservations (issue #20),
 Event Reservations + add-on amenities (issue #21), and reservation
-concurrency/hold management (issue #23), Mercado Pago payments (issue #24), and cash payments (issue #25).
+concurrency/hold management (issue #23), Mercado Pago payments (issue #24), cash payments (issue #25), and the audit trail (issue #27).
 
 ## Buildings
 
@@ -278,6 +278,31 @@ Idempotency ledger for webhook deliveries. Identifiers only.
 | ProcessingResult | varchar(30) | No | Outcome of reconciliation. |
 
 Indexes: unique `(Provider, ProviderEventId)`; non-unique `ProviderOrderId`.
+
+## AuditLogs
+
+Owned by the Audit module (issue #27). Append-only history of business facts;
+no foreign keys to any other table on purpose. See
+[Domain Model](domain-model.md#audit-trail-issue-27).
+
+| Column | Type | Null | Notes |
+| --- | --- | --- | --- |
+| Id | uuid | No | Primary key. |
+| OccurredAtUtc | timestamptz | No | When the fact was recorded (`TimeProvider`). |
+| BuildingId | uuid | Yes | Building the target belongs to; NULL for global events such as a failed login. |
+| ActorType | varchar(20) | No | `User`, `System` or `ExternalProvider`. |
+| ActorUserId | uuid | Yes | `UserAccount.Id`; required for `User`, NULL otherwise. Historical id, no FK. |
+| Action | varchar(60) | No | Member of the closed `AuditAction` catalog (stored by name). |
+| TargetType | varchar(30) | No | `Reservation`, `Payment`, `User`, `PriceRule`, `Amenity`, `EventSlot`. |
+| TargetId | uuid | Yes | Id of the target; NULL when there is none (e.g. failed login). |
+| CorrelationId | varchar(100) | Yes | HTTP trace id for request-driven events; NULL for background jobs. |
+| MetadataJson | jsonb | Yes | Small, allowlisted, server-built JSON. Never secrets, tokens, e-mails, bodies or payer data. |
+
+Indexes: `(OccurredAtUtc)` for the default newest-first listing;
+`(BuildingId, OccurredAtUtc)`; `(TargetType, TargetId, OccurredAtUtc)`;
+`(ActorUserId, OccurredAtUtc)`; `(Action, OccurredAtUtc)` (per-action queries
+such as `PaymentRequiresManualReview`). Rows are never updated or deleted by
+the application; retention is not implemented yet.
 
 ## Concurrency: PostgreSQL advisory locks (issue #23)
 

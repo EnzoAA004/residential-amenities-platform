@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using ResidentialAmenities.Api.Infrastructure.Persistence;
+using ResidentialAmenities.Api.Modules.Audit.Application;
+using ResidentialAmenities.Api.Modules.Audit.Domain;
 using ResidentialAmenities.Api.Modules.Reservations.Domain;
 
 namespace ResidentialAmenities.Api.Modules.Reservations.Application;
@@ -21,7 +23,8 @@ namespace ResidentialAmenities.Api.Modules.Reservations.Application;
 /// </summary>
 public sealed class ReservationPaymentContract(
     AppDbContext dbContext,
-    TimeProvider timeProvider) : IReservationPaymentContract
+    TimeProvider timeProvider,
+    IAuditRecorder auditRecorder) : IReservationPaymentContract
 {
     public async Task<PayableReservation?> GetPayableReservationAsync(
         Guid reservationId,
@@ -82,6 +85,20 @@ public sealed class ReservationPaymentContract(
 
         if (confirmed)
         {
+            if (!wasConfirmed)
+            {
+                // The transition happened in this locked transaction, so it is
+                // audited exactly once, atomically with it. Reservations only
+                // knows a trusted payment succeeded (no provider or method), so
+                // the actor is the system; Payments audits the real actor.
+                auditRecorder.Record(AuditRecord.BySystem(
+                    AuditAction.ReservationConfirmed,
+                    AuditTargetType.Reservation,
+                    reservation.Id,
+                    reservation.BuildingId,
+                    AuditMetadata.ReservationConfirmed()));
+            }
+
             await dbContext.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
 

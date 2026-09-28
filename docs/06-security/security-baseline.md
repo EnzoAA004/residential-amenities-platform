@@ -145,3 +145,24 @@ an Administrator); confirming receipt is `Administrator`-only — provisional
 until OQ-013 defines who receives cash — with the actor always taken from the
 authenticated session and stored on the payment (`CashConfirmedByUserId`,
 `CashConfirmedAtUtc`). The resident-facing payment view never exposes that id.
+
+## Audit trail (issue #27)
+
+- Audit is append-only: no endpoint or application path edits or deletes an
+  `AuditLog`; corrections are new events. It is read through
+  `GET /api/admin/audit`, restricted to `Administrator`.
+- **Never audited:** passwords; access/refresh tokens; auth cookies;
+  `Authorization` headers; secrets (Mercado Pago access token, webhook
+  secret); `x-signature`; connection strings; card data; checkout URLs;
+  idempotency keys; full request/response bodies; payer personal data; and the
+  e-mail typed at a failed login.
+- Metadata is built server-side from typed, allowlisted factories
+  (`AuditMetadata`); nothing accepts an arbitrary dictionary or client input,
+  and there is no middleware that stores requests.
+- A failed login is audited with only a general category (e.g.
+  `InvalidCredentials`), no user id and no submitted identifier; the HTTP
+  response is unchanged, so audit does not enable user enumeration.
+- Audit history is not authority: no authorization, availability or payment
+  decision depends on it.
+- Known gaps: no cryptographic tamper-proofing, no retention policy yet, and
+  no rate limiting on failed-login events.

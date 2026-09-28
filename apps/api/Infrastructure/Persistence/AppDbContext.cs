@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using ResidentialAmenities.Api.Modules.Amenities.Domain;
+using ResidentialAmenities.Api.Modules.Audit.Domain;
 using ResidentialAmenities.Api.Modules.Buildings.Domain;
 using ResidentialAmenities.Api.Modules.Identity.Domain;
 using ResidentialAmenities.Api.Modules.Identity.Infrastructure.Persistence;
@@ -49,6 +50,33 @@ public sealed class AppDbContext(
 
     public DbSet<PaymentProviderEvent> PaymentProviderEvents =>
         Set<PaymentProviderEvent>();
+
+    public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        EnsureAuditLogsAreAppendOnly();
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
+    public override Task<int> SaveChangesAsync(
+        bool acceptAllChangesOnSuccess,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureAuditLogsAreAppendOnly();
+        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
+
+    // The audit trail is append-only: the application never rewrites history.
+    private void EnsureAuditLogsAreAppendOnly()
+    {
+        if (ChangeTracker.Entries<AuditLog>().Any(entry =>
+                entry.State is EntityState.Modified or EntityState.Deleted))
+        {
+            throw new InvalidOperationException(
+                "AuditLog entries are append-only and cannot be modified or deleted.");
+        }
+    }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

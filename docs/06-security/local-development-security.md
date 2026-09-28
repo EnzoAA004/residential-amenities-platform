@@ -123,3 +123,12 @@ Before merging a change that introduces configuration:
 - [ ] logs do not expose the new secret;
 - [ ] CORS changes remain explicit;
 - [ ] production secret storage impact is noted when applicable.
+
+## Audit trail
+
+The `AuditLogs` table stores business facts only. It must never receive
+passwords, tokens, cookies, secrets, `Authorization` headers, `x-signature`,
+connection strings, card data, full request bodies or the e-mail typed at
+login. Metadata is produced by the typed helpers in `AuditMetadata`; if a new
+fact needs a new field, add it to that allowlist deliberately rather than
+serializing an object.

@@ -308,6 +308,19 @@ Events/actions emitted by modules such as:
 
 Audit recording should not become the business authority for another module.
 
+### Implementation (issue #27)
+
+Modules call Audit; Audit calls no module. The public surface is
+`IAuditRecorder.Record(AuditRecord)`, which only adds the entry to the current
+`AppDbContext` so the owning use case controls `SaveChanges` and the
+transaction (the transition and its audit entry commit together). Actors are
+`User`, `System` and `ExternalProvider`; actions are a closed catalog
+(`AuditAction`) and metadata is built only by typed, allowlisted
+`AuditMetadata` factories. `AuditLog` has no foreign keys to other modules'
+tables and is append-only. Reservations audits its own transitions as the
+system (it never knows the payment provider or method); Payments audits the
+real actor. See `docs/04-data/domain-model.md#audit-trail-issue-27`.
+
 ---
 
 ## 9. Notifications

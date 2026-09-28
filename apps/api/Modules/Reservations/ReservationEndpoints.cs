@@ -60,6 +60,13 @@ public static class ReservationEndpoints
                 statusCode: StatusCodes.Status403Forbidden);
         }
 
+        var actorUserId = principal.GetUserId();
+
+        if (actorUserId is null)
+        {
+            return Results.Unauthorized();
+        }
+
         var command = new CreateReservationCommand(
             request.BuildingId,
             request.AmenityId,
@@ -67,7 +74,8 @@ public static class ReservationEndpoints
             useType,
             request.StartsAtUtc,
             request.EndsAtUtc,
-            membershipId.Value);
+            membershipId.Value,
+            actorUserId.Value);
 
         try
         {

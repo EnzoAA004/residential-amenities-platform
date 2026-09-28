@@ -76,6 +76,7 @@ app.MapAmenityEndpoints();
 app.MapPricingEndpoints();
 app.MapReservationEndpoints();
 app.MapPaymentEndpoints();
+app.MapAuditEndpoints();
 app.MapHealthEndpoints();
 app.MapGet("/", () => Results.Redirect("/health"));
 

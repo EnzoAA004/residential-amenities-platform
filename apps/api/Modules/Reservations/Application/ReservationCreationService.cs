@@ -3,6 +3,8 @@ using Microsoft.Extensions.Options;
 using ResidentialAmenities.Api.Infrastructure.Persistence;
 using ResidentialAmenities.Api.Modules.Amenities.Application;
 using ResidentialAmenities.Api.Modules.Amenities.Domain;
+using ResidentialAmenities.Api.Modules.Audit.Application;
+using ResidentialAmenities.Api.Modules.Audit.Domain;
 using ResidentialAmenities.Api.Modules.Pricing.Application;
 using ResidentialAmenities.Api.Modules.Pricing.Domain;
 using ResidentialAmenities.Api.Modules.Reservations.Domain;
@@ -33,7 +35,8 @@ namespace ResidentialAmenities.Api.Modules.Reservations.Application;
 public sealed class ReservationCreationService(
     AppDbContext dbContext,
     TimeProvider timeProvider,
-    IOptions<ReservationHoldOptions> holdOptions)
+    IOptions<ReservationHoldOptions> holdOptions,
+    IAuditRecorder auditRecorder)
 {
     private static readonly HashSet<AmenityKind> AllowedEventAddOnKinds =
     [
@@ -152,6 +155,22 @@ public sealed class ReservationCreationService(
         // back (including via the `await using` disposing an uncommitted
         // transaction on an exception) also releases the advisory locks.
         dbContext.Reservations.Add(reservation);
+
+        // Same SaveChanges + transaction as the reservation itself: both are
+        // persisted together or not at all.
+        auditRecorder.Record(AuditRecord.ByUser(
+            command.ActorUserId,
+            AuditAction.ReservationCreated,
+            AuditTargetType.Reservation,
+            reservation.Id,
+            reservation.BuildingId,
+            AuditMetadata.ReservationCreated(
+                reservation.UseType.ToString(),
+                reservation.StartsAtUtc,
+                reservation.EndsAtUtc,
+                resources.Count,
+                reservation.Status.ToString())));
+
         await dbContext.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 

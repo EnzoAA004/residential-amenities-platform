@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 import { of } from 'rxjs';
 import { describe, expect, it } from 'vitest';
 
@@ -10,6 +11,7 @@ describe('LandingPage', () => {
   it('renders the product shell as the real landing, not the old health screen', async () => {
     TestBed.configureTestingModule({
       providers: [
+        provideRouter([]),
         AuthSessionStore,
         { provide: AuthService, useValue: { logout: () => of(undefined) } }
       ]
@@ -40,6 +42,7 @@ describe('LandingPage', () => {
     expect(text).toContain('Welcome, Resident One');
     expect(text).toContain('Active memberships: Pilot Building 3A');
     expect(text).toContain('Sign out');
+    expect(text).toContain('View amenities');
     expect(text).not.toContain('Check API');
     expect(text).not.toContain('not checked');
   });

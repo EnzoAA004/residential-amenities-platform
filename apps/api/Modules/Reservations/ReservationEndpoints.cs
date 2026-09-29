@@ -21,9 +21,62 @@ public static class ReservationEndpoints
             .RequireAuthorization(AuthorizationPolicies.ResidentAccess);
 
         group.MapPost("/", CreateReservationAsync);
+        group.MapGet("/", ListMyReservationsAsync);
         group.MapGet("/{id:guid}", GetReservationAsync);
 
         return endpoints;
+    }
+
+    /// <summary>
+    /// "My reservations" (issue #66): reservations created by the caller's
+    /// own active membership in <paramref name="buildingId"/> — never a
+    /// general building listing, and never accepting a membership/user id
+    /// from the client (RNF-004). <paramref name="buildingId"/> is required;
+    /// an unauthenticated-for-this-building caller (no active membership)
+    /// gets 403, not an empty page, so it is never confused with "no
+    /// reservations yet".
+    /// </summary>
+    private static async Task<IResult> ListMyReservationsAsync(
+        Guid buildingId,
+        ClaimsPrincipal principal,
+        IResidentReservationQuery query,
+        IBuildingMembershipAuthorizer membershipAuthorizer,
+        CancellationToken cancellationToken,
+        int page = 1,
+        int pageSize = ReservationAdminQuery.DefaultPageSize)
+    {
+        if (buildingId == Guid.Empty)
+        {
+            return Results.Problem(
+                title: "buildingId is required.",
+                statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        var membershipId = await membershipAuthorizer.GetActiveMembershipIdAsync(
+            principal,
+            buildingId,
+            cancellationToken);
+
+        if (membershipId is null)
+        {
+            return Results.Problem(
+                title: "An active resident membership for this building " +
+                       "is required to list reservations.",
+                statusCode: StatusCodes.Status403Forbidden);
+        }
+
+        var result = await query.ListAsync(
+            buildingId,
+            membershipId.Value,
+            page,
+            pageSize,
+            cancellationToken);
+
+        return Results.Ok(new ResidentReservationPageResponse(
+            result.Items.Select(ToSummary).ToList(),
+            result.Page,
+            result.PageSize,
+            result.TotalCount));
     }
 
     private static async Task<IResult> CreateReservationAsync(
@@ -130,14 +183,23 @@ public static class ReservationEndpoints
             return Results.NotFound();
         }
 
-        if (!await membershipAuthorizer.HasAccessAsync(
+        // Building-level access is not enough here: two residents of the
+        // same building must not be able to read each other's reservation by
+        // guessing/sharing its id (object-level authorization). An
+        // Administrator keeps the existing full-access bypass.
+        if (!principal.IsInRole(ApplicationRoles.Administrator))
+        {
+            var membershipId = await membershipAuthorizer.GetActiveMembershipIdAsync(
                 principal,
                 reservation.BuildingId,
-                cancellationToken))
-        {
-            return Results.Problem(
-                title: "You do not have access to this building.",
-                statusCode: StatusCodes.Status403Forbidden);
+                cancellationToken);
+
+            if (membershipId is null || membershipId != reservation.CreatedByMembershipId)
+            {
+                return Results.Problem(
+                    title: "You do not have access to this reservation.",
+                    statusCode: StatusCodes.Status403Forbidden);
+            }
         }
 
         return Results.Ok(ToResponse(reservation));
@@ -153,6 +215,10 @@ public static class ReservationEndpoints
             reservation.EndsAtUtc,
             reservation.CreatedAtUtc,
             reservation.ExpiresAtUtc,
+            reservation.ConfirmedAtUtc,
+            reservation.CancelledAtUtc,
+            reservation.ExpiredAtUtc,
+            reservation.CancellationReason,
             reservation.Resources
                 .Select(resource => new ReservationResourceResponse(
                     resource.AmenityId,
@@ -167,6 +233,31 @@ public static class ReservationEndpoints
                 .ToList(),
             reservation.PriceLines.FirstOrDefault()?.Currency ?? string.Empty,
             reservation.PriceLines.Sum(line => line.Amount));
+
+    // Reservation.Status remains the sole authority: nothing here infers
+    // Expired/Confirmed from the clock or from a payment — every lifecycle
+    // field is copied straight from the stored aggregate.
+    private static ResidentReservationSummaryResponse ToSummary(ResidentReservationRow row) =>
+        new(
+            row.Id,
+            row.BuildingId,
+            row.UseType,
+            row.Status,
+            row.StartsAtUtc,
+            row.EndsAtUtc,
+            row.CreatedAtUtc,
+            row.ExpiresAtUtc,
+            row.ConfirmedAtUtc,
+            row.CancelledAtUtc,
+            row.ExpiredAtUtc,
+            row.CancellationReason,
+            row.Resources
+                .Select(resource => new ReservationResourceResponse(
+                    resource.AmenityId,
+                    resource.IsExclusive))
+                .ToList(),
+            row.Currency ?? string.Empty,
+            row.Total);
 
     private sealed record CreateReservationRequest(
         Guid BuildingId,
@@ -185,6 +276,10 @@ public static class ReservationEndpoints
         DateTimeOffset EndsAtUtc,
         DateTimeOffset CreatedAtUtc,
         DateTimeOffset ExpiresAtUtc,
+        DateTimeOffset? ConfirmedAtUtc,
+        DateTimeOffset? CancelledAtUtc,
+        DateTimeOffset? ExpiredAtUtc,
+        string? CancellationReason,
         IReadOnlyList<ReservationResourceResponse> Resources,
         IReadOnlyList<ReservationPriceLineResponse> PriceLines,
         string Currency,
@@ -199,4 +294,33 @@ public static class ReservationEndpoints
         string ComponentType,
         string Currency,
         decimal Amount);
+
+    /// <summary>
+    /// The "my reservations" list item. Never includes CreatedByMembershipId,
+    /// any user id, or price line detail — the resident already knows these
+    /// are their own reservations; per-line pricing stays on the detail
+    /// endpoint.
+    /// </summary>
+    private sealed record ResidentReservationSummaryResponse(
+        Guid Id,
+        Guid BuildingId,
+        string UseType,
+        string Status,
+        DateTimeOffset StartsAtUtc,
+        DateTimeOffset EndsAtUtc,
+        DateTimeOffset CreatedAtUtc,
+        DateTimeOffset ExpiresAtUtc,
+        DateTimeOffset? ConfirmedAtUtc,
+        DateTimeOffset? CancelledAtUtc,
+        DateTimeOffset? ExpiredAtUtc,
+        string? CancellationReason,
+        IReadOnlyList<ReservationResourceResponse> Resources,
+        string Currency,
+        decimal TotalAmount);
+
+    private sealed record ResidentReservationPageResponse(
+        IReadOnlyList<ResidentReservationSummaryResponse> Items,
+        int Page,
+        int PageSize,
+        int TotalCount);
 }

@@ -1102,6 +1102,47 @@ Definitive prices, final Event/operating hours, cancellation and refund policy
 (OQ-011), full-day, the definitive cash-confirming actor (OQ-013), the real
 hold duration, and cleaning. Nothing in this issue decides them.
 
+## Resident reservation history and payment reads (issue #66)
+
+Two gaps closed, one read model added — no schema change, no new command.
+
+**Object-level authorization on `GET /api/reservations/{id}`.** Before #66
+it only checked `IBuildingMembershipAuthorizer.HasAccessAsync` (building
+membership), so any resident of the same building could read another
+resident's reservation by id — the GUID was doing authorization work it was
+never meant to do. It now also requires, for a non-Administrator caller,
+that their own active membership (`GetActiveMembershipIdAsync`) equals the
+reservation's `CreatedByMembershipId`. Administrator keeps its bypass. This
+is the same ownership check reservation creation and cash declaration
+already use; #66 just closes the one read path that had been left on the
+weaker, building-level check.
+
+**"My reservations"** (`GET /api/reservations?buildingId=&page=&pageSize=`)
+is a new read side, `ResidentReservationQuery`/`IResidentReservationQuery`,
+deliberately separate from `ReservationAdminQuery`: same efficient
+single-page projection (`AsNoTracking`, no aggregate loaded, no N+1,
+`CreatedAtUtc DESC`/`Id DESC` ordering with the same default/max page size),
+but mandatorily filtered to one resolved membership — it can never become a
+general building listing, and its row type never carries
+`CreatedByMembershipId` or any other actor id the way `AdminReservationRow`
+does. Ownership is resolved from the caller's session exactly like
+reservation creation; a membership/user id sent by the client is not a
+recognized parameter and has no effect.
+
+**Resident payment history** (`GET
+/api/reservations/{reservationId}/payments`) stays inside Payments and
+resolves ownership through the existing `IReservationPaymentContract.
+GetPayableReservationAsync` — despite its name, it already returns
+`BuildingId`/`CreatedByMembershipId` for a reservation regardless of status,
+which is exactly what a history view of an old (possibly `Expired`/
+`Cancelled`) reservation needs; Payments still never reads a Reservations
+table directly. The endpoint is a list, not a singular resource, on purpose:
+a `Rejected`/`Cancelled` attempt does not block a new one while the hold is
+still valid, so a reservation can legitimately have 0..N payments.
+`requiresManualReview` is read off `Payment.RequiresManualReview` (the one
+place that rule is defined, from `ReservationOutcome`) — never
+reimplemented for this endpoint.
+
 ## Identity boundary
 
 `UserAccount` exists now because memberships need a stable user foreign key. It intentionally does **not** implement authentication credentials or authorization roles.

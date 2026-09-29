@@ -10,6 +10,7 @@ import { AmenitiesService } from './amenities.service';
 import { AmenitySummary } from './amenities.models';
 import { AmenityAvailabilityComponent } from './amenity-availability.component';
 import { LeisureReservationComponent } from '../reservations/leisure/leisure-reservation.component';
+import { EventReservationComponent } from '../reservations/event/event-reservation.component';
 
 type AmenitiesLoadState =
   | { status: 'idle' }
@@ -23,9 +24,13 @@ type AmenitiesLoadState =
  * selection, amenity listing, and an amenity's structural availability via
  * `AmenityAvailabilityComponent`. Once an amenity is selected, it also
  * hosts the Shared/Exclusive Leisure reservation flow
- * (`LeisureReservationComponent`, issue #47) — quote, confirm, create a
- * `Pending` hold. This page itself never computes availability or a price
- * client-side; see the client README for both issues' details.
+ * (`LeisureReservationComponent`, issue #47), and — only when the selected
+ * amenity is a SUM (`kind === 'Sum'`) — the Event reservation flow
+ * (`EventReservationComponent`, issue #48), passing it the same
+ * already-loaded amenities list as add-on candidates. Both flows quote,
+ * confirm and create a `Pending` hold. This page itself never computes
+ * availability or a price client-side; see the client README for all
+ * three issues' details.
  */
 @Component({
   selector: 'app-amenities-page',
@@ -34,6 +39,7 @@ type AmenitiesLoadState =
     AppShellComponent,
     AmenityAvailabilityComponent,
     LeisureReservationComponent,
+    EventReservationComponent,
     IonBadge,
     IonButton,
     IonItem,
@@ -156,6 +162,9 @@ type AmenitiesLoadState =
             <h2>{{ amenity.name }}</h2>
             <app-amenity-availability [amenity]="amenity" />
             <app-leisure-reservation [amenity]="amenity" />
+            @if (amenity.kind === 'Sum') {
+              <app-event-reservation [baseAmenity]="amenity" [amenities]="amenitiesList()" />
+            }
           }
         }
       }

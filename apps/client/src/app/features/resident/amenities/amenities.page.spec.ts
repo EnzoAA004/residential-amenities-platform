@@ -222,4 +222,45 @@ describe('AmenitiesPage', () => {
 
     expect(fixture.nativeElement.textContent).toContain('Fresh Gym');
   });
+
+  it('does not render the Event flow for a non-SUM amenity', async () => {
+    session.setAuthenticated(userWith([buildingA]));
+    fixture = TestBed.createComponent(AmenitiesPage);
+    fixture.detectChanges();
+
+    httpMock.expectOne('/api/buildings/building-a/amenities').flush([
+      { id: 'pool-1', name: 'Pool', kind: 'Pool', allowsSharedUse: true, allowsExclusiveUse: true }
+    ]);
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    fixture.componentInstance.selectAmenity({
+      id: 'pool-1',
+      name: 'Pool',
+      kind: 'Pool',
+      allowsSharedUse: true,
+      allowsExclusiveUse: true
+    });
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('app-event-reservation')).toBeNull();
+  });
+
+  it('renders the Event flow, with the full amenities list as add-on candidates, for a SUM amenity', async () => {
+    session.setAuthenticated(userWith([buildingA]));
+    fixture = TestBed.createComponent(AmenitiesPage);
+    fixture.detectChanges();
+
+    const sum = { id: 'sum-1', name: 'SUM', kind: 'Sum', allowsSharedUse: true, allowsExclusiveUse: true };
+    const pool = { id: 'pool-1', name: 'Pool', kind: 'Pool', allowsSharedUse: true, allowsExclusiveUse: true };
+    httpMock.expectOne('/api/buildings/building-a/amenities').flush([sum, pool]);
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    fixture.componentInstance.selectAmenity(sum);
+    fixture.detectChanges();
+
+    const eventComponent = fixture.nativeElement.querySelector('app-event-reservation');
+    expect(eventComponent).not.toBeNull();
+  });
 });

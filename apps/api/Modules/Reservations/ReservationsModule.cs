@@ -15,6 +15,7 @@ public static class ReservationsModule
         services.AddScoped<ReservationExpirationService>();
         services.AddScoped<ReservationScheduleValidator>();
         services.AddScoped<IReservationAdminQuery, ReservationAdminQuery>();
+        services.AddScoped<IResidentReservationQuery, ResidentReservationQuery>();
         services.AddScoped<IReservationAdminContract, ReservationAdminService>();
         services.AddScoped<IEventSlotAdminContract, EventSlotAdminService>();
         services.AddScoped<IReservationPaymentContract, ReservationPaymentContract>();

@@ -146,7 +146,9 @@ GET  /api/amenities/{amenityId}/availability?fromUtc=&toUtc=
 GET  /api/buildings/{buildingId}/event-slots?date=YYYY-MM-DD
 GET  /api/pricing/quote?buildingId=&amenityId=&useType=&addOnAmenityId=&atUtc=
 POST /api/reservations
+GET  /api/reservations?buildingId=&page=&pageSize=
 GET  /api/reservations/{id}
+GET  /api/reservations/{reservationId}/payments
 ```
 
 ### Resident Event slot discovery (issue #62)
@@ -254,6 +256,85 @@ conflicts, serializing concurrent attempts on the same resource. See
 `docs/04-data/domain-model.md#concurrency-and-holds-issue-23` for why this
 approach was chosen over a database exclusion constraint or `Serializable`
 isolation.
+
+### Resident reservation history and payment reads (issue #66)
+
+```http
+GET /api/reservations?buildingId=&page=&pageSize=       ("my reservations")
+GET /api/reservations/{id}                                 (owner, or Administrator)
+GET /api/reservations/{reservationId}/payments              (owner, or Administrator)
+```
+
+**"My reservations"** is `buildingId` (required) filtered to reservations
+`CreatedByMembershipId` matches the caller's own **active** membership in
+that building, resolved server-side by `IBuildingMembershipAuthorizer`
+exactly like reservation creation. The client can never make this list show
+someone else's reservations: it does not accept `membershipId`, `userId` or
+`createdByMembershipId` as query parameters, and passing them is silently
+ignored. No active membership in `buildingId` → `403`, not an empty page (so
+"forbidden" and "no reservations yet" are never confused). Paginated like
+the administrative read models: `page` defaults to `1`, `pageSize` defaults
+to `50` and is clamped to `100`; results are ordered `CreatedAtUtc DESC`,
+`Id DESC` (a tiebreaker, so paging is stable even when two reservations
+share a timestamp). Each item is a summary (no per-line pricing, no
+`CreatedByMembershipId` or other actor id — the caller already knows these
+are their own):
+
+```json
+{
+  "items": [{
+    "id": "...", "buildingId": "...",
+    "useType": "SharedLeisure", "status": "Confirmed",
+    "startsAtUtc": "...", "endsAtUtc": "...",
+    "createdAtUtc": "...", "expiresAtUtc": "...",
+    "confirmedAtUtc": "...", "cancelledAtUtc": null, "expiredAtUtc": null,
+    "cancellationReason": null,
+    "resources": [{ "amenityId": "...", "isExclusive": false }],
+    "currency": "ARS", "totalAmount": 5000
+  }],
+  "page": 1, "pageSize": 50, "totalCount": 1
+}
+```
+
+`GET /api/reservations/{id}`'s object-level authorization was hardened: it
+previously only checked building-level access (`HasAccessAsync`), so any
+resident with an active membership in the same building could read another
+resident's reservation just by knowing/guessing its id. It now also requires
+`CreatedByMembershipId` to match the caller's own active membership for a
+non-Administrator caller; a same-building resident who did not create the
+reservation gets `403`, same as a missing membership. Administrator keeps
+the existing full-access bypass. The response gained (additive, nothing
+renamed/removed) `confirmedAtUtc`, `cancelledAtUtc`, `expiredAtUtc` and
+`cancellationReason` — always copied straight from `Reservation`, never
+inferred from the clock or from a payment.
+
+`GET /api/reservations/{reservationId}/payments` is the resident-facing
+payment **history** — plural and always a list (`200` with `[]` when there
+are none, never `404` for "no payment yet"), because a reservation can have
+more than one payment attempt: a `Rejected`/`Cancelled` attempt does not
+block a new one while the hold is still valid. Ordered `CreatedAtUtc DESC`,
+`Id DESC`, newest first. Ownership is enforced the same way as the detail
+endpoint above (Administrator bypass; otherwise the caller's active
+membership must match the reservation's `CreatedByMembershipId`), resolved
+through `IReservationPaymentContract.GetPayableReservationAsync` — Payments
+still never reads a Reservations table directly (module boundary). Each
+item is the same explicit resident DTO `GET /api/payments/{id}` already
+returns (plus `createdAtUtc`), and equally never exposes
+`idempotencyKey`/`checkoutUrl`/`providerOrderId`/`providerStatus*`/
+`cashConfirmedByUserId`:
+
+```json
+[
+  {
+    "paymentId": "...", "reservationId": "...",
+    "method": "Cash", "status": "Pending",
+    "amount": 5000, "currency": "ARS",
+    "createdAtUtc": "...", "approvedAtUtc": null,
+    "reservationOutcome": "None", "requiresManualReview": false,
+    "cashConfirmedAtUtc": null
+  }
+]
+```
 
 ### Payments — Mercado Pago (issue #24)
 

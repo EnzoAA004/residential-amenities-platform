@@ -45,6 +45,15 @@ public static class PaymentEndpoints
             .WithTags("Payments")
             .RequireAuthorization(AuthorizationPolicies.ResidentAccess);
 
+        // Plural and 0..N on purpose (issue #66): a reservation can have more
+        // than one payment attempt (a Rejected/Cancelled one followed by a
+        // new attempt while the hold is still valid), so the client must
+        // never assume a single paymentId per reservation.
+        endpoints
+            .MapGet("/api/reservations/{reservationId:guid}/payments", ListReservationPaymentsAsync)
+            .WithTags("Payments")
+            .RequireAuthorization(AuthorizationPolicies.ResidentAccess);
+
         // Public on purpose: Mercado Pago calls it directly. Authenticity is
         // established by verifying x-signature, never by user credentials.
         endpoints
@@ -272,6 +281,69 @@ public static class PaymentEndpoints
             payment.CashConfirmedAtUtc));
     }
 
+    private static async Task<IResult> ListReservationPaymentsAsync(
+        Guid reservationId,
+        System.Security.Claims.ClaimsPrincipal principal,
+        AppDbContext dbContext,
+        IReservationPaymentContract reservations,
+        IBuildingMembershipAuthorizer membershipAuthorizer,
+        CancellationToken cancellationToken)
+    {
+        // Payments never reads Reservations' tables directly (module
+        // boundary): this reuses the same read contract Payments already has
+        // for GetPaymentAsync/initiation, which returns the reservation's
+        // BuildingId/CreatedByMembershipId regardless of its current status
+        // (Pending/Confirmed/Expired/Cancelled) — exactly what a history view
+        // of an old reservation needs.
+        var reservation = await reservations.GetPayableReservationAsync(
+            reservationId,
+            cancellationToken);
+
+        if (reservation is null)
+        {
+            return Results.NotFound();
+        }
+
+        if (!principal.IsInRole(ApplicationRoles.Administrator))
+        {
+            var membershipId = await membershipAuthorizer.GetActiveMembershipIdAsync(
+                principal,
+                reservation.BuildingId,
+                cancellationToken);
+
+            if (membershipId is null || membershipId != reservation.CreatedByMembershipId)
+            {
+                return Results.Problem(
+                    title: "You do not have access to this reservation's payments.",
+                    statusCode: StatusCodes.Status403Forbidden);
+            }
+        }
+
+        var payments = await dbContext.Payments
+            .AsNoTracking()
+            .Where(payment => payment.ReservationId == reservationId)
+            .OrderByDescending(payment => payment.CreatedAtUtc)
+            .ThenByDescending(payment => payment.Id)
+            .ToListAsync(cancellationToken);
+
+        // RequiresManualReview is read straight off the domain entity — the
+        // one place that rule is defined — never reimplemented here.
+        return Results.Ok(payments
+            .Select(payment => new ResidentPaymentResponse(
+                payment.Id,
+                payment.ReservationId,
+                payment.Method.ToString(),
+                payment.Status.ToString(),
+                payment.Amount,
+                payment.Currency,
+                payment.CreatedAtUtc,
+                payment.ApprovedAtUtc,
+                payment.ReservationOutcome.ToString(),
+                payment.RequiresManualReview,
+                payment.CashConfirmedAtUtc))
+            .ToList());
+    }
+
     private static async Task<IResult> ReceiveMercadoPagoWebhookAsync(
         HttpRequest request,
         IOptions<MercadoPagoOptions> options,
@@ -386,6 +458,25 @@ public static class PaymentEndpoints
         string Status,
         decimal Amount,
         string Currency,
+        DateTimeOffset? ApprovedAtUtc,
+        string ReservationOutcome,
+        bool RequiresManualReview,
+        DateTimeOffset? CashConfirmedAtUtc);
+
+    /// <summary>
+    /// One item of a reservation's payment history (issue #66). Deliberately
+    /// excludes IdempotencyKey, CheckoutUrl, ProviderOrderId, ProviderStatus,
+    /// ProviderStatusDetail and CashConfirmedByUserId — the same resident
+    /// boundary GET /api/payments/{id} already enforces.
+    /// </summary>
+    private sealed record ResidentPaymentResponse(
+        Guid PaymentId,
+        Guid ReservationId,
+        string Method,
+        string Status,
+        decimal Amount,
+        string Currency,
+        DateTimeOffset CreatedAtUtc,
         DateTimeOffset? ApprovedAtUtc,
         string ReservationOutcome,
         bool RequiresManualReview,

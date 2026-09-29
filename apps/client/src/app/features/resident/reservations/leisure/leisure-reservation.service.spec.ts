@@ -94,6 +94,10 @@ describe('LeisureReservationService', () => {
       endsAtUtc: '2026-01-05T12:00:00Z',
       createdAtUtc: '2026-01-01T00:00:00Z',
       expiresAtUtc: '2026-01-01T00:30:00Z',
+      confirmedAtUtc: null,
+      cancelledAtUtc: null,
+      expiredAtUtc: null,
+      cancellationReason: null,
       resources: [{ amenityId: 'amenity-1', isExclusive: true }],
       priceLines: [
         { amenityId: 'amenity-1', componentType: 'Base', currency: 'ARS', amount: 6500 }

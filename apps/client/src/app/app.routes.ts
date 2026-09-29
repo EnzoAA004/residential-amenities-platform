@@ -21,10 +21,26 @@ export const routes: Routes = [
       import('./features/resident/amenities/amenities.page').then((module) => module.AmenitiesPage)
   },
   {
+    path: 'reservations',
+    canMatch: [authenticatedGuard],
+    loadComponent: () =>
+      import('./features/resident/reservations/history/resident-reservation-list.page').then(
+        (module) => module.ResidentReservationListPage
+      )
+  },
+  {
     path: 'reservations/:reservationId/payment',
     canMatch: [authenticatedGuard],
     loadComponent: () =>
       import('./features/resident/payments/payment.page').then((module) => module.PaymentPage)
+  },
+  {
+    path: 'reservations/:reservationId',
+    canMatch: [authenticatedGuard],
+    loadComponent: () =>
+      import('./features/resident/reservations/history/resident-reservation-detail.page').then(
+        (module) => module.ResidentReservationDetailPage
+      )
   },
   {
     path: 'payments/return',

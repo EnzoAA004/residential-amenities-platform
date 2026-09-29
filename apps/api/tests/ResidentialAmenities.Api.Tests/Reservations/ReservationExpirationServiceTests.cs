@@ -116,9 +116,14 @@ public sealed class ReservationExpirationServiceTests : IAsyncLifetime
 
         clock.Advance(TimeSpan.FromMinutes(5));
 
-        var secondRun = await service.ExpirePastHoldsAsync(
-            TestContext.Current.CancellationToken);
-        Assert.Equal(0, secondRun);
+        // Not asserted against 0: ExpirePastHoldsAsync sweeps the whole
+        // table, and this suite shares one PostgreSQL database across many
+        // test classes (plus the app's own real-time
+        // ReservationExpirationHostedService) in the same collection — a
+        // globally-exact count is not an invariant this test can own. The
+        // actual idempotency guarantee under test is that THIS row is never
+        // "re-expired" with a later timestamp, checked below.
+        await service.ExpirePastHoldsAsync(TestContext.Current.CancellationToken);
 
         // The already-expired row must keep its original ExpiredAtUtc — the
         // second run must not "re-expire" it with a later timestamp.

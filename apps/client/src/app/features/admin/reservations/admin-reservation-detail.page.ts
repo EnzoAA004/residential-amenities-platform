@@ -6,6 +6,7 @@ import { IonButton, IonText } from '@ionic/angular';
 import { catchError, map, of, startWith, switchMap } from 'rxjs';
 
 import { ApiError } from '../../../core/api/api-error';
+import { AppErrorStateComponent } from '../../../shared/error-state/app-error-state.component';
 import { AdminReservationDetail } from '../admin.models';
 import { AdminService } from '../admin.service';
 
@@ -42,7 +43,7 @@ function isReasonValid(reason: string): boolean {
 @Component({
   selector: 'app-admin-reservation-detail-page',
   standalone: true,
-  imports: [IonButton, IonText, ReactiveFormsModule, RouterLink],
+  imports: [AppErrorStateComponent, IonButton, IonText, ReactiveFormsModule, RouterLink],
   styles: [
     `
       .detail-grid,
@@ -101,7 +102,7 @@ function isReasonValid(reason: string): boolean {
           <p><ion-text color="medium">Cargando reserva…</ion-text></p>
         }
         @case ('error') {
-          <p role="alert"><ion-text color="danger">{{ errorTitle() }}</ion-text></p>
+          <app-error-state [title]="errorTitle()" [detail]="errorDetail() ?? undefined" />
         }
         @case ('success') {
           <div class="detail-grid">
@@ -196,7 +197,7 @@ function isReasonValid(reason: string): boolean {
                   </label>
 
                   @if (cancelReasonError(); as error) {
-                    <p role="alert"><ion-text color="danger">{{ error }}</ion-text></p>
+                    <app-error-state [title]="error" />
                   }
 
                   <div class="op-form__actions">
@@ -221,13 +222,7 @@ function isReasonValid(reason: string): boolean {
 
               @if (cancelState(); as cancel) {
                 @if (cancel.status === 'error') {
-                  <p role="alert">
-                    <ion-text color="danger">{{ cancel.error.title }}</ion-text>
-                    @if (cancel.error.detail; as detail) {
-                      <br />
-                      <ion-text color="danger">{{ detail }}</ion-text>
-                    }
-                  </p>
+                  <app-error-state [title]="cancel.error.title" [detail]="cancel.error.detail" />
                 }
               }
             </section>
@@ -272,7 +267,7 @@ function isReasonValid(reason: string): boolean {
                   </label>
 
                   @if (rescheduleValidationError(); as error) {
-                    <p role="alert"><ion-text color="danger">{{ error }}</ion-text></p>
+                    <app-error-state [title]="error" />
                   }
 
                   <div class="op-form__actions">
@@ -300,13 +295,7 @@ function isReasonValid(reason: string): boolean {
 
               @if (rescheduleState(); as reschedule) {
                 @if (reschedule.status === 'error') {
-                  <p role="alert">
-                    <ion-text color="danger">{{ reschedule.error.title }}</ion-text>
-                    @if (reschedule.error.detail; as detail) {
-                      <br />
-                      <ion-text color="danger">{{ detail }}</ion-text>
-                    }
-                  </p>
+                  <app-error-state [title]="reschedule.error.title" [detail]="reschedule.error.detail" />
                 }
               }
             </section>
@@ -339,6 +328,10 @@ export class AdminReservationDetailPage {
   readonly errorTitle = computed(() => {
     const state = this.stateSignal();
     return state.status === 'error' ? state.error.title : '';
+  });
+  readonly errorDetail = computed(() => {
+    const state = this.stateSignal();
+    return state.status === 'error' ? (state.error.detail ?? null) : null;
   });
 
   // Captures the reservationId a mutation was fired for; only applied to

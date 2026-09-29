@@ -4,19 +4,36 @@ Angular + Ionic + Capacitor client for Residential Amenities Platform.
 
 ## Status
 
-Frontend foundation, web authentication, resident amenity/availability
-browsing, both reservation flows, and payment (issues #44–#49): a real
-application shell, a small design system, a typed API client/error
-model/endpoint catalog, cookie-backed web login/logout, session bootstrap,
-route guards, global 401 handling, a resident building context derived from
-the user's own memberships, browsing of a building's amenities and their
-structural availability, creating a Shared/Exclusive Leisure reservation hold
-or an Event reservation (configured slots + Pool/Barbecue add-ons), and
-paying that hold — Mercado Pago Checkout Pro or a cash declaration, with a
-server-verified return screen and manual-review/cash-pending states shown
-honestly. Reservation history/detail and admin operations arrive with issue
-#50 and later (see
-[`docs/12-roadmap/backlog-mvp-client.md`](../../docs/12-roadmap/backlog-mvp-client.md)).
+This is no longer an early scaffold: the client implements the full resident
+and administrator product surface through issue #55 — web authentication,
+resident amenity/availability browsing, both reservation flows, payment,
+resident reservation history/detail, and the complete administrator
+workflow, plus a testing/accessibility/error-handling hardening pass.
+
+**Resident** (issues #44–#50): a real application shell, a small design
+system, a typed API client/error model/endpoint catalog, cookie-backed web
+login/logout, session bootstrap, route guards, global 401 handling, a
+resident building context derived from the user's own memberships, browsing
+of a building's amenities and their structural availability, creating a
+Shared/Exclusive Leisure reservation hold or an Event reservation (configured
+slots + Pool/Barbecue add-ons), paying that hold — Mercado Pago Checkout Pro
+or a cash declaration, with a server-verified return screen and
+manual-review/cash-pending states shown honestly — and a resident-facing
+reservation history list/detail view.
+
+**Administrator** (issues #51–#54): read dashboards (overview, reservations,
+payments), reservation cancel/reschedule with an explicit confirm step,
+price-rule/availability/maintenance-period/event-slot configuration, the
+read-only audit trail, and manual payment review/cash confirmation — all
+under `/admin`, gated by `adminGuard`.
+
+**Hardening** (issue #55): a shared `AppErrorStateComponent`
+(`shared/error-state`) unifying error rendering across resident and admin
+screens, an accessibility pass (labels, button copy, `role="alert"`), a
+responsive review of admin forms/nav, and a full-flow integration test (see
+"Shared error-state component" and "Testing" below). See
+[`docs/12-roadmap/backlog-mvp-client.md`](../../docs/12-roadmap/backlog-mvp-client.md)
+for the full backlog.
 
 ## Baseline
 
@@ -35,6 +52,13 @@ honestly. Reservation history/detail and admin operations arrive with issue
   (`features/resident/amenities`)
 - Shared/Exclusive Leisure reservation quote-and-create flow
   (`features/resident/reservations/leisure`)
+- Event reservation quote-and-create flow (`features/resident/reservations/event`)
+- Payment (Mercado Pago Checkout Pro + cash) (`features/resident/payments`)
+- Resident reservation history list/detail (`features/resident/reservations/history`)
+- The full administrator workflow (`features/admin`): overview/reservations/
+  payments dashboards, cancel/reschedule, pricing, availability, event slots,
+  audit, and manual payment review/cash confirmation
+- A shared, reusable error-state component (`shared/error-state`)
 - An internal `/health` diagnostic (`features/diagnostics`, `core/health`)
 
 ## Install and run
@@ -78,6 +102,21 @@ Tests run once by default through the repository script, which is suitable
 for local validation and CI. No test calls a real backend: HTTP-level tests
 use Angular's `HttpTestingController`.
 
+`src/app/integration/resident-cash-payment-flow.spec.ts` (#55) is a
+full-flow integration spec using `RouterTestingHarness` + real
+`app.routes.ts` + `HttpTestingController` (no mocked services): login →
+session bootstrap → load amenities → create a Leisure reservation → declare
+a cash payment. It asserts a declared-but-unconfirmed cash payment is never
+shown or treated as a confirmed reservation (Cash Pending ≠ Reservation
+Confirmed — see "Payment flows" above).
+
+**Known local limitation:** local Node was `v24.11.1` during #55 while the
+Angular 22 CLI requires `>=24.15.0`; `npm test`/`npm run build` could not run
+locally in that environment (see "Node version" above). `npx tsc -p
+tsconfig.app.json --noEmit` and `npx tsc -p tsconfig.spec.json --noEmit`
+were used instead to validate every change, and CI remains authoritative for
+the actual `ng test`/`ng build`.
+
 ## Client structure
 
 ```text
@@ -91,6 +130,8 @@ src/
 │   │   └── health/      # HealthService (root-level /health, not /api)
 │   ├── layout/           # reusable page chrome
 │   │   └── app-shell/    # header + content frame every page composes
+│   ├── shared/           # reusable UI shared across features (not page chrome)
+│   │   └── error-state/  # AppErrorStateComponent — unified ApiError rendering (#55)
 │   ├── features/         # product screens, one folder per feature
 │   │   ├── landing/       # authenticated landing page
 │   │   ├── login/         # public web login
@@ -99,9 +140,20 @@ src/
 │   │   │   ├── reservations/
 │   │   │   │   ├── reservation.models.ts # DTOs shared by Leisure and Event
 │   │   │   │   ├── leisure/  # Shared/Exclusive Leisure quote+create (#47)
-│   │   │   │   └── event/    # Event slots + add-ons quote+create (#48)
+│   │   │   │   ├── event/    # Event slots + add-ons quote+create (#48)
+│   │   │   │   └── history/  # reservation list/detail (#50)
 │   │   │   └── payments/     # Mercado Pago / cash payment (#49)
+│   │   ├── admin/         # administrator workflow (#51-#54)
+│   │   │   ├── admin-shell.page.ts, admin-overview.page.ts
+│   │   │   ├── reservations/  # list/detail, cancel/reschedule (#52)
+│   │   │   ├── payments/      # list + cash confirmation (#54)
+│   │   │   ├── pricing/       # price-rule configuration (#53)
+│   │   │   ├── availability/  # windows + maintenance periods (#53)
+│   │   │   ├── event-slots/   # event slot configuration (#53)
+│   │   │   ├── audit/         # read-only audit trail (#54)
+│   │   │   └── payment-review/ # manual review queue (#54)
 │   │   └── diagnostics/   # internal /health check, not linked from nav
+│   ├── integration/       # cross-feature integration specs (#55)
 │   ├── app.component.ts   # root: <ion-app><ion-router-outlet></ion-router-outlet></ion-app>
 │   ├── app.config.ts
 │   └── app.routes.ts
@@ -112,9 +164,7 @@ src/
 └── styles.scss
 ```
 
-`core` never imports from `features`. `features/admin/` arrives with a later
-product slice once there is an administrator workflow to render — it is not
-created empty ahead of time.
+`core` never imports from `features`.
 
 ### Adding a feature
 
@@ -166,6 +216,43 @@ interface ApiError {
 No path in this mapping ever surfaces a stack trace, an exception message, a
 connection string or a raw server object to the UI, and nothing here
 `console.log`s an error by default.
+
+## Shared error-state component
+
+Issue #55 introduced `AppErrorStateComponent`
+(`shared/error-state/app-error-state.component.ts`) as the one place that
+renders an `ApiError` (or a plain validation string) to the resident/admin —
+replacing the many hand-written
+`<p role="alert"><ion-text color="danger">{{ ... }}</ion-text></p>` blocks
+that had accumulated across `features/resident` and `features/admin`:
+
+```html
+<app-error-state
+  [title]="errorTitle()"
+  [detail]="errorDetail() ?? undefined"
+  [showRetry]="true"
+  (retry)="reload()"
+/>
+```
+
+- `title` (required) and `detail` (optional) are rendered **verbatim** —
+  never clipped, never conditioned on status code. A migrated screen always
+  shows the exact same real `ApiError.title`/`.detail` it showed before.
+- `showRetry` defaults to `false`; a screen opts in only where retrying was
+  already safe/offered before the migration (a `GET` reload). It is never
+  turned on for a non-idempotent mutation that didn't have a retry action
+  already — reservation/event-reservation creation still have none.
+- The message renders with `role="alert"`, matching every error block it
+  replaced.
+- Adopted across both resident (`login`, `payments/payment.page`,
+  `reservations/leisure`, `reservations/event`) and administrator
+  (`audit`, `payments`, `availability`, `event-slots`,
+  `reservations/admin-reservation-detail`, `pricing`) screens — not every
+  single error render in the app, but a representative, broad set covering
+  cancel/reschedule, pricing, availability, event-slots and cash-confirm.
+- Unit-tested directly (`app-error-state.component.spec.ts`): renders the
+  title with `role="alert"`, renders/omits `detail`, shows the retry button
+  only when `showRetry` is set, and emits `(retry)` on click.
 
 ## Web authentication
 

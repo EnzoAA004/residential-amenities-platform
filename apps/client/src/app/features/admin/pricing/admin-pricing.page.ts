@@ -12,6 +12,7 @@ import {
 import { Subject, catchError, map, of, startWith, switchMap } from 'rxjs';
 
 import { ApiError } from '../../../core/api/api-error';
+import { AppErrorStateComponent } from '../../../shared/error-state/app-error-state.component';
 import {
   AdminPriceComponentType,
   AdminPriceRuleFilters,
@@ -73,6 +74,7 @@ function emptyDraft(): CreateDraft {
   selector: 'app-admin-pricing-page',
   standalone: true,
   imports: [
+    AppErrorStateComponent,
     IonButton,
     IonInput,
     IonItem,
@@ -170,10 +172,7 @@ function emptyDraft(): CreateDraft {
           </p>
         }
         @case ('error') {
-          <p role="alert"><ion-text color="danger">{{ listErrorTitle() }}</ion-text></p>
-          @if (listErrorDetail(); as detail) {
-            <p role="alert"><ion-text color="danger">{{ detail }}</ion-text></p>
-          }
+          <app-error-state [title]="listErrorTitle()" [detail]="listErrorDetail() ?? undefined" />
         }
         @case ('empty') {
           <p><ion-text color="medium">No hay reglas de precio para estos filtros.</ion-text></p>
@@ -292,7 +291,7 @@ function emptyDraft(): CreateDraft {
         </ion-item>
 
         @if (createValidationError(); as error) {
-          <p role="alert"><ion-text color="danger">{{ error }}</ion-text></p>
+          <app-error-state [title]="error" />
         }
 
         <ion-button type="submit" [disabled]="createState().status === 'creating'">
@@ -326,10 +325,7 @@ function emptyDraft(): CreateDraft {
           </section>
         }
         @case ('error') {
-          <p role="alert"><ion-text color="danger">{{ createErrorTitle() }}</ion-text></p>
-          @if (createErrorDetail(); as detail) {
-            <p role="alert"><ion-text color="danger">{{ detail }}</ion-text></p>
-          }
+          <app-error-state [title]="createErrorTitle()" [detail]="createErrorDetail() ?? undefined" />
         }
       }
     </section>

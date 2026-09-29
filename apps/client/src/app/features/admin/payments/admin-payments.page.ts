@@ -13,6 +13,7 @@ import {
 import { Subject, catchError, map, of, startWith, switchMap } from 'rxjs';
 
 import { ApiError } from '../../../core/api/api-error';
+import { AppErrorStateComponent } from '../../../shared/error-state/app-error-state.component';
 import {
   AdminPayment,
   AdminPaymentFilters,
@@ -48,6 +49,7 @@ const pageSizes = [25, 50, 100] as const;
   selector: 'app-admin-payments-page',
   standalone: true,
   imports: [
+    AppErrorStateComponent,
     IonButton,
     IonInput,
     IonItem,
@@ -174,8 +176,12 @@ const pageSizes = [25, 50, 100] as const;
           </p>
         }
         @case ('error') {
-          <p role="alert"><ion-text color="danger">{{ errorTitle() }}</ion-text></p>
-          <ion-button type="button" fill="outline" (click)="reload()">Reintentar</ion-button>
+          <app-error-state
+            [title]="errorTitle()"
+            [detail]="errorDetail() ?? undefined"
+            [showRetry]="true"
+            (retry)="reload()"
+          />
         }
         @case ('empty') {
           <p><ion-text color="medium">No hay pagos para estos filtros.</ion-text></p>
@@ -239,13 +245,7 @@ const pageSizes = [25, 50, 100] as const;
                   }
 
                   @if (confirmErrorFor(payment.paymentId); as confirmError) {
-                    <p role="alert">
-                      <ion-text color="danger">{{ confirmError.title }}</ion-text>
-                      @if (confirmError.detail; as detail) {
-                        <br />
-                        <ion-text color="danger">{{ detail }}</ion-text>
-                      }
-                    </p>
+                    <app-error-state [title]="confirmError.title" [detail]="confirmError.detail" />
                   }
                 }
               </li>
@@ -285,6 +285,10 @@ export class AdminPaymentsPage {
   protected readonly errorTitle = computed(() => {
     const state = this.state();
     return state.status === 'error' ? state.error.title : '';
+  });
+  protected readonly errorDetail = computed(() => {
+    const state = this.state();
+    return state.status === 'error' ? (state.error.detail ?? null) : null;
   });
   protected readonly hasNextPage = computed(() => {
     const page = this.page();

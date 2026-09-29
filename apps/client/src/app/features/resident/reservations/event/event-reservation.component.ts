@@ -6,6 +6,7 @@ import { Subject, catchError, map, merge, of, startWith, switchMap } from 'rxjs'
 
 import { ApiError } from '../../../../core/api/api-error';
 import { ResidentContextStore } from '../../../../core/resident-context/resident-context.store';
+import { AppErrorStateComponent } from '../../../../shared/error-state/app-error-state.component';
 import { AmenitySummary } from '../../amenities/amenities.models';
 import { PriceQuote, Reservation } from '../reservation.models';
 import { EventReservationService } from './event-reservation.service';
@@ -49,7 +50,7 @@ type CreateState =
 @Component({
   selector: 'app-event-reservation',
   standalone: true,
-  imports: [RouterLink, IonButton, IonNote, IonSpinner, IonText],
+  imports: [AppErrorStateComponent, RouterLink, IonButton, IonNote, IonSpinner, IonText],
   styles: [
     `
       .event-form {
@@ -195,14 +196,13 @@ type CreateState =
                 </p>
               }
               @case ('error') {
-                <p role="alert">
-                  <ion-text color="danger">{{ slotsErrorTitle() }}</ion-text>
-                  @if (slotsErrorDetail(); as detail) {
-                    <br />
-                    <ion-text color="danger">{{ detail }}</ion-text>
-                  }
-                </p>
-                <ion-button type="button" fill="clear" (click)="reloadSlots()">Retry</ion-button>
+                <app-error-state
+                  [title]="slotsErrorTitle()"
+                  [detail]="slotsErrorDetail() ?? undefined"
+                  [showRetry]="true"
+                  retryLabel="Reintentar franjas"
+                  (retry)="reloadSlots()"
+                />
               }
               @case ('success') {
                 <fieldset>
@@ -256,14 +256,13 @@ type CreateState =
             </p>
           }
           @case ('error') {
-            <p role="alert">
-              <ion-text color="danger">{{ quoteErrorTitle() }}</ion-text>
-              @if (quoteErrorDetail(); as detail) {
-                <br />
-                <ion-text color="danger">{{ detail }}</ion-text>
-              }
-            </p>
-            <ion-button type="button" fill="clear" (click)="requestQuote()">Retry</ion-button>
+            <app-error-state
+              [title]="quoteErrorTitle()"
+              [detail]="quoteErrorDetail() ?? undefined"
+              [showRetry]="true"
+              retryLabel="Reintentar cotización"
+              (retry)="requestQuote()"
+            />
           }
           @case ('success') {
             <section class="quote-card" aria-live="polite">
@@ -288,13 +287,7 @@ type CreateState =
         }
 
         @if (createStatus.status === 'error') {
-          <p role="alert">
-            <ion-text color="danger">{{ createErrorTitle() }}</ion-text>
-            @if (createErrorDetail(); as detail) {
-              <br />
-              <ion-text color="danger">{{ detail }}</ion-text>
-            }
-          </p>
+          <app-error-state [title]="createErrorTitle()" [detail]="createErrorDetail() ?? undefined" />
         }
 
         @if (createStatus.status === 'unknown') {

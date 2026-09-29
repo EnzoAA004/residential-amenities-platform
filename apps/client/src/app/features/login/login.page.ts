@@ -14,11 +14,13 @@ import {
 import { ApiError } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
 import { AppShellComponent } from '../../layout/app-shell/app-shell.component';
+import { AppErrorStateComponent } from '../../shared/error-state/app-error-state.component';
 
 @Component({
   selector: 'app-login',
   standalone: true,
   imports: [
+    AppErrorStateComponent,
     AppShellComponent,
     IonButton,
     IonInput,
@@ -43,11 +45,6 @@ import { AppShellComponent } from '../../layout/app-shell/app-shell.component';
 
       ion-item {
         --border-radius: var(--app-radius-sm);
-      }
-
-      .login-error {
-        display: block;
-        margin-block: var(--app-space-2);
       }
 
       ion-button {
@@ -92,9 +89,7 @@ import { AppShellComponent } from '../../layout/app-shell/app-shell.component';
           }
 
           @if (errorMessage()) {
-            <ion-text color="danger" class="login-error" role="alert">
-              {{ errorMessage() }}
-            </ion-text>
+            <app-error-state [title]="errorMessage()!" />
           }
 
           <ion-button type="submit" expand="block" [disabled]="form.invalid || loading()">

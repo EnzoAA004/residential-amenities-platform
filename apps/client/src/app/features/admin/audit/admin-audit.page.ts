@@ -12,6 +12,7 @@ import {
 import { Subject, catchError, map, of, startWith, switchMap } from 'rxjs';
 
 import { ApiError } from '../../../core/api/api-error';
+import { AppErrorStateComponent } from '../../../shared/error-state/app-error-state.component';
 import { AUDIT_ACTIONS, AUDIT_TARGET_TYPES, AuditFilters, AuditPage } from '../admin.models';
 import { AdminService } from '../admin.service';
 
@@ -38,6 +39,7 @@ const pageSizes = [25, 50, 100] as const;
   selector: 'app-admin-audit-page',
   standalone: true,
   imports: [
+    AppErrorStateComponent,
     IonButton,
     IonInput,
     IonItem,
@@ -163,14 +165,12 @@ const pageSizes = [25, 50, 100] as const;
           </p>
         }
         @case ('error') {
-          <p role="alert">
-            <ion-text color="danger">{{ errorTitle() }}</ion-text>
-            @if (errorDetail(); as detail) {
-              <br />
-              <ion-text color="danger">{{ detail }}</ion-text>
-            }
-          </p>
-          <ion-button type="button" fill="outline" (click)="reload()">Reintentar</ion-button>
+          <app-error-state
+            [title]="errorTitle()"
+            [detail]="errorDetail() ?? undefined"
+            [showRetry]="true"
+            (retry)="reload()"
+          />
         }
         @case ('empty') {
           <p><ion-text color="medium">No hay eventos de auditoría para estos filtros.</ion-text></p>

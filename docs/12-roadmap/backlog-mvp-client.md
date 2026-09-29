@@ -63,8 +63,10 @@ is what confirms the whole phase together.
 Nothing in this phase resolves issue #2. Concretely:
 
 - **Prices and event hours**: the client always reads them from
-  `GET /api/pricing/quote` and `GET /api/admin/buildings/{id}/event-slots` /
-  the resident-facing availability endpoints — never a constant in the client.
+  `GET /api/pricing/quote` and the resident-facing
+  `GET /api/buildings/{id}/event-slots?date=` (issue #62) / amenity
+  availability endpoints — never a constant in the client, and never the
+  Administrator-only `GET /api/admin/buildings/{id}/event-slots`.
 - **Hold duration**: the client reads `expiresAtUtc` from the reservation
   response and renders a countdown from it; it never assumes 30 minutes or any
   other fixed duration.

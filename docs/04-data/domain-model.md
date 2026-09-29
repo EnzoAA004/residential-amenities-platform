@@ -1080,6 +1080,16 @@ reservations and reschedules; existing reservations are untouched. Audit:
 `EventSlotCreated`, `EventSlotUpdated` (also used for re-activation, with the
 active flag), `EventSlotDeactivated`; only real changes are audited.
 
+A resident (not just Administrator) discovers a building's **active** Event
+slots via the separate, narrower `GET /api/buildings/{buildingId}/event-slots?date=`
+(issue #62) — a distinct contract, never a relaxed policy on the admin
+route above. It expands each active slot to a UTC `startsAtUtc`/`endsAtUtc`
+occurrence for the requested calendar date using `Building.TimeZoneId`
+server-side (rejecting a DST-invalid/ambiguous local time with `422`
+instead of guessing an offset), and does not consult
+`Reservations`/pricing/amenity availability — it reports configured slots,
+not final bookability; `POST /api/reservations` remains authoritative.
+
 ### Atomicity
 
 Every command writes its audit entry in the same `SaveChanges`/transaction as

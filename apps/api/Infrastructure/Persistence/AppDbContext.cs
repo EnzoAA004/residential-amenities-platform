@@ -46,6 +46,9 @@ public sealed class AppDbContext(
     public DbSet<EventSlotDefinition> EventSlotDefinitions =>
         Set<EventSlotDefinition>();
 
+    public DbSet<ReservationEntryPoint> ReservationEntryPoints =>
+        Set<ReservationEntryPoint>();
+
     public DbSet<Payment> Payments => Set<Payment>();
 
     public DbSet<PaymentProviderEvent> PaymentProviderEvents =>

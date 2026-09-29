@@ -145,11 +145,31 @@ GET  /api/buildings/{buildingId}/amenities
 GET  /api/amenities/{amenityId}/availability?fromUtc=&toUtc=
 GET  /api/buildings/{buildingId}/event-slots?date=YYYY-MM-DD
 GET  /api/pricing/quote?buildingId=&amenityId=&useType=&addOnAmenityId=&atUtc=
+GET  /api/reservation-entry-points/{token}
 POST /api/reservations
 GET  /api/reservations?buildingId=&page=&pageSize=
 GET  /api/reservations/{id}
 GET  /api/reservations/{reservationId}/payments
 ```
+
+### Reservation entry points (issue #80)
+
+`GET /api/reservation-entry-points/{token}` resolves an opaque QR/link token
+into the safe reservation context the client needs to start a resident booking
+flow: `buildingId`, `amenityId`, display labels, amenity kind, allowed use
+modes and an optional `suggestedUseType`.
+
+The token is not a direct database id and is normalized case-insensitively by
+the API. The endpoint requires `ResidentAccess` and validates the caller's
+active membership against the resolved building before returning data:
+unauthenticated requests return `401`, valid tokens for buildings the caller
+cannot access return `403`, and unknown, inactive or no-longer-valid entry
+points return `404`.
+
+This endpoint intentionally does not calculate pricing, payment state or final
+availability. Clients must still call `GET /api/pricing/quote`, availability
+and/or event-slot endpoints as needed, and `POST /api/reservations` remains the
+authority for conflicts and reservation business validation.
 
 ### Resident Event slot discovery (issue #62)
 

@@ -37,7 +37,37 @@ export const routes: Routes = [
   {
     path: 'admin',
     canMatch: [adminGuard],
+    loadComponent: () =>
+      import('./features/admin/admin-shell.page').then((module) => module.AdminShellPage),
     children: [
+      {
+        path: '',
+        pathMatch: 'full',
+        loadComponent: () =>
+          import('./features/admin/admin-overview.page').then((module) => module.AdminOverviewPage)
+      },
+      {
+        path: 'reservations',
+        pathMatch: 'full',
+        loadComponent: () =>
+          import('./features/admin/reservations/admin-reservations.page').then(
+            (module) => module.AdminReservationsPage
+          )
+      },
+      {
+        path: 'reservations/:id',
+        loadComponent: () =>
+          import('./features/admin/reservations/admin-reservation-detail.page').then(
+            (module) => module.AdminReservationDetailPage
+          )
+      },
+      {
+        path: 'payments',
+        loadComponent: () =>
+          import('./features/admin/payments/admin-payments.page').then(
+            (module) => module.AdminPaymentsPage
+          )
+      },
       {
         path: '**',
         redirectTo: ''

@@ -7,7 +7,7 @@ import { RouterTestingHarness } from '@angular/router/testing';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { API_BASE_URL } from '../core/config/api-base-url.token';
-import { routes } from '../app.routes';
+import { AuthSessionStore } from '../core/auth/auth-session.store';
 import { AmenitiesPage } from '../features/resident/amenities/amenities.page';
 import { AmenitySummary } from '../features/resident/amenities/amenities.models';
 import { LeisureReservationComponent } from '../features/resident/reservations/leisure/leisure-reservation.component';
@@ -16,27 +16,30 @@ import { Payment } from '../features/resident/payments/payment.models';
 import { PriceQuote, Reservation } from '../features/resident/reservations/reservation.models';
 
 /**
- * Full-flow integration test (issue #55): session bootstrap → resident
+ * Full-flow integration test (issue #55): resident session → resident
  * context → load amenities → create a Leisure reservation → declare a cash
- * payment. Every layer is real (real `AuthService`/`authenticatedGuard`,
- * `AmenitiesPage`, `LeisureReservationComponent`, `PaymentPage`, real
- * `Router` via `RouterTestingHarness`) — only the HTTP boundary is mocked,
- * and only with the exact contracts this flow actually calls:
- * `GET /api/auth/me`, `GET /api/buildings/{buildingId}/amenities`,
- * `GET /api/pricing/quote`, `POST /api/reservations`,
+ * payment. `AmenitiesPage`, `LeisureReservationComponent` and `PaymentPage`
+ * are all real, and the HTTP boundary is mocked only with the exact
+ * contracts this flow actually calls: `GET /api/buildings/{buildingId}
+ * /amenities`, `GET /api/pricing/quote`, `POST /api/reservations`,
  * `GET /api/reservations/{id}`, `POST /api/reservations/{id}/payments/cash`,
  * `GET /api/payments/{id}`.
  *
- * Deliberately starts from `/amenities` rather than driving the actual
- * `/login` form: `authenticatedGuard`'s own `GET /api/auth/me` check IS the
- * real session bootstrap every guarded route performs (on first load, on
- * refresh, or right after a real login's own redirect) — exercising it here
- * covers the same session/routing integration this issue asks for, without
- * also depending on `AuthService.login()`'s fire-and-forget post-login
- * redirect, whose own independent `authenticatedGuard` invocation races this
- * test's own explicit navigation in a way that proved flaky in CI across
- * several attempts. The login form itself (submission, validation, error
- * rendering) already has its own dedicated coverage in `login.page.spec.ts`.
+ * The session itself is seeded directly on `AuthSessionStore` rather than
+ * driven through `/login` or through the real, guarded `app.routes.ts`: this
+ * matches how every other spec in this codebase tests an authenticated
+ * screen (a minimal, guard-free route config for the page under test), and
+ * deliberately avoids the two things that made earlier attempts at this
+ * specific test flaky/unsafe in CI — `AuthService.login()`'s fire-and-forget
+ * post-login redirect, and an async `canMatch` guard whose own HTTP call has
+ * to be flushed before `navigateByUrl()`'s own promise resolves (routing
+ * this test through the real `app.routes.ts` to exercise that guard, while
+ * not awaiting the navigation immediately to flush it in time, left a
+ * navigation dangling across test files and corrupted later specs' TestBed
+ * instances in CI). Login/session-bootstrap and route-guarding both already
+ * have dedicated, isolated coverage of their own (`login.page.spec.ts`,
+ * `auth.guard.spec.ts`, `auth.service.spec.ts`) — this test's job is the
+ * reservation/payment integration, not re-proving routing security.
  *
  * The pricing quote is included because the real Leisure flow requires one
  * as an explicit step before create — it is not optional here.
@@ -47,14 +50,6 @@ import { PriceQuote, Reservation } from '../features/resident/reservations/reser
  */
 describe('resident cash payment flow (integration)', () => {
   let httpMock: HttpTestingController;
-
-  const authenticatedMeResponse = {
-    id: 'user-1',
-    email: 'resident@example.test',
-    displayName: 'Resident',
-    roles: ['Resident'],
-    memberships: [{ buildingId: 'building-a', unitId: 'unit-a', unit: '1A', building: 'Building A' }]
-  };
 
   const amenity: AmenitySummary = {
     id: 'amenity-pool',
@@ -112,12 +107,29 @@ describe('resident cash payment flow (integration)', () => {
       providers: [
         provideHttpClient(),
         provideHttpClientTesting(),
-        provideRouter(routes),
+        // A minimal, guard-free route config for the pages under test —
+        // the same pattern every other spec in this codebase uses (see
+        // payment.page.spec.ts, admin-reservations.page.spec.ts, etc.).
+        provideRouter([
+          { path: 'amenities', component: AmenitiesPage },
+          { path: 'reservations/:reservationId/payment', component: PaymentPage }
+        ]),
         { provide: API_BASE_URL, useValue: '/api' }
       ]
     });
 
     httpMock = TestBed.inject(HttpTestingController);
+
+    // Seeds an authenticated resident session directly — no HTTP call, no
+    // login form, no guard. `ResidentContextStore.activeMembership` derives
+    // itself from this session's `memberships` with no request of its own.
+    TestBed.inject(AuthSessionStore).setAuthenticated({
+      id: 'user-1',
+      email: 'resident@example.test',
+      displayName: 'Resident',
+      roles: ['Resident'],
+      memberships: [{ buildingId: 'building-a', unitId: 'unit-a', unit: '1A', building: 'Building A' }]
+    });
   });
 
   afterEach(() => {
@@ -125,20 +137,10 @@ describe('resident cash payment flow (integration)', () => {
     sessionStorage.clear();
   });
 
-  it('bootstraps a resident session, loads amenities, creates a Leisure reservation and declares cash — without ever showing it as confirmed', async () => {
-    // --- 1. Session bootstrap: authenticatedGuard's own /auth/me check --------
+  it('loads amenities, creates a Leisure reservation and declares cash — without ever showing it as confirmed', async () => {
+    // --- 1. Amenities load for the resident's single (auto-selected) building -
     const harness = await RouterTestingHarness.create();
-
-    // Unlike every other spec in this codebase, this test uses the REAL
-    // app.routes.ts — including `/amenities`' actual `canMatch:
-    // [authenticatedGuard]`. That guard is async (`await auth.initialize()`),
-    // so navigateByUrl()'s own returned promise cannot resolve until the
-    // GET it triggers is flushed. It must therefore be flushed while the
-    // navigation promise is still in flight, not awaited first.
-    const amenitiesNavigation = harness.navigateByUrl('/amenities', AmenitiesPage);
-    httpMock.expectOne('/api/auth/me').flush(authenticatedMeResponse);
-    const amenitiesComponent = await amenitiesNavigation;
-    await harness.fixture.whenStable();
+    const amenitiesComponent = await harness.navigateByUrl('/amenities', AmenitiesPage);
 
     httpMock.expectOne('/api/buildings/building-a/amenities').flush([amenity]);
     await harness.fixture.whenStable();

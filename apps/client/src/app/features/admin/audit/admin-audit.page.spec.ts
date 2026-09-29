@@ -156,7 +156,12 @@ describe('AdminAuditPage', () => {
     harness.detectChanges();
 
     expect(text(harness)).toContain('No hay eventos de auditoría');
-    expect(text(harness)).not.toContain('CashPaymentConfirmed');
+    // 'CashPaymentConfirmed' alone isn't a safe negative check — it's also
+    // one of the static action-filter <select> options, always rendered
+    // regardless of results. Check for content unique to an actual rendered
+    // row from the stale item instead (its targetId never appears in the
+    // filter form).
+    expect(text(harness)).not.toContain(auditItem.targetId!);
     httpMock.expectNone((request) => request.method !== 'GET');
   });
 });

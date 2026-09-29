@@ -127,12 +127,17 @@ describe('AdminPaymentReviewPage', () => {
     await harness.fixture.whenStable();
     harness.detectChanges();
 
-    const rendered = text(harness).toLowerCase();
-    expect(rendered).not.toContain('resolver');
-    expect(rendered).not.toContain('aprobar');
-    expect(rendered).not.toContain('reembols');
-    expect(rendered).not.toContain('descartar');
-    expect(rendered).not.toContain('confirmar efectivo');
+    // Checked against actual controls, not the whole page's text: the
+    // page's own read-only-notice copy legitimately explains that no
+    // resolve/approve/refund action exists, which necessarily uses those
+    // words in prose. What must never exist is a BUTTON offering one.
+    const buttonLabels = Array.from(
+      harness.routeNativeElement!.querySelectorAll('ion-button')
+    ).map((button) => button.textContent!.trim().toLowerCase());
+
+    for (const forbidden of ['resolver', 'aprobar', 'reembols', 'descartar', 'confirmar efectivo']) {
+      expect(buttonLabels.some((label) => label.includes(forbidden))).toBe(false);
+    }
     httpMock.expectNone((request) => request.method !== 'GET');
   });
 

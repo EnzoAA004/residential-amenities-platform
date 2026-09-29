@@ -1,5 +1,9 @@
 # MVP Client Backlog — Phase 5
 
+Status: **completed**. Master tracking issue **#56** is closed; child issues
+**#44-#55** and backend prerequisites **#62** and **#66** are closed as
+completed. The final frontend hardening PR was merged as #73.
+
 This backlog turns [Phase 5 — MVP client / product UI](roadmap.md#phase-5--mvp-client--product-ui)
 into incremental, independently mergeable work against the **existing,
 stable backend contracts** (issues #19–#27, all merged to `main`). No backend
@@ -7,41 +11,35 @@ change is expected to support this phase; if one turns out to be genuinely
 necessary, it is scoped as its own small issue rather than folded into a
 frontend one.
 
-Master tracking issue: **#56**.
+Master tracking issue: **#56** (closed).
 
 ## Why this phase exists
 
 The roadmap previously went straight from Phase 4 (Administration) to what is
-now Phase 6 (QR entry point, push notifications, messaging). The Angular +
-Ionic + Capacitor client (issue #7) is still the Phase 1 technical scaffold —
-shell, routing stub, one health-check screen — so none of those extensions
-have a product to extend yet. This backlog inserts the missing step: build the
-resident- and administrator-facing product UI against the backend that
-already exists.
+now Phase 6 (QR entry point, push notifications, messaging). This backlog
+inserted the missing step: build the resident- and administrator-facing
+product UI against the backend that already exists.
 
 ## Issues
 
-| # | Issue | Depends on |
-| --- | --- | --- |
-| 1 | Application shell, design system foundation and API client | — |
-| 2 | Authentication, session persistence and route guards | 1 |
-| 3 | Resident context, amenities and availability browsing | 2 |
-| 4 | Leisure reservation flow (shared/exclusive) | 3 |
-| 5 | Event reservation flow (slots + add-ons) | 3 |
-| 6 | Payment flows (Mercado Pago + cash) | 4, 5 |
-| 7 | Resident reservation history and detail | 6 |
-| 8 | Administrator shell and dashboards (read models) | 2 |
-| 9 | Administrator reservation operations (cancel/reschedule) | 8 |
-| 10 | Administrator configuration (pricing/availability/event slots) | 8 |
-| 11 | Audit trail and payment manual-review views | 8 |
-| 12 | Frontend testing, accessibility and error handling | 1–11 (incremental) |
+| # | GitHub issue | Issue | Depends on | Status |
+| --- | --- | --- | --- | --- |
+| 1 | #44 | Application shell, design system foundation and API client | — | Completed |
+| 2 | #45 | Authentication, session persistence and route guards | #44 | Completed |
+| 3 | #46 | Resident context, amenities and availability browsing | #45 | Completed |
+| 4 | #47 | Leisure reservation flow (shared/exclusive) | #46 | Completed |
+| 5 | #48 | Event reservation flow (slots + add-ons) | #46, #62 | Completed |
+| 6 | #49 | Payment flows (Mercado Pago + cash) | #47, #48 | Completed |
+| 7 | #50 | Resident reservation history and detail | #49, #66 | Completed |
+| 8 | #51 | Administrator shell and dashboards (read models) | #45 | Completed |
+| 9 | #52 | Administrator reservation operations (cancel/reschedule) | #51 | Completed |
+| 10 | #53 | Administrator configuration (pricing/availability/event slots) | #51 | Completed |
+| 11 | #54 | Audit trail and payment manual-review views | #51 | Completed |
+| 12 | #55 | Frontend testing, accessibility and error handling | #44-#54 (incremental) | Completed |
 
-Issues 4 and 5 can proceed in parallel once 3 is merged; issues 8–11 can
-proceed in parallel with 4–7 once 2 is merged (they only need the
-Administrator route guard, not the resident booking flow). Issue 12 lands
-incrementally alongside each of the others (each issue's own acceptance
-criteria include its tests and accessibility pass); the final pass of issue 12
-is what confirms the whole phase together.
+Issues #62 and #66 were added and completed as narrow backend prerequisites
+discovered during Phase 5: resident-facing Event slot discovery and
+resident-owned reservation/payment reads.
 
 ## What stays out of this phase
 

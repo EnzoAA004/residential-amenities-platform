@@ -5,14 +5,17 @@ Angular + Ionic + Capacitor client for Residential Amenities Platform.
 ## Status
 
 Frontend foundation, web authentication, resident amenity/availability
-browsing and the first reservation flow (issues #44, #45, #46 and #47): a
-real application shell, a small design system, a typed API client/error
+browsing, both reservation flows, and payment (issues #44–#49): a real
+application shell, a small design system, a typed API client/error
 model/endpoint catalog, cookie-backed web login/logout, session bootstrap,
 route guards, global 401 handling, a resident building context derived from
 the user's own memberships, browsing of a building's amenities and their
-structural availability, and creating a Shared/Exclusive Leisure reservation
-hold (quote → confirm → create). Event reservations, payment and admin
-operations arrive with issues #48 and later (see
+structural availability, creating a Shared/Exclusive Leisure reservation hold
+or an Event reservation (configured slots + Pool/Barbecue add-ons), and
+paying that hold — Mercado Pago Checkout Pro or a cash declaration, with a
+server-verified return screen and manual-review/cash-pending states shown
+honestly. Reservation history/detail and admin operations arrive with issue
+#50 and later (see
 [`docs/12-roadmap/backlog-mvp-client.md`](../../docs/12-roadmap/backlog-mvp-client.md)).
 
 ## Baseline
@@ -93,8 +96,11 @@ src/
 │   │   ├── login/         # public web login
 │   │   ├── resident/
 │   │   │   ├── amenities/    # amenity listing + availability browsing (#46)
-│   │   │   └── reservations/
-│   │   │       └── leisure/  # Shared/Exclusive Leisure quote+create (#47)
+│   │   │   ├── reservations/
+│   │   │   │   ├── reservation.models.ts # DTOs shared by Leisure and Event
+│   │   │   │   ├── leisure/  # Shared/Exclusive Leisure quote+create (#47)
+│   │   │   │   └── event/    # Event slots + add-ons quote+create (#48)
+│   │   │   └── payments/     # Mercado Pago / cash payment (#49)
 │   │   └── diagnostics/   # internal /health check, not linked from nav
 │   ├── app.component.ts   # root: <ion-app><ion-router-outlet></ion-router-outlet></ion-app>
 │   ├── app.config.ts
@@ -189,6 +195,14 @@ HttpOnly cookie managed by the browser
 +
 GET /api/auth/me at startup
 ```
+
+The one exception anywhere in the client is issue #49's
+`MercadoPagoReturnContextStore`, which uses `sessionStorage` for exactly two
+non-sensitive UUIDs (`paymentId`, `reservationId`) needed to correlate the
+browser's return from Mercado Pago's Checkout Pro — see "Payment flows"
+below. This is not session persistence: it never carries a token, cookie,
+role, user object or membership, and reading it never substitutes for
+`GET /api/auth/me`.
 
 ### Session state
 
@@ -584,6 +598,89 @@ candidates, never issuing a second amenities request.
 Shared reservation DTOs (`PriceQuote`, `Reservation`, etc.) live in
 `features/resident/reservations/reservation.models.ts`, used by both the
 Leisure and Event services/components instead of being duplicated.
+
+## Payment flows (Mercado Pago + cash)
+
+Issue #49 pays the `Pending` hold #47/#48 create. Both reservation flows'
+confirmation card gets a **Continuar al pago** link to
+`/reservations/{reservation.id}/payment` — no price, status or other data is
+passed via query params; `PaymentPage` always re-fetches the reservation from
+`GET /api/reservations/{id}`, so it is independently reachable (reload,
+direct navigation, a login redirect's `returnUrl`) and never depends on a
+signal a previous component left behind.
+
+- **Reservation load**: `PaymentPage` reads `reservationId` from the route
+  param (not from memory) and shows `loading`/`success`/`error` for it. A
+  reservation whose `status` is not `Pending` shows a neutral message instead
+  of payment actions — but the client never treats the countdown reaching
+  zero as authoritative: the hold's `expiresAtUtc` only drives a **display**
+  countdown, and a `POST` past that instant is left to the backend to accept
+  or reject. The device clock is never used to locally mark a reservation
+  `Expired`.
+- **Mercado Pago**: `POST /api/reservations/{id}/payments/mercadopago` with
+  an empty (`null`) body — the backend derives amount/currency from the
+  reservation's own price snapshot and manages its own idempotency key. On
+  success, only `{ paymentId, reservationId }` — never `checkoutUrl`,
+  `providerOrderId`, tokens or credentials — is saved via
+  `MercadoPagoReturnContextStore` (`sessionStorage`, key
+  `residential-amenities:mercadopago-return`), then `ExternalNavigationService`
+  redirects the same tab to `checkoutUrl` (same-tab, not `window.open`, so the
+  `sessionStorage` entry survives for the return page).
+- **Cash**: `POST /api/reservations/{id}/payments/cash` with an empty body;
+  the response is intentionally minimal, so the page immediately follows up
+  with `GET /api/payments/{paymentId}` to render the full read model. A
+  `Pending` cash payment is shown with an explicit "todavía NO confirma la
+  reserva" notice — confirming receipt is `POST /api/payments/{id}/cash/confirm`,
+  an **Administrator-only** endpoint this resident-facing flow never calls.
+  A manual "Actualizar estado" re-runs the same `GET` so the resident can
+  check for themselves once an administrator confirms.
+- **Method conflict**: declaring one method while the other is already active
+  is a real backend `409`, shown with its own title/detail — the client never
+  switches methods, replaces the existing attempt, or guesses a cause.
+- **Manual retry, never automatic**: neither POST is wrapped in
+  `retry`/`retryWhen`. Unlike reservation creation (#47/#48), both are
+  backend-idempotent — Mercado Pago reuses the same persisted attempt and
+  idempotency key, Cash returns the same still-`Pending` declaration — so a
+  network failure (`status === 0`) is shown as a retryable message, and the
+  action is immediately clickable again rather than permanently blocked.
+  Both actions are still disabled from double-submitting and from each other
+  while either is in flight.
+- **Payment status rendering**: `Payment.status` (`Created`/`Pending`/
+  `Approved`/`Rejected`/`Cancelled`) and `Payment.requiresManualReview` are
+  rendered from **exhaustive, typed** mappings — never a free string, and
+  never a synthetic "RequiresManualReview" status. `requiresManualReview` is
+  its own boolean, shown as a separate warning alongside an `Approved`
+  status when true; `Payment.reservationOutcome` (`None`/
+  `ReservationConfirmed`/`ApprovedAfterExpiry`/
+  `ApprovedForCancelledReservation`/`ApprovedForMissingReservation`) is
+  never inferred from `status` — it is rendered exactly as the backend
+  reports it, and "Pago aprobado y reserva confirmada" is only ever shown
+  when the backend's own outcome says `ReservationConfirmed`.
+- **Return page** (`/payments/return`, `PaymentReturnPage`): **never injects
+  `ActivatedRoute` and never reads a query parameter.** Mercado Pago's
+  `back_urls` are UX-only configuration (RB-011) and the provider may append
+  its own `status`/`payment_id`/`collection_status`/etc. on return, none of
+  which this app can trust as identity or proof of payment. The only
+  `paymentId` this page will ever query is the one read once, at
+  construction, from `MercadoPagoReturnContextStore` — a visitor with no
+  saved context (different tab, cleared session, a bare bookmark) sees a
+  neutral "No encontramos un pago iniciado en esta sesión." and the page
+  makes no request at all. A manual "Actualizar estado" re-queries the same
+  stored id; there is no background polling.
+- **Amount/currency**: `PaymentPage`'s initial snapshot uses
+  `Reservation.totalAmount`/`currency`; once a `Payment` exists, its own
+  `amount`/`currency` are used instead — nothing is recalculated or
+  re-quoted client-side.
+
+### Native/Capacitor authentication remains a gap
+
+The client's web session (issue #45) is entirely cookie-based
+(`docs/06-security/security-baseline.md`'s Web posture); the same doc's
+Mobile/non-browser posture — an opaque bearer token, refresh flow and secure
+device storage — is **not implemented by any issue through #49**. This is a
+known gap before a native Android/iOS build (RF-023) can ship: nothing in the
+backlog through the current phase covers it. It should be scoped as its own
+issue before native packaging work begins, rather than assumed solved.
 
 ## `/health` vs `/api`
 

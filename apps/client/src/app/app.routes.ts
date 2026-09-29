@@ -21,6 +21,20 @@ export const routes: Routes = [
       import('./features/resident/amenities/amenities.page').then((module) => module.AmenitiesPage)
   },
   {
+    path: 'reservations/:reservationId/payment',
+    canMatch: [authenticatedGuard],
+    loadComponent: () =>
+      import('./features/resident/payments/payment.page').then((module) => module.PaymentPage)
+  },
+  {
+    path: 'payments/return',
+    canMatch: [authenticatedGuard],
+    loadComponent: () =>
+      import('./features/resident/payments/payment-return.page').then(
+        (module) => module.PaymentReturnPage
+      )
+  },
+  {
     path: 'admin',
     canMatch: [adminGuard],
     children: [

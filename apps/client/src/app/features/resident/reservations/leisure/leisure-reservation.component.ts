@@ -1,6 +1,7 @@
 import { Component, DestroyRef, Input, computed, effect, inject, signal, untracked } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { IonButton, IonNote, IonSpinner, IonText } from '@ionic/angular';
 
 import { ApiError } from '../../../../core/api/api-error';
@@ -46,7 +47,7 @@ const USE_TYPE_LABELS: Record<LeisureUseType, string> = {
 @Component({
   selector: 'app-leisure-reservation',
   standalone: true,
-  imports: [ReactiveFormsModule, IonButton, IonNote, IonSpinner, IonText],
+  imports: [ReactiveFormsModule, RouterLink, IonButton, IonNote, IonSpinner, IonText],
   styles: [
     `
       .leisure-form {
@@ -143,6 +144,10 @@ const USE_TYPE_LABELS: Record<LeisureUseType, string> = {
           <p>
             <ion-text color="medium">El pago se realizará en el siguiente paso.</ion-text>
           </p>
+
+          <ion-button [routerLink]="['/reservations', createStatus.reservation.id, 'payment']">
+            Continuar al pago
+          </ion-button>
 
           <ion-button type="button" fill="outline" (click)="resetFlow()">
             Create another reservation

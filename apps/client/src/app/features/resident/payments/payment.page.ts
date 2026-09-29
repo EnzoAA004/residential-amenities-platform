@@ -149,8 +149,9 @@ const RESERVATION_OUTCOME_EXPLANATIONS: Record<Payment['reservationOutcome'], st
             </dl>
 
             @if (isPending()) {
+              @let remaining = remainingMs();
               <p>
-                @if (remainingMs(); as remaining) {
+                @if (remaining !== null) {
                   <ion-text [color]="remaining > 0 ? 'medium' : 'warning'">
                     @if (remaining > 0) {
                       Tiempo restante del hold: {{ formatRemaining(remaining) }}

@@ -103,6 +103,19 @@ describe('resident cash payment flow (integration)', () => {
   });
 
   afterEach(() => {
+    // Final safety net: a stray `/api/auth/me` from a fire-and-forget
+    // post-login redirect's own guard check (see `awaitDrainingStrayAuthMe`
+    // below) should already have been drained by then, but this guarantees
+    // `verify()` is never the one reporting it as an unhandled test failure.
+    httpMock.match('/api/auth/me').forEach((request) =>
+      request.flush({
+        id: 'user-1',
+        email: 'resident@example.test',
+        displayName: 'Resident',
+        roles: ['Resident'],
+        memberships: [{ buildingId: 'building-a', unitId: 'unit-a', unit: '1A', building: 'Building A' }]
+      })
+    );
     httpMock.verify();
     sessionStorage.clear();
   });
@@ -115,6 +128,39 @@ describe('resident cash payment flow (integration)', () => {
     memberships: [{ buildingId: 'building-a', unitId: 'unit-a', unit: '1A', building: 'Building A' }]
   };
 
+  /**
+   * `login()`'s success handler fires a fire-and-forget post-login redirect
+   * (to `/`, via its own `authenticatedGuard`) alongside whatever navigation
+   * this test drives explicitly next — the exact tick on which that guard's
+   * own `/auth/me` call (if `AuthService.initialize()`'s memoization hasn't
+   * settled yet from this guard's perspective) gets dispatched is not
+   * something this test can pin down or should have to. Rather than a
+   * single flush at a guessed point, this polls for and drains any such
+   * stray request on every macrotask tick while `promise` is still pending,
+   * so it can never block `promise` (or a later `whenStable()`) regardless
+   * of exactly when it appears. Real, explicitly awaited requests — the
+   * initial 401 and the post-login 200 — are still asserted and flushed
+   * directly with `httpMock.expectOne(...)`, never through this helper.
+   */
+  async function awaitDrainingStrayAuthMe<T>(promise: Promise<T>): Promise<T> {
+    let settled = false;
+    promise.then(
+      () => {
+        settled = true;
+      },
+      () => {
+        settled = true;
+      }
+    );
+
+    while (!settled) {
+      httpMock.match('/api/auth/me').forEach((request) => request.flush(authenticatedMeResponse));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+
+    return promise;
+  }
+
   it('logs in, loads amenities, creates a Leisure reservation and declares cash — without ever showing it as confirmed', async () => {
     // --- 1. Login page loads for an anonymous visitor -----------------------
     const harness = await RouterTestingHarness.create();
@@ -124,28 +170,23 @@ describe('resident cash payment flow (integration)', () => {
       { status: 401, title: 'You need to sign in to continue.' },
       { status: 401, statusText: 'Unauthorized' }
     );
-    await harness.fixture.whenStable();
+    await awaitDrainingStrayAuthMe(harness.fixture.whenStable());
 
     // --- 2. Real login submit -------------------------------------------------
     loginComponent.form.setValue({ email: 'resident@example.test', password: 'Test!Password123' });
     loginComponent.submit();
 
     httpMock.expectOne('/api/auth/login').flush(null);
-
-    // login() triggers its own `loadCurrentUser()` call, AND its success
-    // handler fires a fire-and-forget post-login redirect (to `/`) whose own
-    // `authenticatedGuard` can independently race AuthService.initialize()'s
-    // memoization. `whenStable()` will not resolve while ANY HTTP request —
-    // including a second, stray `/auth/me` from that redirect — is still
-    // outstanding, so every matching request is drained here, not just one.
-    httpMock.match('/api/auth/me').forEach((request) => request.flush(authenticatedMeResponse));
-    await harness.fixture.whenStable();
+    httpMock.expectOne('/api/auth/me').flush(authenticatedMeResponse);
+    await awaitDrainingStrayAuthMe(harness.fixture.whenStable());
 
     // --- 3. Amenities load for the resident's single (auto-selected) building -
-    const amenitiesComponent = await harness.navigateByUrl('/amenities', AmenitiesPage);
+    const amenitiesComponent = await awaitDrainingStrayAuthMe(
+      harness.navigateByUrl('/amenities', AmenitiesPage)
+    );
 
     httpMock.expectOne('/api/buildings/building-a/amenities').flush([amenity]);
-    await harness.fixture.whenStable();
+    await awaitDrainingStrayAuthMe(harness.fixture.whenStable());
     harness.fixture.detectChanges();
 
     expect(harness.routeNativeElement!.textContent).toContain('Pool');
@@ -162,12 +203,12 @@ describe('resident cash payment flow (integration)', () => {
 
     leisureComponent.requestQuote();
     httpMock.expectOne((req) => req.url === '/api/pricing/quote').flush(quote);
-    await harness.fixture.whenStable();
+    await awaitDrainingStrayAuthMe(harness.fixture.whenStable());
     harness.fixture.detectChanges();
 
     leisureComponent.create();
     httpMock.expectOne('/api/reservations').flush(createdReservation);
-    await harness.fixture.whenStable();
+    await awaitDrainingStrayAuthMe(harness.fixture.whenStable());
     harness.fixture.detectChanges();
 
     const afterCreateText = harness.routeNativeElement!.textContent!;
@@ -175,13 +216,12 @@ describe('resident cash payment flow (integration)', () => {
     expect(afterCreateText).toContain('Pending');
 
     // --- 5. Navigate to the payment page and declare cash ----------------------
-    const paymentComponent = await harness.navigateByUrl(
-      '/reservations/reservation-1/payment',
-      PaymentPage
+    const paymentComponent = await awaitDrainingStrayAuthMe(
+      harness.navigateByUrl('/reservations/reservation-1/payment', PaymentPage)
     );
 
     httpMock.expectOne('/api/reservations/reservation-1').flush(createdReservation);
-    await harness.fixture.whenStable();
+    await awaitDrainingStrayAuthMe(harness.fixture.whenStable());
     harness.fixture.detectChanges();
 
     paymentComponent.declareCash();
@@ -193,7 +233,7 @@ describe('resident cash payment flow (integration)', () => {
     });
 
     httpMock.expectOne('/api/payments/payment-1').flush(pendingCashPayment);
-    await harness.fixture.whenStable();
+    await awaitDrainingStrayAuthMe(harness.fixture.whenStable());
     harness.fixture.detectChanges();
 
     // --- 6. Cash Pending must never be shown/treated as Reservation Confirmed -

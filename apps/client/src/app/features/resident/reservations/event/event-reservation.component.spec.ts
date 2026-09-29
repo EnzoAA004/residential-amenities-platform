@@ -647,11 +647,11 @@ describe('EventReservationComponent', () => {
 
     const linkDebugElement = fixture.debugElement.query(By.directive(RouterLink));
     expect(linkDebugElement).toBeTruthy();
-    expect(linkDebugElement.injector.get(RouterLink).routerLink).toEqual([
-      '/reservations',
-      'reservation-1',
-      'payment'
-    ]);
+    // `routerLink` is a write-only setter in this Angular version (no
+    // getter) — the resolved `urlTree` is the only readable target.
+    expect(linkDebugElement.injector.get(RouterLink).urlTree?.toString()).toBe(
+      '/reservations/reservation-1/payment'
+    );
   });
 
   it('resets the whole flow only via the explicit "create another" action', async () => {

@@ -128,7 +128,10 @@ describe('PaymentPage', () => {
   });
 
   it('shows a hold countdown from the real expiresAtUtc, and a safe zero-state message — never a client-side Expired status', async () => {
-    vi.useFakeTimers();
+    // shouldAdvanceTime keeps real async work (router navigation, HTTP
+    // testing flushes) moving forward instead of hanging forever, while
+    // still letting setSystemTime/advanceTimersByTime drive the countdown.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
     vi.setSystemTime(new Date('2026-10-01T12:59:00Z'));
 
     const { harness } = await navigateToPayment();

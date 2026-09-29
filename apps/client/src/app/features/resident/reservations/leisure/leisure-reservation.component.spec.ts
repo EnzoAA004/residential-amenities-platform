@@ -356,11 +356,11 @@ describe('LeisureReservationComponent', () => {
 
     const linkDebugElement = fixture.debugElement.query(By.directive(RouterLink));
     expect(linkDebugElement).toBeTruthy();
-    expect(linkDebugElement.injector.get(RouterLink).routerLink).toEqual([
-      '/reservations',
-      reservation.id,
-      'payment'
-    ]);
+    // `routerLink` is a write-only setter in this Angular version (no
+    // getter) — the resolved `urlTree` is the only readable target.
+    expect(linkDebugElement.injector.get(RouterLink).urlTree?.toString()).toBe(
+      `/reservations/${reservation.id}/payment`
+    );
   });
 
   it('shows a clear 409 conflict message and leaves no phantom reservation state', async () => {

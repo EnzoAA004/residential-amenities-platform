@@ -2,7 +2,7 @@ import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute } from '@angular/router';
 import { IonButton, IonNote, IonSpinner, IonText } from '@ionic/angular';
-import { Subject, catchError, map, merge, of, startWith, switchMap } from 'rxjs';
+import { Subject, catchError, filter, map, merge, of, startWith, switchMap } from 'rxjs';
 
 import { ApiError } from '../../../core/api/api-error';
 import { AppShellComponent } from '../../../layout/app-shell/app-shell.component';
@@ -325,25 +325,30 @@ export class PaymentPage {
     return status === 'submittingMercadoPago' || status === 'submittingCash';
   });
 
-  private readonly cashPaymentIdSignal = signal<string | null>(null);
+  // A plain Subject, not a signal read through `toObservable` — the latter
+  // only propagates a write on the next effect flush, which never happens in
+  // a test that flushes an `HttpTestingController` request synchronously and
+  // relies on `whenStable()` (no pending zone task to wait for). A Subject
+  // emits synchronously to this pipeline, matching `reservationRetrySubject`.
+  private readonly cashPaymentIdSubject = new Subject<string>();
+  private lastCashPaymentId: string | null = null;
   private readonly cashRefreshSubject = new Subject<void>();
 
   readonly cashPaymentState = toSignal(
     merge(
-      toObservable(this.cashPaymentIdSignal),
-      this.cashRefreshSubject.pipe(map(() => this.cashPaymentIdSignal()))
+      this.cashPaymentIdSubject,
+      this.cashRefreshSubject.pipe(
+        map(() => this.lastCashPaymentId),
+        filter((paymentId): paymentId is string => paymentId !== null)
+      )
     ).pipe(
-      switchMap((paymentId) => {
-        if (!paymentId) {
-          return of<CashPaymentState>({ status: 'idle' });
-        }
-
-        return this.paymentService.getPayment(paymentId).pipe(
+      switchMap((paymentId) =>
+        this.paymentService.getPayment(paymentId).pipe(
           map((payment): CashPaymentState => ({ status: 'success', payment })),
           catchError((error: ApiError) => of<CashPaymentState>({ status: 'error', error })),
           startWith<CashPaymentState>({ status: 'loading' })
-        );
-      })
+        )
+      )
     ),
     { initialValue: { status: 'idle' } as CashPaymentState }
   );
@@ -477,7 +482,8 @@ export class PaymentPage {
           this.actionState.set({ status: 'idle' });
           // Fetches the full read model immediately — the declare response
           // itself is intentionally minimal (paymentId/status/expiry only).
-          this.cashPaymentIdSignal.set(response.paymentId);
+          this.lastCashPaymentId = response.paymentId;
+          this.cashPaymentIdSubject.next(response.paymentId);
         },
         error: (error: ApiError) => {
           if (reservationId !== this.reservationId()) {

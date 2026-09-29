@@ -8,7 +8,7 @@ import { AuthSessionStore } from '../../../../core/auth/auth-session.store';
 import { ResidentContextStore } from '../../../../core/resident-context/resident-context.store';
 import { AmenitySummary } from '../../amenities/amenities.models';
 import { LeisureReservationComponent } from './leisure-reservation.component';
-import { PriceQuote, Reservation } from './leisure-reservation.models';
+import { PriceQuote, Reservation } from '../reservation.models';
 
 const sharedOnlyAmenity: AmenitySummary = {
   id: 'amenity-shared',

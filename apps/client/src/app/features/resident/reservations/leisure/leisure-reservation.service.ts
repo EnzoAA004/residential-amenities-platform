@@ -3,12 +3,8 @@ import { Observable } from 'rxjs';
 
 import { ApiClient } from '../../../../core/api/api-client.service';
 import { apiPaths } from '../../../../core/api/api-paths';
-import {
-  CreateLeisureReservationRequest,
-  LeisureUseType,
-  PriceQuote,
-  Reservation
-} from './leisure-reservation.models';
+import { PriceQuote, Reservation } from '../reservation.models';
+import { CreateLeisureReservationRequest, LeisureUseType } from './leisure-reservation.models';
 
 /**
  * Thin wrapper over `ApiClient` for quoting and creating a Leisure

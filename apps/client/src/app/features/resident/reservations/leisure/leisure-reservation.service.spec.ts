@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { API_BASE_URL } from '../../../../core/config/api-base-url.token';
 import { LeisureReservationService } from './leisure-reservation.service';
-import { PriceQuote, Reservation } from './leisure-reservation.models';
+import { PriceQuote, Reservation } from '../reservation.models';
 
 describe('LeisureReservationService', () => {
   let service: LeisureReservationService;

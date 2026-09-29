@@ -11,8 +11,9 @@ import {
   toDateTimeLocalInputValue,
   validateAvailabilityRange
 } from '../../amenities/availability-range';
+import { PriceQuote, Reservation } from '../reservation.models';
 import { LeisureReservationService } from './leisure-reservation.service';
-import { LeisureUseType, PriceQuote, Reservation } from './leisure-reservation.models';
+import { LeisureUseType } from './leisure-reservation.models';
 
 type QuoteState =
   | { status: 'idle' }

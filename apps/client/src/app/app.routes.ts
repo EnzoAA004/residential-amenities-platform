@@ -101,6 +101,27 @@ export const routes: Routes = [
           )
       },
       {
+        path: 'pricing',
+        loadComponent: () =>
+          import('./features/admin/pricing/admin-pricing.page').then(
+            (module) => module.AdminPricingPage
+          )
+      },
+      {
+        path: 'availability',
+        loadComponent: () =>
+          import('./features/admin/availability/admin-availability.page').then(
+            (module) => module.AdminAvailabilityPage
+          )
+      },
+      {
+        path: 'event-slots',
+        loadComponent: () =>
+          import('./features/admin/event-slots/admin-event-slots.page').then(
+            (module) => module.AdminEventSlotsPage
+          )
+      },
+      {
         path: '**',
         redirectTo: ''
       }

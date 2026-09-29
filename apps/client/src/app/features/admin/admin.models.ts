@@ -231,3 +231,130 @@ export interface AuditFilters {
   page: number;
   pageSize: number;
 }
+
+// --- pricing --------------------------------------------------------------
+
+export type AdminPriceComponentType = 'Base' | 'AddOn';
+
+export interface AdminPriceRule {
+  id: string;
+  buildingId: string;
+  amenityId: string;
+  componentType: AdminPriceComponentType | string;
+  useType: AdminReservationUseType | string;
+  currency: string;
+  amount: number;
+  effectiveFromUtc: string;
+  effectiveToUtc: string | null;
+}
+
+export type AdminPriceRulePage = AdminPage<AdminPriceRule>;
+
+export interface AdminPriceRuleFilters {
+  buildingId: string;
+  amenityId?: string;
+  activeAtUtc?: string;
+  page: number;
+  pageSize: number;
+}
+
+export interface CreatePriceRuleRequest {
+  buildingId: string;
+  amenityId: string;
+  componentType: AdminPriceComponentType;
+  useType: AdminReservationUseType;
+  currency: string;
+  amount: number;
+  effectiveFromUtc?: string;
+  effectiveToUtc?: string;
+}
+
+/**
+ * A new rule is never an edit of the old one: it is effective-dated and any
+ * prior rule for the same building/amenity/component/use type is superseded
+ * (its `effectiveToUtc` is closed), never rewritten. The UI must always show
+ * both `created` and `superseded` explicitly, and never describe this as
+ * "editing" a rule.
+ */
+export interface PriceRuleCreationResult {
+  created: AdminPriceRule;
+  superseded: AdminPriceRule[];
+}
+
+// --- availability -----------------------------------------------------------
+
+/**
+ * Numeric `System.DayOfWeek` wire value: 0 = Sunday .. 6 = Saturday (matches
+ * `Date.prototype.getDay()`), not a day name string — the backend has no
+ * `JsonStringEnumConverter` registered, so enums serialize as their integer
+ * value.
+ */
+export type AdminDayOfWeek = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+
+export interface AdminAvailabilityWindow {
+  id: string;
+  dayOfWeek: AdminDayOfWeek;
+  /** `HH:mm:ss`. */
+  startTime: string;
+  /** `HH:mm:ss`. */
+  endTime: string;
+}
+
+export interface AdminUnavailablePeriod {
+  id: string;
+  startsAtUtc: string;
+  endsAtUtc: string;
+  reason: string | null;
+}
+
+export interface AdminAvailabilityConfig {
+  amenityId: string;
+  buildingId: string;
+  windows: AdminAvailabilityWindow[];
+  unavailablePeriods: AdminUnavailablePeriod[];
+}
+
+export interface AvailabilityWindowInput {
+  dayOfWeek: AdminDayOfWeek;
+  /** `HH:mm:ss`. */
+  startTime: string;
+  /** `HH:mm:ss`. */
+  endTime: string;
+}
+
+export interface ReplaceAvailabilityRequest {
+  buildingId: string;
+  windows: AvailabilityWindowInput[];
+}
+
+export interface CreateUnavailablePeriodRequest {
+  buildingId: string;
+  startsAtUtc: string;
+  endsAtUtc: string;
+  reason?: string | null;
+}
+
+export interface CreateUnavailablePeriodResult {
+  periodId: string;
+}
+
+// --- event slots ------------------------------------------------------------
+
+export interface AdminEventSlot {
+  id: string;
+  buildingId: string;
+  name: string;
+  /** `HH:mm:ss`. */
+  startTime: string;
+  /** `HH:mm:ss`. */
+  endTime: string;
+  isActive: boolean;
+}
+
+export interface EventSlotRequest {
+  name: string;
+  /** `HH:mm:ss`. */
+  startTime: string;
+  /** `HH:mm:ss`. */
+  endTime: string;
+}

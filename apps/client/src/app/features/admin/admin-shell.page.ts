@@ -30,6 +30,8 @@ import { AppShellComponent } from '../../layout/app-shell/app-shell.component';
         </ion-button>
         <ion-button routerLink="/admin/reservations" routerLinkActive="active">Reservas</ion-button>
         <ion-button routerLink="/admin/payments" routerLinkActive="active">Pagos</ion-button>
+        <ion-button routerLink="/admin/audit" routerLinkActive="active">Auditoría</ion-button>
+        <ion-button routerLink="/admin/payment-review" routerLinkActive="active">Revisión manual</ion-button>
       </nav>
 
       <router-outlet />

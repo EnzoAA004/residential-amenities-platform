@@ -76,6 +76,47 @@ describe('AdminService', () => {
     request.flush({ items: [], page: 3, pageSize: 25, totalCount: 0 });
   });
 
+  it('lists audit entries with the exact backend filters and pagination', () => {
+    service
+      .listAudit({
+        buildingId: 'building-1',
+        actorUserId: 'user-1',
+        action: 'CashPaymentConfirmed',
+        targetType: 'Payment',
+        targetId: 'payment-1',
+        fromUtc: '2026-10-01T00:00:00Z',
+        toUtc: '2026-10-02T00:00:00Z',
+        page: 2,
+        pageSize: 100
+      })
+      .subscribe();
+
+    const request = httpMock.expectOne(
+      '/api/admin/audit?buildingId=building-1&actorUserId=user-1&action=CashPaymentConfirmed&targetType=Payment&targetId=payment-1&fromUtc=2026-10-01T00:00:00Z&toUtc=2026-10-02T00:00:00Z&page=2&pageSize=100'
+    );
+    expect(request.request.method).toBe('GET');
+    request.flush({ items: [], page: 2, pageSize: 100, totalCount: 0 });
+  });
+
+  it('confirms a cash payment through the shared resident/admin endpoint', () => {
+    service.confirmCashPayment('payment-1').subscribe();
+
+    const request = httpMock.expectOne('/api/payments/payment-1/cash/confirm');
+    expect(request.request.method).toBe('POST');
+    expect(request.request.body).toBeNull();
+    request.flush({
+      paymentId: 'payment-1',
+      reservationId: 'reservation-1',
+      status: 'Approved',
+      amount: 12000,
+      currency: 'ARS',
+      cashConfirmedAtUtc: '2026-10-01T10:00:00Z',
+      cashConfirmedByUserId: 'admin-1',
+      reservationOutcome: 'ReservationConfirmed',
+      requiresManualReview: false
+    });
+  });
+
   it('never calls admin mutation endpoints for read operations', () => {
     service.listReservations({ page: 1, pageSize: 50 }).subscribe();
     httpMock.expectOne('/api/admin/reservations?page=1&pageSize=50').flush({

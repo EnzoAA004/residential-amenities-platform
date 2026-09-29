@@ -28,6 +28,26 @@ const payment: AdminPayment = {
   cashConfirmedByUserId: null
 };
 
+const pendingCashPayment: AdminPayment = {
+  ...payment,
+  paymentId: 'payment-cash-1',
+  method: 'Cash',
+  status: 'Pending',
+  reservationOutcome: 'None',
+  requiresManualReview: false,
+  providerStatus: null,
+  providerStatusDetail: null,
+  cashDeclaredAtUtc: '2026-10-01T10:00:00Z'
+};
+
+const approvedCashPayment: AdminPayment = {
+  ...pendingCashPayment,
+  paymentId: 'payment-cash-2',
+  status: 'Approved',
+  cashConfirmedAtUtc: '2026-10-01T11:00:00Z',
+  cashConfirmedByUserId: 'admin-1'
+};
+
 describe('AdminPaymentsPage', () => {
   let httpMock: HttpTestingController;
 
@@ -163,5 +183,208 @@ describe('AdminPaymentsPage', () => {
     expect(text(harness)).toContain('No hay pagos');
     expect(text(harness)).not.toContain('MercadoPago · Approved');
     httpMock.expectNone((request) => request.method !== 'GET');
+  });
+
+  describe('cash confirmation', () => {
+    it('shows the confirm action only for Cash + Pending payments', async () => {
+      const { harness } = await navigate();
+      httpMock.expectOne('/api/admin/payments?page=1&pageSize=50').flush({
+        items: [payment, pendingCashPayment, approvedCashPayment],
+        page: 1,
+        pageSize: 50,
+        totalCount: 3
+      });
+      await harness.fixture.whenStable();
+      harness.detectChanges();
+
+      expect(text(harness)).toContain('Confirmar efectivo');
+    });
+
+    it('does not show the confirm action for a MercadoPago payment', async () => {
+      const { harness } = await navigate();
+      httpMock.expectOne('/api/admin/payments?page=1&pageSize=50').flush({
+        items: [payment],
+        page: 1,
+        pageSize: 50,
+        totalCount: 1
+      });
+      await harness.fixture.whenStable();
+      harness.detectChanges();
+
+      expect(text(harness)).not.toContain('Confirmar efectivo');
+    });
+
+    it('does not show the confirm action for an already-Approved Cash payment', async () => {
+      const { harness } = await navigate();
+      httpMock.expectOne('/api/admin/payments?page=1&pageSize=50').flush({
+        items: [approvedCashPayment],
+        page: 1,
+        pageSize: 50,
+        totalCount: 1
+      });
+      await harness.fixture.whenStable();
+      harness.detectChanges();
+
+      expect(text(harness)).not.toContain('Confirmar efectivo');
+    });
+
+    it('requires explicit confirmation before the POST fires', async () => {
+      const { harness, component } = await navigate();
+      httpMock.expectOne('/api/admin/payments?page=1&pageSize=50').flush({
+        items: [pendingCashPayment],
+        page: 1,
+        pageSize: 50,
+        totalCount: 1
+      });
+      await harness.fixture.whenStable();
+      harness.detectChanges();
+
+      component.armConfirmCash(pendingCashPayment.paymentId);
+      harness.detectChanges();
+      httpMock.expectNone((request) => request.method === 'POST');
+      expect(text(harness)).toContain('¿Confirmar que se recibió el efectivo de este pago?');
+
+      component.confirmCash(pendingCashPayment.paymentId);
+      const request = httpMock.expectOne(
+        `/api/payments/${pendingCashPayment.paymentId}/cash/confirm`
+      );
+      expect(request.request.method).toBe('POST');
+      expect(request.request.body).toBeNull();
+      request.flush({
+        paymentId: pendingCashPayment.paymentId,
+        reservationId: pendingCashPayment.reservationId,
+        status: 'Approved',
+        amount: pendingCashPayment.amount,
+        currency: pendingCashPayment.currency,
+        cashConfirmedAtUtc: '2026-10-01T12:00:00Z',
+        cashConfirmedByUserId: 'admin-1',
+        reservationOutcome: 'ReservationConfirmed',
+        requiresManualReview: false
+      });
+    });
+
+    it('cancelling the armed confirmation never fires the POST', async () => {
+      const { harness, component } = await navigate();
+      httpMock.expectOne('/api/admin/payments?page=1&pageSize=50').flush({
+        items: [pendingCashPayment],
+        page: 1,
+        pageSize: 50,
+        totalCount: 1
+      });
+      await harness.fixture.whenStable();
+
+      component.armConfirmCash(pendingCashPayment.paymentId);
+      component.cancelConfirmCash();
+      harness.detectChanges();
+
+      expect(text(harness)).not.toContain('¿Confirmar que se recibió el efectivo de este pago?');
+      httpMock.expectNone((request) => request.method === 'POST');
+    });
+
+    it('updates the rendered outcome and requiresManualReview from the real response, never assuming Approved implies ReservationConfirmed', async () => {
+      const { harness, component } = await navigate();
+      httpMock.expectOne('/api/admin/payments?page=1&pageSize=50').flush({
+        items: [pendingCashPayment],
+        page: 1,
+        pageSize: 50,
+        totalCount: 1
+      });
+      await harness.fixture.whenStable();
+      harness.detectChanges();
+
+      component.confirmCash(pendingCashPayment.paymentId);
+      httpMock.expectOne(`/api/payments/${pendingCashPayment.paymentId}/cash/confirm`).flush({
+        paymentId: pendingCashPayment.paymentId,
+        reservationId: pendingCashPayment.reservationId,
+        status: 'Approved',
+        amount: pendingCashPayment.amount,
+        currency: pendingCashPayment.currency,
+        cashConfirmedAtUtc: '2026-10-01T12:00:00Z',
+        cashConfirmedByUserId: 'admin-1',
+        reservationOutcome: 'ApprovedAfterExpiry',
+        requiresManualReview: true
+      });
+      await harness.fixture.whenStable();
+      harness.detectChanges();
+
+      expect(text(harness)).toContain('Outcome: ApprovedAfterExpiry');
+      expect(text(harness)).toContain('Requiere revisión administrativa');
+      expect(text(harness)).not.toContain('Confirmar efectivo');
+    });
+
+    it('shows the real detail on a 409 (not a confirmable Cash/Pending payment)', async () => {
+      const { harness, component } = await navigate();
+      httpMock.expectOne('/api/admin/payments?page=1&pageSize=50').flush({
+        items: [pendingCashPayment],
+        page: 1,
+        pageSize: 50,
+        totalCount: 1
+      });
+      await harness.fixture.whenStable();
+      harness.detectChanges();
+
+      component.confirmCash(pendingCashPayment.paymentId);
+      httpMock.expectOne(`/api/payments/${pendingCashPayment.paymentId}/cash/confirm`).flush(
+        {
+          status: 409,
+          title: 'Unable to confirm this cash payment.',
+          detail: 'This payment is not a Cash payment awaiting confirmation.'
+        },
+        { status: 409, statusText: 'Conflict' }
+      );
+      await harness.fixture.whenStable();
+      harness.detectChanges();
+
+      expect(text(harness)).toContain('This payment is not a Cash payment awaiting confirmation.');
+    });
+
+    it('shows the real detail on a 403', async () => {
+      const { harness, component } = await navigate();
+      httpMock.expectOne('/api/admin/payments?page=1&pageSize=50').flush({
+        items: [pendingCashPayment],
+        page: 1,
+        pageSize: 50,
+        totalCount: 1
+      });
+      await harness.fixture.whenStable();
+      harness.detectChanges();
+
+      component.confirmCash(pendingCashPayment.paymentId);
+      httpMock.expectOne(`/api/payments/${pendingCashPayment.paymentId}/cash/confirm`).flush(
+        { status: 403, title: 'Forbidden', detail: 'Only an Administrator can confirm cash.' },
+        { status: 403, statusText: 'Forbidden' }
+      );
+      await harness.fixture.whenStable();
+      harness.detectChanges();
+
+      expect(text(harness)).toContain('Only an Administrator can confirm cash.');
+    });
+
+    it('blocks a double submit while a confirmation is already in flight', async () => {
+      const { harness, component } = await navigate();
+      httpMock.expectOne('/api/admin/payments?page=1&pageSize=50').flush({
+        items: [pendingCashPayment],
+        page: 1,
+        pageSize: 50,
+        totalCount: 1
+      });
+      await harness.fixture.whenStable();
+      harness.detectChanges();
+
+      component.confirmCash(pendingCashPayment.paymentId);
+      component.confirmCash(pendingCashPayment.paymentId);
+
+      httpMock.expectOne(`/api/payments/${pendingCashPayment.paymentId}/cash/confirm`).flush({
+        paymentId: pendingCashPayment.paymentId,
+        reservationId: pendingCashPayment.reservationId,
+        status: 'Approved',
+        amount: pendingCashPayment.amount,
+        currency: pendingCashPayment.currency,
+        cashConfirmedAtUtc: '2026-10-01T12:00:00Z',
+        cashConfirmedByUserId: 'admin-1',
+        reservationOutcome: 'ReservationConfirmed',
+        requiresManualReview: false
+      });
+    });
   });
 });

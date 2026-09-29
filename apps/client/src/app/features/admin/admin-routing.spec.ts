@@ -51,6 +51,50 @@ describe('admin routing', () => {
     httpMock.expectNone((request) => request.url.startsWith('/api/admin'));
   });
 
+  it('blocks a Resident session from /admin/audit before any HTTP request fires', async () => {
+    store.setAuthenticated({
+      id: 'resident',
+      email: 'resident@example.test',
+      displayName: 'Resident',
+      roles: ['Resident'],
+      memberships: []
+    });
+
+    const result = await TestBed.runInInjectionContext(() =>
+      adminGuard(
+        {} as never,
+        [new UrlSegment('admin', {}), new UrlSegment('audit', {})],
+        {} as never
+      )
+    );
+
+    expect(result.toString()).toBe('/');
+    httpMock.expectNone((request) => request.url.startsWith('/api/admin'));
+    httpMock.expectNone((request) => request.url.includes('/audit'));
+  });
+
+  it('blocks a Resident session from /admin/payment-review before any HTTP request fires', async () => {
+    store.setAuthenticated({
+      id: 'resident',
+      email: 'resident@example.test',
+      displayName: 'Resident',
+      roles: ['Resident'],
+      memberships: []
+    });
+
+    const result = await TestBed.runInInjectionContext(() =>
+      adminGuard(
+        {} as never,
+        [new UrlSegment('admin', {}), new UrlSegment('payment-review', {})],
+        {} as never
+      )
+    );
+
+    expect(result.toString()).toBe('/');
+    httpMock.expectNone((request) => request.url.startsWith('/api/admin'));
+    httpMock.expectNone((request) => request.url.includes('/payments'));
+  });
+
   it('allows Administrator users into /admin', async () => {
     store.setAuthenticated({
       id: 'admin',

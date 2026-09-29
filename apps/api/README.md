@@ -143,10 +143,45 @@ requires a real membership to attribute it to).
 ```http
 GET  /api/buildings/{buildingId}/amenities
 GET  /api/amenities/{amenityId}/availability?fromUtc=&toUtc=
+GET  /api/buildings/{buildingId}/event-slots?date=YYYY-MM-DD
 GET  /api/pricing/quote?buildingId=&amenityId=&useType=&addOnAmenityId=&atUtc=
 POST /api/reservations
 GET  /api/reservations/{id}
 ```
+
+### Resident Event slot discovery (issue #62)
+
+`GET /api/buildings/{buildingId}/event-slots?date=YYYY-MM-DD` — distinct
+from the Administrator-only `GET /api/admin/buildings/{buildingId}/event-slots`
+below (which also lists inactive slots and admin fields). This one requires
+`ResidentAccess` + `IBuildingMembershipAuthorizer` like the other
+resident-facing endpoints above; it never reuses the admin endpoint or
+relaxes its policy.
+
+It returns only the building's **active** `EventSlotDefinition`s, expanded
+to UTC instants for the requested calendar date using `Building.TimeZoneId`
+— the client never combines a date with `EventSlotDefinition.StartTime`
+using its own device time zone, which would silently miscompute
+`startsAtUtc`/`endsAtUtc` for any building not in the server/device's zone:
+
+```json
+[
+  { "id": "...", "name": "Afternoon", "startsAtUtc": "2026-10-01T17:00:00Z", "endsAtUtc": "2026-10-01T22:00:00Z" }
+]
+```
+
+If the requested date/time combination is invalid (spring-forward DST gap)
+or ambiguous (fall-back DST repeat) in the building's time zone, the
+endpoint returns `422` rather than silently picking one of two possible UTC
+offsets.
+
+This is **configured** Event slots, not final availability: it never reads
+`Reservations`/`ReservationResources`/pricing/amenity availability to decide
+what to return, the same way `GET /api/amenities/{id}/availability` reports
+structural availability without knowing about reservations. A slot that is
+already fully booked (or in maintenance) still appears here; `POST
+/api/reservations` remains the sole authority for conflicts and business
+validation (`409`/`422`) when a resident actually tries to book one.
 
 `POST /api/reservations` supports `useType` values `SharedLeisure`,
 `ExclusiveLeisure` and `Event`. Shared/Exclusive Leisure request body:
@@ -161,11 +196,13 @@ GET  /api/reservations/{id}
 }
 ```
 
-Event reservations add `addOnAmenityIds` (0–2 amenities of kind `Pool` or
-`Barbecue`); `amenityId` is the base resource, which must be an active
-amenity of kind `Sum`. The requested range must match a configured
-`EventSlotDefinition` exactly — an arbitrary range that merely falls inside
-the SUM's general availability is rejected:
+Event reservations may include optional `addOnAmenityIds`; `amenityId` is
+the base resource, which must be an active amenity of kind `Sum`. Each
+add-on must be a distinct, active amenity from the same building, of kind
+`Pool` or `Barbecue`, and must allow exclusive use — the backend does not
+impose a separate numeric maximum on the number of add-ons. The requested
+range must match a configured `EventSlotDefinition` exactly — an arbitrary
+range that merely falls inside the SUM's general availability is rejected:
 
 ```json
 {

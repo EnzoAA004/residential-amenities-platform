@@ -75,6 +75,7 @@ app.MapIdentityEndpoints();
 app.MapAmenityEndpoints();
 app.MapPricingEndpoints();
 app.MapReservationEndpoints();
+app.MapEventSlotEndpoints();
 app.MapPaymentEndpoints();
 app.MapAuditEndpoints();
 app.MapAdminEndpoints();

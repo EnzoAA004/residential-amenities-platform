@@ -258,6 +258,7 @@ const RESERVATION_OUTCOME_EXPLANATIONS: Record<Payment['reservationOutcome'], st
           }
         }
       }
+    }
     </app-shell>
   `
 })

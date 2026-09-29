@@ -110,6 +110,10 @@ describe('EventReservationService', () => {
       endsAtUtc: '2026-10-01T22:00:00Z',
       createdAtUtc: '2026-01-01T00:00:00Z',
       expiresAtUtc: '2026-01-01T00:30:00Z',
+      confirmedAtUtc: null,
+      cancelledAtUtc: null,
+      expiredAtUtc: null,
+      cancellationReason: null,
       resources: [
         { amenityId: 'sum-1', isExclusive: true },
         { amenityId: 'pool-1', isExclusive: true }

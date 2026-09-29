@@ -44,6 +44,10 @@ export interface Reservation {
   endsAtUtc: string;
   createdAtUtc: string;
   expiresAtUtc: string;
+  confirmedAtUtc: string | null;
+  cancelledAtUtc: string | null;
+  expiredAtUtc: string | null;
+  cancellationReason: string | null;
   resources: ReservationResource[];
   priceLines: ReservationPriceLine[];
   currency: string;

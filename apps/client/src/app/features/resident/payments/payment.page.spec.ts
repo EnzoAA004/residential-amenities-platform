@@ -186,9 +186,42 @@ describe('PaymentPage', () => {
     expect(raw).not.toContain('mercadopago.test');
   });
 
-  it.each([409, 422, 502])(
-    'shows the real title/detail for a Mercado Pago %i, and allows an immediate manual retry',
-    async (status) => {
+  it('does not navigate to checkoutUrl when the return context fails to save, and shows a local error instead', async () => {
+    const setItemSpy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('storage unavailable');
+    });
+
+    try {
+      const { harness, component } = await navigateToPayment();
+      httpMock.expectOne('/api/reservations/reservation-1').flush(reservationWith());
+      await harness.fixture.whenStable();
+      harness.detectChanges();
+
+      component.initiateMercadoPago();
+      httpMock.expectOne('/api/reservations/reservation-1/payments/mercadopago').flush(mercadoPagoInitiateResponse);
+      await harness.fixture.whenStable();
+      harness.detectChanges();
+
+      expect(navigateTo).not.toHaveBeenCalled();
+      expect(text(harness)).not.toContain('checkoutUrl');
+      expect(text(harness)).not.toContain('mercadopago.test');
+      expect(text(harness)).toContain(
+        'No pudimos preparar de forma segura el retorno desde Mercado Pago'
+      );
+      expect(component.isSubmitting()).toBe(false);
+    } finally {
+      setItemSpy.mockRestore();
+    }
+  });
+
+  it.each([
+    [403, false],
+    [409, false],
+    [422, false],
+    [502, true]
+  ])(
+    'shows the real title/detail for a Mercado Pago %i, allows an immediate manual retry, and shows retry guidance only when %s',
+    async (status, guidanceExpected) => {
       const { harness, component } = await navigateToPayment();
       httpMock.expectOne('/api/reservations/reservation-1').flush(reservationWith());
       await harness.fixture.whenStable();
@@ -207,10 +240,16 @@ describe('PaymentPage', () => {
       expect(text(harness)).toContain('Unable to start this payment.');
       expect(text(harness)).toContain('backend detail');
       expect(component.isSubmitting()).toBe(false);
+
+      if (guidanceExpected) {
+        expect(text(harness)).toContain('Podés volver a intentarlo');
+      } else {
+        expect(text(harness)).not.toContain('Podés volver a intentarlo');
+      }
     }
   );
 
-  it('a network failure (status 0) on Mercado Pago initiation allows an immediate manual retry, not a permanent block', async () => {
+  it('a network failure (status 0) on Mercado Pago initiation allows an immediate manual retry, and shows retry guidance', async () => {
     const { harness, component } = await navigateToPayment();
     httpMock.expectOne('/api/reservations/reservation-1').flush(reservationWith());
     await harness.fixture.whenStable();
@@ -221,8 +260,10 @@ describe('PaymentPage', () => {
       .expectOne('/api/reservations/reservation-1/payments/mercadopago')
       .error(new ProgressEvent('error'), { status: 0, statusText: 'Unknown Error' });
     await harness.fixture.whenStable();
+    harness.detectChanges();
 
     expect(component.isSubmitting()).toBe(false);
+    expect(text(harness)).toContain('Podés volver a intentarlo');
 
     component.initiateMercadoPago();
     httpMock.expectOne('/api/reservations/reservation-1/payments/mercadopago').flush(mercadoPagoInitiateResponse);
@@ -432,5 +473,134 @@ describe('PaymentPage', () => {
     harness.detectChanges();
 
     expect(text(harness)).toContain('Pago aprobado y reserva confirmada.');
+  });
+
+  it('shows a Cash-specific loading state, hiding the method choice, while the read-model GET is in flight', async () => {
+    const { harness, component } = await navigateToPayment();
+    httpMock.expectOne('/api/reservations/reservation-1').flush(reservationWith());
+    await harness.fixture.whenStable();
+    harness.detectChanges();
+
+    component.declareCash();
+    httpMock
+      .expectOne('/api/reservations/reservation-1/payments/cash')
+      .flush({ paymentId: 'payment-2', status: 'Pending', reservationExpiresAtUtc: '2026-10-01T13:00:00Z' });
+    await harness.fixture.whenStable();
+    harness.detectChanges();
+
+    // The GET to /api/payments/payment-2 is now in flight but not yet flushed.
+    expect(text(harness)).toContain('Efectivo declarado');
+    expect(text(harness)).toContain('Consultando el estado del pago');
+    expect(text(harness)).not.toContain('Pagar con Mercado Pago');
+    expect(text(harness)).not.toContain('Declarar efectivo');
+
+    httpMock.expectOne('/api/payments/payment-2').flush(pendingCashPayment);
+    await harness.fixture.whenStable();
+  });
+
+  it('keeps the Cash branch (not the method choice) when the read-model GET fails, and recovers on refresh', async () => {
+    const { harness, component } = await navigateToPayment();
+    httpMock.expectOne('/api/reservations/reservation-1').flush(reservationWith());
+    await harness.fixture.whenStable();
+    harness.detectChanges();
+
+    component.declareCash();
+    httpMock
+      .expectOne('/api/reservations/reservation-1/payments/cash')
+      .flush({ paymentId: 'payment-2', status: 'Pending', reservationExpiresAtUtc: '2026-10-01T13:00:00Z' });
+    await harness.fixture.whenStable();
+    httpMock
+      .expectOne('/api/payments/payment-2')
+      .flush(
+        { status: 502, title: 'The payment provider could not be reached.' },
+        { status: 502, statusText: 'Bad Gateway' }
+      );
+    await harness.fixture.whenStable();
+    harness.detectChanges();
+
+    expect(text(harness)).toContain('The payment provider could not be reached.');
+    expect(text(harness)).toContain('Actualizar estado');
+    expect(text(harness)).not.toContain('Pagar con Mercado Pago');
+    expect(text(harness)).not.toContain('Declarar efectivo');
+
+    // Retry is a GET to the same payment id — never a repeated cash POST.
+    component.refreshCashPayment();
+    httpMock.expectOne('/api/payments/payment-2').flush(pendingCashPayment);
+    await harness.fixture.whenStable();
+    harness.detectChanges();
+
+    expect(text(harness)).toContain('Efectivo declarado');
+    expect(text(harness)).toContain('todavía NO confirma la reserva');
+  });
+
+  // --- route reuse (A -> B) ----------------------------------------------------
+
+  it('resets all per-reservation state when the route reuses this component for a different reservationId', async () => {
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/reservations/reservation-A/payment', PaymentPage);
+
+    httpMock.expectOne('/api/reservations/reservation-A').flush(reservationWith({ id: 'reservation-A' }));
+    await harness.fixture.whenStable();
+    harness.detectChanges();
+
+    const componentA = harness.routeDebugElement!.componentInstance as PaymentPage;
+    componentA.declareCash();
+    httpMock
+      .expectOne('/api/reservations/reservation-A/payments/cash')
+      .flush({ paymentId: 'payment-A', status: 'Pending', reservationExpiresAtUtc: '2026-10-01T13:00:00Z' });
+    await harness.fixture.whenStable();
+    httpMock
+      .expectOne('/api/payments/payment-A')
+      .flush({ ...pendingCashPayment, paymentId: 'payment-A', reservationId: 'reservation-A' });
+    await harness.fixture.whenStable();
+    harness.detectChanges();
+
+    expect(text(harness)).toContain('Efectivo declarado');
+
+    // Navigate to a different reservation without destroying the fixture —
+    // Angular's default route reuse strategy keeps the same component
+    // instance when only the route param changes.
+    const componentB = await harness.navigateByUrl('/reservations/reservation-B/payment', PaymentPage);
+    expect(componentB).toBe(componentA);
+
+    httpMock.expectOne('/api/reservations/reservation-B').flush(reservationWith({ id: 'reservation-B' }));
+    await harness.fixture.whenStable();
+    harness.detectChanges();
+
+    expect(text(harness)).not.toContain('Efectivo declarado');
+    expect(text(harness)).not.toContain('payment-A');
+    expect(text(harness)).toContain('Pagar con Mercado Pago');
+    expect(text(harness)).toContain('Declarar efectivo');
+  });
+
+  it('cancels a stale in-flight Cash GET for reservation A when navigating to reservation B', async () => {
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/reservations/reservation-A/payment', PaymentPage);
+
+    httpMock.expectOne('/api/reservations/reservation-A').flush(reservationWith({ id: 'reservation-A' }));
+    await harness.fixture.whenStable();
+    harness.detectChanges();
+
+    const componentA = harness.routeDebugElement!.componentInstance as PaymentPage;
+    componentA.declareCash();
+    httpMock
+      .expectOne('/api/reservations/reservation-A/payments/cash')
+      .flush({ paymentId: 'payment-A', status: 'Pending', reservationExpiresAtUtc: '2026-10-01T13:00:00Z' });
+    await harness.fixture.whenStable();
+
+    // Payment A's read-model GET is left in flight, unflushed.
+    const staleRequestA = httpMock.expectOne('/api/payments/payment-A');
+
+    await harness.navigateByUrl('/reservations/reservation-B/payment', PaymentPage);
+    httpMock.expectOne('/api/reservations/reservation-B').flush(reservationWith({ id: 'reservation-B' }));
+    await harness.fixture.whenStable();
+    harness.detectChanges();
+
+    // switchMap already tore down the A subscription when the id reset to null.
+    expect(() => staleRequestA.flush(pendingCashPayment)).toThrow();
+
+    // A late response for A must never affect B's rendered state.
+    expect(text(harness)).not.toContain('Efectivo declarado');
+    expect(text(harness)).toContain('Pagar con Mercado Pago');
   });
 });

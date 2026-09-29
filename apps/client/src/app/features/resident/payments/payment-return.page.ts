@@ -14,7 +14,12 @@ type ReturnState =
   | { status: 'noContext' }
   | { status: 'loading' }
   | { status: 'success'; payment: Payment }
-  | { status: 'error'; error: ApiError };
+  | { status: 'error'; error: ApiError }
+  // The GET succeeded, but the payment it returned does not belong to the
+  // reservation this session actually started paying for. This is treated
+  // as a hard stop, never as a variant of `success` — no status is inferred
+  // and the mismatched payment is never rendered.
+  | { status: 'correlationError' };
 
 const PAYMENT_STATUS_LABELS: Record<Payment['status'], string> = {
   Created: 'Iniciando',
@@ -100,6 +105,14 @@ const RESERVATION_OUTCOME_EXPLANATIONS: Record<Payment['reservationOutcome'], st
           </p>
           <ion-button type="button" fill="clear" (click)="refresh()">Actualizar estado</ion-button>
         }
+        @case ('correlationError') {
+          <p role="alert">
+            <ion-text color="danger">
+              No pudimos correlacionar este pago con la reserva iniciada en esta sesión.
+            </ion-text>
+          </p>
+          <ion-button routerLink="/amenities">Volver a amenities</ion-button>
+        }
         @case ('success') {
           <section class="payment-card" aria-live="polite">
             <dl>
@@ -168,7 +181,23 @@ export class PaymentReturnPage {
       ? merge(of(null), this.refreshSubject).pipe(
           switchMap(() =>
             this.paymentService.getPayment(this.context!.paymentId).pipe(
-              map((payment): ReturnState => ({ status: 'success', payment })),
+              map((payment): ReturnState => {
+                // Defense in depth: the URL already pins the request to
+                // `context.paymentId`, but a mismatched `reservationId` (or,
+                // in principle, a backend bug returning the wrong payment
+                // for that id) must never be rendered as this session's
+                // result — no status is inferred from a payment that isn't
+                // provably the one this browser started.
+                if (
+                  payment.paymentId !== this.context!.paymentId ||
+                  payment.reservationId !== this.context!.reservationId
+                ) {
+                  this.returnContextStore.clear();
+                  return { status: 'correlationError' };
+                }
+
+                return { status: 'success', payment };
+              }),
               catchError((error: ApiError) => of<ReturnState>({ status: 'error', error })),
               startWith<ReturnState>({ status: 'loading' })
             )

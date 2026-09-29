@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MercadoPagoReturnContextStore } from './mercado-pago-return-context.store';
 
@@ -23,9 +23,26 @@ describe('MercadoPagoReturnContextStore', () => {
   });
 
   it('saves and reads back exactly paymentId and reservationId', () => {
-    store.save({ paymentId: 'payment-1', reservationId: 'reservation-1' });
+    const saved = store.save({ paymentId: 'payment-1', reservationId: 'reservation-1' });
 
+    expect(saved).toBe(true);
     expect(store.read()).toEqual({ paymentId: 'payment-1', reservationId: 'reservation-1' });
+  });
+
+  it('returns false, and persists nothing, when sessionStorage.setItem throws', () => {
+    const setItemSpy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('storage unavailable');
+    });
+
+    try {
+      const saved = store.save({ paymentId: 'payment-1', reservationId: 'reservation-1' });
+      expect(saved).toBe(false);
+    } finally {
+      setItemSpy.mockRestore();
+    }
+
+    expect(sessionStorage.getItem(STORAGE_KEY)).toBeNull();
+    expect(store.read()).toBeNull();
   });
 
   it('stores only the two ids in sessionStorage — nothing else', () => {

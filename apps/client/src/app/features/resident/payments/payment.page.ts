@@ -1,8 +1,18 @@
 import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
-import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute } from '@angular/router';
 import { IonButton, IonNote, IonSpinner, IonText } from '@ionic/angular';
-import { Subject, catchError, filter, map, merge, of, startWith, switchMap } from 'rxjs';
+import {
+  BehaviorSubject,
+  Subject,
+  catchError,
+  distinctUntilChanged,
+  map,
+  merge,
+  of,
+  startWith,
+  switchMap
+} from 'rxjs';
 
 import { ApiError } from '../../../core/api/api-error';
 import { AppShellComponent } from '../../../layout/app-shell/app-shell.component';
@@ -32,7 +42,12 @@ type PaymentActionState =
   | { status: 'idle' }
   | { status: 'submittingMercadoPago' }
   | { status: 'submittingCash' }
-  | { status: 'error'; method: 'MercadoPago' | 'Cash'; error: ApiError };
+  | { status: 'error'; method: 'MercadoPago' | 'Cash'; error: ApiError }
+  // The backend already created the Mercado Pago payment successfully — this
+  // is not an ApiError and must never be faked as one (e.g. status 0). It
+  // means sessionStorage itself failed, so redirecting would strand the
+  // resident with no way to correlate the return.
+  | { status: 'returnContextError' };
 
 type CashPaymentState =
   | { status: 'idle' }
@@ -155,51 +170,87 @@ const RESERVATION_OUTCOME_EXPLANATIONS: Record<Payment['reservationOutcome'], st
                 Esta reserva no está pendiente de pago (estado actual: {{ reservation()!.status }}).
               </ion-text>
             </p>
-          } @else if (cashPaymentState(); as cashState) {
-            @if (cashState.status === 'success') {
-              <section class="payment-card" aria-live="polite">
-                <h3>Efectivo declarado</h3>
-                <dl>
-                  <dt>Método</dt>
-                  <dd>Efectivo</dd>
-                  <dt>Estado del pago</dt>
-                  <dd>{{ paymentStatusLabel(cashState.payment.status) }}</dd>
-                  <dt>Monto</dt>
-                  <dd>{{ formatAmount(cashState.payment.amount, cashState.payment.currency) }}</dd>
-                  @if (cashState.payment.cashConfirmedAtUtc; as confirmedAt) {
-                    <dt>Confirmado</dt>
-                    <dd>{{ formatDateTime(confirmedAt) }}</dd>
-                  }
-                </dl>
-
-                @if (cashState.payment.status === 'Pending') {
-                  <p>
-                    <ion-text color="medium">
-                      La declaración de efectivo todavía NO confirma la reserva. Un administrador
-                      debe confirmar que recibió el dinero.
-                    </ion-text>
-                  </p>
-                } @else if (
-                  cashState.payment.status === 'Approved' &&
-                  cashState.payment.reservationOutcome === 'ReservationConfirmed'
-                ) {
-                  <p>
-                    <ion-text color="success">Pago aprobado y reserva confirmada.</ion-text>
-                  </p>
-                } @else if (cashState.payment.requiresManualReview) {
-                  <p role="alert">
-                    <ion-note color="warning">
-                      El pago fue aprobado, pero requiere revisión manual.
-                      {{ reservationOutcomeExplanation(cashState.payment.reservationOutcome) }}
-                    </ion-note>
-                  </p>
+          } @else if (cashPaymentState().status !== 'idle') {
+            <!--
+              Once a cash paymentId is known, the resident stays in this
+              branch regardless of the read model's own loading/error state —
+              a declared Cash payment is real and must never be replaced by
+              the method-choice section just because its GET is in flight or
+              failed.
+            -->
+            @if (cashPaymentState(); as cashState) {
+              @switch (cashState.status) {
+                @case ('loading') {
+                  <section class="payment-card" aria-live="polite">
+                    <h3>Efectivo declarado</h3>
+                    <p>
+                      <ion-spinner name="dots" />
+                      <ion-text color="medium">Consultando el estado del pago…</ion-text>
+                    </p>
+                  </section>
                 }
+                @case ('error') {
+                  <section class="payment-card" role="alert">
+                    <h3>Efectivo declarado</h3>
+                    <p>
+                      <ion-text color="danger">{{ cashPaymentErrorTitle() }}</ion-text>
+                      @if (cashPaymentErrorDetail(); as detail) {
+                        <br />
+                        <ion-text color="danger">{{ detail }}</ion-text>
+                      }
+                    </p>
+                    <ion-button type="button" fill="clear" (click)="refreshCashPayment()">
+                      Actualizar estado
+                    </ion-button>
+                  </section>
+                }
+                @case ('success') {
+                  <section class="payment-card" aria-live="polite">
+                    <h3>Efectivo declarado</h3>
+                    <dl>
+                      <dt>Método</dt>
+                      <dd>Efectivo</dd>
+                      <dt>Estado del pago</dt>
+                      <dd>{{ paymentStatusLabel(cashState.payment.status) }}</dd>
+                      <dt>Monto</dt>
+                      <dd>{{ formatAmount(cashState.payment.amount, cashState.payment.currency) }}</dd>
+                      @if (cashState.payment.cashConfirmedAtUtc; as confirmedAt) {
+                        <dt>Confirmado</dt>
+                        <dd>{{ formatDateTime(confirmedAt) }}</dd>
+                      }
+                    </dl>
 
-                <ion-button type="button" fill="clear" (click)="refreshCashPayment()">
-                  Actualizar estado
-                </ion-button>
-              </section>
-            } @else {
+                    @if (cashState.payment.status === 'Pending') {
+                      <p>
+                        <ion-text color="medium">
+                          La declaración de efectivo todavía NO confirma la reserva. Un
+                          administrador debe confirmar que recibió el dinero.
+                        </ion-text>
+                      </p>
+                    } @else if (
+                      cashState.payment.status === 'Approved' &&
+                      cashState.payment.reservationOutcome === 'ReservationConfirmed'
+                    ) {
+                      <p>
+                        <ion-text color="success">Pago aprobado y reserva confirmada.</ion-text>
+                      </p>
+                    } @else if (cashState.payment.requiresManualReview) {
+                      <p role="alert">
+                        <ion-note color="warning">
+                          El pago fue aprobado, pero requiere revisión manual.
+                          {{ reservationOutcomeExplanation(cashState.payment.reservationOutcome) }}
+                        </ion-note>
+                      </p>
+                    }
+
+                    <ion-button type="button" fill="clear" (click)="refreshCashPayment()">
+                      Actualizar estado
+                    </ion-button>
+                  </section>
+                }
+              }
+            }
+          } @else {
             <section class="method-card">
               <h3>Elegí cómo pagar</h3>
               <div class="method-actions">
@@ -234,31 +285,27 @@ const RESERVATION_OUTCOME_EXPLANATIONS: Record<Payment['reservationOutcome'], st
                       <ion-text color="danger">{{ detail }}</ion-text>
                     }
                   </p>
-                  <p>
-                    <ion-note color="medium">
-                      Podés volver a intentarlo: el servidor reutiliza el intento activo de este
-                      método.
-                    </ion-note>
+                  @if (shouldShowRetryGuidance(action)) {
+                    <p>
+                      <ion-note color="medium">
+                        Podés volver a intentarlo: el servidor reutiliza el intento activo de este
+                        método.
+                      </ion-note>
+                    </p>
+                  }
+                } @else if (action.status === 'returnContextError') {
+                  <p role="alert">
+                    <ion-text color="danger">
+                      No pudimos preparar de forma segura el retorno desde Mercado Pago. No salimos
+                      de la aplicación.
+                    </ion-text>
                   </p>
                 }
-              }
-
-              @if (cashPaymentState().status === 'loading') {
-                <p aria-live="polite">
-                  <ion-spinner name="dots" /> <ion-text color="medium">Consultando el pago…</ion-text>
-                </p>
-              }
-
-              @if (cashPaymentState().status === 'error') {
-                <p role="alert">
-                  <ion-text color="danger">{{ cashPaymentErrorTitle() }}</ion-text>
-                </p>
               }
             </section>
           }
         }
       }
-    }
     </app-shell>
   `
 })
@@ -269,18 +316,23 @@ export class PaymentPage {
   private readonly externalNavigation = inject(ExternalNavigationService);
   private readonly destroyRef = inject(DestroyRef);
 
-  private readonly routeReservationId = toSignal(
-    this.route.paramMap.pipe(map((params) => params.get('reservationId'))),
-    { initialValue: null as string | null }
+  // Derived directly from the route observable — not from a signal fed back
+  // through `toObservable()` — so both this stream and the reset below fire
+  // synchronously with router navigation, with no dependency on an effect
+  // flush timing to reset per-reservation state when Angular reuses this
+  // component instance across `/reservations/A/payment` -> `.../B/payment`.
+  private readonly reservationIdChanges$ = this.route.paramMap.pipe(
+    map((params) => params.get('reservationId') ?? ''),
+    distinctUntilChanged()
   );
 
-  readonly reservationId = computed(() => this.routeReservationId() ?? '');
+  readonly reservationId = toSignal(this.reservationIdChanges$, { initialValue: '' });
 
   private readonly reservationRetrySubject = new Subject<void>();
 
   readonly reservationState = toSignal(
     merge(
-      toObservable(this.reservationId),
+      this.reservationIdChanges$,
       this.reservationRetrySubject.pipe(map(() => this.reservationId()))
     ).pipe(
       switchMap((reservationId) => {
@@ -325,30 +377,34 @@ export class PaymentPage {
     return status === 'submittingMercadoPago' || status === 'submittingCash';
   });
 
-  // A plain Subject, not a signal read through `toObservable` — the latter
-  // only propagates a write on the next effect flush, which never happens in
-  // a test that flushes an `HttpTestingController` request synchronously and
-  // relies on `whenStable()` (no pending zone task to wait for). A Subject
-  // emits synchronously to this pipeline, matching `reservationRetrySubject`.
-  private readonly cashPaymentIdSubject = new Subject<string>();
-  private lastCashPaymentId: string | null = null;
+  // A `BehaviorSubject`, not a signal read through `toObservable` — the
+  // latter only propagates a write on the next effect flush, which never
+  // happens in a test that flushes an `HttpTestingController` request
+  // synchronously and relies on `whenStable()` (no pending zone task to wait
+  // on). A Subject emits synchronously, matching `reservationRetrySubject`.
+  // `null` both represents "no cash payment declared yet" (the initial
+  // value) and is how a reservationId change cancels an in-flight GET for
+  // the *previous* reservation's payment — `switchMap` below tears down that
+  // inner subscription outright the instant `null` is pushed.
+  private readonly cashPaymentIdSubject = new BehaviorSubject<string | null>(null);
   private readonly cashRefreshSubject = new Subject<void>();
 
   readonly cashPaymentState = toSignal(
     merge(
       this.cashPaymentIdSubject,
-      this.cashRefreshSubject.pipe(
-        map(() => this.lastCashPaymentId),
-        filter((paymentId): paymentId is string => paymentId !== null)
-      )
+      this.cashRefreshSubject.pipe(map(() => this.cashPaymentIdSubject.value))
     ).pipe(
-      switchMap((paymentId) =>
-        this.paymentService.getPayment(paymentId).pipe(
+      switchMap((paymentId) => {
+        if (!paymentId) {
+          return of<CashPaymentState>({ status: 'idle' });
+        }
+
+        return this.paymentService.getPayment(paymentId).pipe(
           map((payment): CashPaymentState => ({ status: 'success', payment })),
           catchError((error: ApiError) => of<CashPaymentState>({ status: 'error', error })),
           startWith<CashPaymentState>({ status: 'loading' })
-        )
-      )
+        );
+      })
     ),
     { initialValue: { status: 'idle' } as CashPaymentState }
   );
@@ -358,11 +414,26 @@ export class PaymentPage {
     return state.status === 'error' ? state.error.title : '';
   });
 
+  readonly cashPaymentErrorDetail = computed(() => {
+    const state = this.cashPaymentState();
+    return state.status === 'error' ? (state.error.detail ?? null) : null;
+  });
+
   private readonly nowMs = signal(Date.now());
 
   constructor() {
     const timer = setInterval(() => this.nowMs.set(Date.now()), 1000);
     this.destroyRef.onDestroy(() => clearInterval(timer));
+
+    // Angular can reuse this component instance across
+    // `/reservations/A/payment` -> `/reservations/B/payment` (the route
+    // matches the same component). Every real reservationId change resets
+    // all per-reservation state synchronously — including cancelling any
+    // cash-payment GET still in flight for the reservation just left.
+    this.reservationIdChanges$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
+      this.actionState.set({ status: 'idle' });
+      this.cashPaymentIdSubject.next(null);
+    });
   }
 
   readonly remainingMs = computed<number | null>(() => {
@@ -439,11 +510,21 @@ export class PaymentPage {
           }
 
           // Only the two correlation ids — never the checkoutUrl, tokens,
-          // or provider order id — before leaving the app entirely.
-          this.returnContextStore.save({
+          // or provider order id — before leaving the app entirely. The
+          // backend payment already exists at this point; if it cannot be
+          // saved, we must NOT navigate away with no way to correlate the
+          // return, but we also must not fake an ApiError for a purely
+          // local storage failure.
+          const saved = this.returnContextStore.save({
             paymentId: response.paymentId,
             reservationId
           });
+
+          if (!saved) {
+            this.actionState.set({ status: 'returnContextError' });
+            return;
+          }
+
           this.actionState.set({ status: 'idle' });
           this.externalNavigation.navigateTo(response.checkoutUrl);
         },
@@ -482,7 +563,6 @@ export class PaymentPage {
           this.actionState.set({ status: 'idle' });
           // Fetches the full read model immediately — the declare response
           // itself is intentionally minimal (paymentId/status/expiry only).
-          this.lastCashPaymentId = response.paymentId;
           this.cashPaymentIdSubject.next(response.paymentId);
         },
         error: (error: ApiError) => {
@@ -493,5 +573,22 @@ export class PaymentPage {
           this.actionState.set({ status: 'error', method: 'Cash', error });
         }
       });
+  }
+
+  /**
+   * Both POSTs are backend-idempotent, so "you can retry" is only honest for
+   * errors where the server itself would consider a retry meaningful: a
+   * network failure (no request ever reached it), or — for Mercado Pago
+   * specifically — a 502 from the provider being transiently unavailable.
+   * A 403/404/409/422 is a real, stable rejection (no permission, no active
+   * conflicting attempt, an invalid price snapshot, ...) that a bare retry
+   * will not fix.
+   */
+  shouldShowRetryGuidance(action: Extract<PaymentActionState, { status: 'error' }>): boolean {
+    if (action.error.status === 0) {
+      return true;
+    }
+
+    return action.method === 'MercadoPago' && action.error.status === 502;
   }
 }

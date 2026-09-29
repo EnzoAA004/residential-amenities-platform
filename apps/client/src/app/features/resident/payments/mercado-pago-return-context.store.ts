@@ -39,16 +39,23 @@ function isValidContext(value: unknown): value is MercadoPagoReturnContext {
   providedIn: 'root'
 })
 export class MercadoPagoReturnContextStore {
-  save(context: MercadoPagoReturnContext): void {
+  /**
+   * Returns `true` once the context is actually persisted, `false` if
+   * `sessionStorage` threw (private browsing, disabled storage, quota).
+   * The caller (`PaymentPage`) must not redirect to Mercado Pago's checkout
+   * on `false`: the backend payment was created successfully, but without a
+   * saved correlation id, the return page could never confirm which payment
+   * to show.
+   */
+  save(context: MercadoPagoReturnContext): boolean {
     try {
       sessionStorage.setItem(
         STORAGE_KEY,
         JSON.stringify({ paymentId: context.paymentId, reservationId: context.reservationId })
       );
+      return true;
     } catch {
-      // sessionStorage can throw (private browsing, disabled storage, quota).
-      // The return page's "no context" state already handles a missing
-      // entry safely, so there is nothing further to do here.
+      return false;
     }
   }
 

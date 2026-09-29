@@ -191,4 +191,31 @@ describe('PaymentReturnPage', () => {
     expect(text(harness)).toContain('la reserva ya estaba cancelada');
     expect(text(harness)).not.toContain('Pago aprobado y reserva confirmada.');
   });
+
+  it('never renders a payment whose reservationId does not match the saved return context, and clears the store', async () => {
+    const store = TestBed.inject(MercadoPagoReturnContextStore);
+    store.save({ paymentId: 'payment-A', reservationId: 'reservation-A' });
+
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/payments/return', PaymentReturnPage);
+
+    // The backend returns a payment for a *different* reservation than the
+    // one this session actually started paying for.
+    httpMock.expectOne('/api/payments/payment-A').flush({
+      ...approvedPayment,
+      paymentId: 'payment-A',
+      reservationId: 'reservation-B',
+      status: 'Approved'
+    });
+    await harness.fixture.whenStable();
+    harness.detectChanges();
+
+    expect(text(harness)).not.toContain('Aprobado');
+    expect(text(harness)).not.toContain('Pago aprobado y reserva confirmada.');
+    expect(text(harness)).toContain(
+      'No pudimos correlacionar este pago con la reserva iniciada en esta sesión.'
+    );
+    expect(store.read()).toBeNull();
+    httpMock.expectNone(() => true);
+  });
 });

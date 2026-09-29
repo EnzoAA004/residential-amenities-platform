@@ -2,6 +2,7 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { IonButton, IonInput, IonItem, IonLabel, IonSpinner, IonText } from '@ionic/angular';
 
 import { ApiError } from '../../../core/api/api-error';
+import { AppErrorStateComponent } from '../../../shared/error-state/app-error-state.component';
 import { AdminEventSlot, EventSlotRequest } from '../admin.models';
 import { AdminService } from '../admin.service';
 
@@ -47,7 +48,7 @@ function toInputTime(wire: string): string {
 @Component({
   selector: 'app-admin-event-slots-page',
   standalone: true,
-  imports: [IonButton, IonInput, IonItem, IonLabel, IonSpinner, IonText],
+  imports: [AppErrorStateComponent, IonButton, IonInput, IonItem, IonLabel, IonSpinner, IonText],
   styles: [
     `
       .admin-lookup,
@@ -105,10 +106,7 @@ function toInputTime(wire: string): string {
           </p>
         }
         @case ('error') {
-          <p role="alert"><ion-text color="danger">{{ listErrorTitle() }}</ion-text></p>
-          @if (listErrorDetail(); as detail) {
-            <p role="alert"><ion-text color="danger">{{ detail }}</ion-text></p>
-          }
+          <app-error-state [title]="listErrorTitle()" [detail]="listErrorDetail() ?? undefined" />
         }
         @case ('success') {
           @if (slots().length === 0) {
@@ -156,10 +154,7 @@ function toInputTime(wire: string): string {
           }
 
           @if (stateChangeError(); as error) {
-            <p role="alert"><ion-text color="danger">{{ error.title }}</ion-text></p>
-            @if (error.detail) {
-              <p role="alert"><ion-text color="danger">{{ error.detail }}</ion-text></p>
-            }
+            <app-error-state [title]="error.title" [detail]="error.detail" />
           }
 
           <h2>{{ draft().editingId ? 'Editar turno' : 'Crear turno' }}</h2>
@@ -182,7 +177,7 @@ function toInputTime(wire: string): string {
             </ion-item>
 
             @if (validationError(); as error) {
-              <p role="alert"><ion-text color="danger">{{ error }}</ion-text></p>
+              <app-error-state [title]="error" />
             }
 
             <div>
@@ -196,10 +191,7 @@ function toInputTime(wire: string): string {
           </form>
 
           @if (formState().status === 'error') {
-            <p role="alert"><ion-text color="danger">{{ formErrorTitle() }}</ion-text></p>
-            @if (formErrorDetail(); as detail) {
-              <p role="alert"><ion-text color="danger">{{ detail }}</ion-text></p>
-            }
+            <app-error-state [title]="formErrorTitle()" [detail]="formErrorDetail() ?? undefined" />
           }
         }
       }

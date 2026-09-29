@@ -16,6 +16,7 @@ import {
 
 import { ApiError } from '../../../core/api/api-error';
 import { AppShellComponent } from '../../../layout/app-shell/app-shell.component';
+import { AppErrorStateComponent } from '../../../shared/error-state/app-error-state.component';
 import { ExternalNavigationService } from './external-navigation.service';
 import { MercadoPagoReturnContextStore } from './mercado-pago-return-context.store';
 import { Payment } from './payment.models';
@@ -86,7 +87,7 @@ const RESERVATION_OUTCOME_EXPLANATIONS: Record<Payment['reservationOutcome'], st
 @Component({
   selector: 'app-payment-page',
   standalone: true,
-  imports: [AppShellComponent, IonButton, IonNote, IonSpinner, IonText],
+  imports: [AppErrorStateComponent, AppShellComponent, IonButton, IonNote, IonSpinner, IonText],
   styles: [
     `
       .payment-card,
@@ -128,14 +129,13 @@ const RESERVATION_OUTCOME_EXPLANATIONS: Record<Payment['reservationOutcome'], st
           </p>
         }
         @case ('error') {
-          <p role="alert">
-            <ion-text color="danger">{{ reservationErrorTitle() }}</ion-text>
-            @if (reservationErrorDetail(); as detail) {
-              <br />
-              <ion-text color="danger">{{ detail }}</ion-text>
-            }
-          </p>
-          <ion-button type="button" fill="clear" (click)="reloadReservation()">Retry</ion-button>
+          <app-error-state
+            [title]="reservationErrorTitle()"
+            [detail]="reservationErrorDetail() ?? undefined"
+            [showRetry]="true"
+            retryLabel="Reintentar"
+            (retry)="reloadReservation()"
+          />
         }
         @case ('success') {
           <section class="payment-card">
@@ -191,18 +191,15 @@ const RESERVATION_OUTCOME_EXPLANATIONS: Record<Payment['reservationOutcome'], st
                   </section>
                 }
                 @case ('error') {
-                  <section class="payment-card" role="alert">
+                  <section class="payment-card">
                     <h3>Efectivo declarado</h3>
-                    <p>
-                      <ion-text color="danger">{{ cashPaymentErrorTitle() }}</ion-text>
-                      @if (cashPaymentErrorDetail(); as detail) {
-                        <br />
-                        <ion-text color="danger">{{ detail }}</ion-text>
-                      }
-                    </p>
-                    <ion-button type="button" fill="clear" (click)="refreshCashPayment()">
-                      Actualizar estado
-                    </ion-button>
+                    <app-error-state
+                      [title]="cashPaymentErrorTitle()"
+                      [detail]="cashPaymentErrorDetail() ?? undefined"
+                      [showRetry]="true"
+                      retryLabel="Actualizar estado"
+                      (retry)="refreshCashPayment()"
+                    />
                   </section>
                 }
                 @case ('success') {
@@ -279,13 +276,7 @@ const RESERVATION_OUTCOME_EXPLANATIONS: Record<Payment['reservationOutcome'], st
 
               @if (actionState(); as action) {
                 @if (action.status === 'error') {
-                  <p role="alert">
-                    <ion-text color="danger">{{ action.error.title }}</ion-text>
-                    @if (action.error.detail; as detail) {
-                      <br />
-                      <ion-text color="danger">{{ detail }}</ion-text>
-                    }
-                  </p>
+                  <app-error-state [title]="action.error.title" [detail]="action.error.detail" />
                   @if (shouldShowRetryGuidance(action)) {
                     <p>
                       <ion-note color="medium">
@@ -295,12 +286,9 @@ const RESERVATION_OUTCOME_EXPLANATIONS: Record<Payment['reservationOutcome'], st
                     </p>
                   }
                 } @else if (action.status === 'returnContextError') {
-                  <p role="alert">
-                    <ion-text color="danger">
-                      No pudimos preparar de forma segura el retorno desde Mercado Pago. No salimos
-                      de la aplicación.
-                    </ion-text>
-                  </p>
+                  <app-error-state
+                    title="No pudimos preparar de forma segura el retorno desde Mercado Pago. No salimos de la aplicación."
+                  />
                 }
               }
             </section>

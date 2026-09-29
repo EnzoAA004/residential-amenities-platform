@@ -2,6 +2,7 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { IonButton, IonInput, IonItem, IonLabel, IonSelect, IonSelectOption, IonSpinner, IonText } from '@ionic/angular';
 
 import { ApiError } from '../../../core/api/api-error';
+import { AppErrorStateComponent } from '../../../shared/error-state/app-error-state.component';
 import { AdminAvailabilityConfig, AdminDayOfWeek, AvailabilityWindowInput } from '../admin.models';
 import { AdminService } from '../admin.service';
 
@@ -60,7 +61,17 @@ function toInputTime(wire: string): string {
 @Component({
   selector: 'app-admin-availability-page',
   standalone: true,
-  imports: [IonButton, IonInput, IonItem, IonLabel, IonSelect, IonSelectOption, IonSpinner, IonText],
+  imports: [
+    AppErrorStateComponent,
+    IonButton,
+    IonInput,
+    IonItem,
+    IonLabel,
+    IonSelect,
+    IonSelectOption,
+    IonSpinner,
+    IonText
+  ],
   styles: [
     `
       .admin-lookup,
@@ -121,10 +132,7 @@ function toInputTime(wire: string): string {
           </p>
         }
         @case ('error') {
-          <p role="alert"><ion-text color="danger">{{ configErrorTitle() }}</ion-text></p>
-          @if (configErrorDetail(); as detail) {
-            <p role="alert"><ion-text color="danger">{{ detail }}</ion-text></p>
-          }
+          <app-error-state [title]="configErrorTitle()" [detail]="configErrorDetail() ?? undefined" />
         }
         @case ('success') {
           <h2>Ventanas semanales</h2>
@@ -160,7 +168,7 @@ function toInputTime(wire: string): string {
           </p>
 
           @if (replaceValidationError(); as error) {
-            <p role="alert"><ion-text color="danger">{{ error }}</ion-text></p>
+            <app-error-state [title]="error" />
           }
 
           <p>
@@ -170,10 +178,7 @@ function toInputTime(wire: string): string {
           </p>
 
           @if (replaceState().status === 'error') {
-            <p role="alert"><ion-text color="danger">{{ replaceErrorTitle() }}</ion-text></p>
-            @if (replaceErrorDetail(); as detail) {
-              <p role="alert"><ion-text color="danger">{{ detail }}</ion-text></p>
-            }
+            <app-error-state [title]="replaceErrorTitle()" [detail]="replaceErrorDetail() ?? undefined" />
           }
 
           <h2>Períodos de mantenimiento / no disponibilidad</h2>
@@ -208,10 +213,7 @@ function toInputTime(wire: string): string {
           }
 
           @if (deleteError(); as error) {
-            <p role="alert"><ion-text color="danger">{{ error.title }}</ion-text></p>
-            @if (error.detail) {
-              <p role="alert"><ion-text color="danger">{{ error.detail }}</ion-text></p>
-            }
+            <app-error-state [title]="error.title" [detail]="error.detail" />
           }
 
           <form class="period-form" (submit)="submitPeriod($event)">
@@ -240,7 +242,7 @@ function toInputTime(wire: string): string {
             </ion-item>
 
             @if (periodValidationError(); as error) {
-              <p role="alert"><ion-text color="danger">{{ error }}</ion-text></p>
+              <app-error-state [title]="error" />
             }
 
             <ion-button type="submit" [disabled]="periodCreateState().status === 'creating'">
@@ -249,10 +251,7 @@ function toInputTime(wire: string): string {
           </form>
 
           @if (periodCreateState().status === 'error') {
-            <p role="alert"><ion-text color="danger">{{ periodCreateErrorTitle() }}</ion-text></p>
-            @if (periodCreateErrorDetail(); as detail) {
-              <p role="alert"><ion-text color="danger">{{ detail }}</ion-text></p>
-            }
+            <app-error-state [title]="periodCreateErrorTitle()" [detail]="periodCreateErrorDetail() ?? undefined" />
           }
         }
       }

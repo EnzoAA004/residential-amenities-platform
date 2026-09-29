@@ -6,6 +6,7 @@ import { IonButton, IonNote, IonSpinner, IonText } from '@ionic/angular';
 
 import { ApiError } from '../../../../core/api/api-error';
 import { ResidentContextStore } from '../../../../core/resident-context/resident-context.store';
+import { AppErrorStateComponent } from '../../../../shared/error-state/app-error-state.component';
 import { AmenitySummary } from '../../amenities/amenities.models';
 import {
   defaultAvailabilityRange,
@@ -47,7 +48,7 @@ const USE_TYPE_LABELS: Record<LeisureUseType, string> = {
 @Component({
   selector: 'app-leisure-reservation',
   standalone: true,
-  imports: [ReactiveFormsModule, RouterLink, IonButton, IonNote, IonSpinner, IonText],
+  imports: [AppErrorStateComponent, ReactiveFormsModule, RouterLink, IonButton, IonNote, IonSpinner, IonText],
   styles: [
     `
       .leisure-form {
@@ -215,14 +216,13 @@ const USE_TYPE_LABELS: Record<LeisureUseType, string> = {
               </p>
             }
             @case ('error') {
-              <p role="alert">
-                <ion-text color="danger">{{ quoteErrorTitle() }}</ion-text>
-                @if (quoteErrorDetail(); as detail) {
-                  <br />
-                  <ion-text color="danger">{{ detail }}</ion-text>
-                }
-              </p>
-              <ion-button type="button" fill="clear" (click)="requestQuote()">Retry</ion-button>
+              <app-error-state
+                [title]="quoteErrorTitle()"
+                [detail]="quoteErrorDetail() ?? undefined"
+                [showRetry]="true"
+                retryLabel="Reintentar cotización"
+                (retry)="requestQuote()"
+              />
             }
             @case ('success') {
               <section class="quote-card" aria-live="polite">
@@ -247,13 +247,7 @@ const USE_TYPE_LABELS: Record<LeisureUseType, string> = {
           }
 
           @if (createStatus.status === 'error') {
-            <p role="alert">
-              <ion-text color="danger">{{ createErrorTitle() }}</ion-text>
-              @if (createErrorDetail(); as detail) {
-                <br />
-                <ion-text color="danger">{{ detail }}</ion-text>
-              }
-            </p>
+            <app-error-state [title]="createErrorTitle()" [detail]="createErrorDetail() ?? undefined" />
           }
 
           @if (createStatus.status === 'unknown') {

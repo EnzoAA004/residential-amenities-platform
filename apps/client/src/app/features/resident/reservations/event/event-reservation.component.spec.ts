@@ -1,6 +1,8 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
+import { RouterLink, provideRouter } from '@angular/router';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { API_BASE_URL } from '../../../../core/config/api-base-url.token';
@@ -87,6 +89,7 @@ describe('EventReservationComponent', () => {
       providers: [
         provideHttpClient(),
         provideHttpClientTesting(),
+        provideRouter([]),
         { provide: API_BASE_URL, useValue: '/api' },
         AuthSessionStore,
         ResidentContextStore
@@ -617,6 +620,39 @@ describe('EventReservationComponent', () => {
       expect(fixture.nativeElement.textContent).not.toContain('Event reservation hold created');
     }
   );
+
+  it('offers a link to continue to payment for the created reservation', async () => {
+    await selectSlotAndReachQuoteReady();
+    component.requestQuote();
+    httpMock.expectOne((req) => req.url === '/api/pricing/quote').flush(quote);
+    await fixture.whenStable();
+
+    component.create();
+    httpMock.expectOne('/api/reservations').flush({
+      id: 'reservation-1',
+      buildingId: 'building-a',
+      useType: 'Event',
+      status: 'Pending',
+      startsAtUtc: slot1.startsAtUtc,
+      endsAtUtc: slot1.endsAtUtc,
+      createdAtUtc: '2026-01-01T00:00:00Z',
+      expiresAtUtc: '2026-01-01T00:30:00Z',
+      resources: [],
+      priceLines: [],
+      currency: 'ARS',
+      totalAmount: 15000
+    });
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const linkDebugElement = fixture.debugElement.query(By.directive(RouterLink));
+    expect(linkDebugElement).toBeTruthy();
+    expect(linkDebugElement.injector.get(RouterLink).routerLink).toEqual([
+      '/reservations',
+      'reservation-1',
+      'payment'
+    ]);
+  });
 
   it('resets the whole flow only via the explicit "create another" action', async () => {
     await selectSlotAndReachQuoteReady();

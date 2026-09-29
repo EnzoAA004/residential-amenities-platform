@@ -1,6 +1,8 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
+import { RouterLink, provideRouter } from '@angular/router';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { API_BASE_URL } from '../../../../core/config/api-base-url.token';
@@ -78,6 +80,7 @@ describe('LeisureReservationComponent', () => {
       providers: [
         provideHttpClient(),
         provideHttpClientTesting(),
+        provideRouter([]),
         { provide: API_BASE_URL, useValue: '/api' },
         AuthSessionStore,
         ResidentContextStore
@@ -337,6 +340,27 @@ describe('LeisureReservationComponent', () => {
     expect(fixture.nativeElement.textContent).toContain(
       'El precio se actualizó al crear la reserva. Este es el importe registrado en el hold.'
     );
+  });
+
+  it('offers a link to continue to payment for the created reservation, not a query-string price', async () => {
+    createFixture(sharedOnlyAmenity);
+    component.requestQuote();
+    httpMock.expectOne((req) => req.url === '/api/pricing/quote').flush(quote);
+    await fixture.whenStable();
+
+    component.create();
+    const reservation = reservationWith();
+    httpMock.expectOne('/api/reservations').flush(reservation);
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const linkDebugElement = fixture.debugElement.query(By.directive(RouterLink));
+    expect(linkDebugElement).toBeTruthy();
+    expect(linkDebugElement.injector.get(RouterLink).routerLink).toEqual([
+      '/reservations',
+      reservation.id,
+      'payment'
+    ]);
   });
 
   it('shows a clear 409 conflict message and leaves no phantom reservation state', async () => {

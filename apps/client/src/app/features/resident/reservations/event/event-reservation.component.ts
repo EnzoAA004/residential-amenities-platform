@@ -1,5 +1,6 @@
 import { Component, DestroyRef, Input, computed, effect, inject, signal, untracked } from '@angular/core';
 import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
+import { RouterLink } from '@angular/router';
 import { IonButton, IonNote, IonSpinner, IonText } from '@ionic/angular';
 import { Subject, catchError, map, merge, of, startWith, switchMap } from 'rxjs';
 
@@ -48,7 +49,7 @@ type CreateState =
 @Component({
   selector: 'app-event-reservation',
   standalone: true,
-  imports: [IonButton, IonNote, IonSpinner, IonText],
+  imports: [RouterLink, IonButton, IonNote, IonSpinner, IonText],
   styles: [
     `
       .event-form {
@@ -160,6 +161,10 @@ type CreateState =
           <p>
             <ion-text color="medium">El pago se realizará en el siguiente paso.</ion-text>
           </p>
+
+          <ion-button [routerLink]="['/reservations', createStatus.reservation.id, 'payment']">
+            Continuar al pago
+          </ion-button>
 
           <ion-button type="button" fill="outline" (click)="resetFlow()">
             Create another reservation

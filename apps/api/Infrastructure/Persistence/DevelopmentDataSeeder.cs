@@ -89,6 +89,16 @@ public static class DevelopmentDataSeeder
             dbContext.EventSlotDefinitions.AddRange(CreatePilotEventSlots());
         }
 
+        var hasReservationEntryPoints = await dbContext.ReservationEntryPoints
+            .AnyAsync(
+                entryPoint => entryPoint.BuildingId == PilotBuildingId,
+                cancellationToken);
+
+        if (!hasReservationEntryPoints)
+        {
+            dbContext.ReservationEntryPoints.AddRange(CreatePilotReservationEntryPoints());
+        }
+
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 
@@ -252,5 +262,19 @@ public static class DevelopmentDataSeeder
             "Placeholder evening slot",
             new TimeOnly(19, 0),
             new TimeOnly(22, 0));
+    }
+
+    // Development-only QR entry point for the pilot SUM. The token is an
+    // opaque product URL handle, not a business decision; production QR
+    // management can replace it with administered values later.
+    private static IEnumerable<ReservationEntryPoint> CreatePilotReservationEntryPoints()
+    {
+        yield return new ReservationEntryPoint(
+            Guid.NewGuid(),
+            "pilot-sum",
+            PilotBuildingId,
+            PilotSumId,
+            ReservationUseType.SharedLeisure,
+            "Pilot SUM");
     }
 }

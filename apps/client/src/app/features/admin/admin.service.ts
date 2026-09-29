@@ -11,7 +11,10 @@ import {
   AdminReservationDetail,
   AdminReservationFilters,
   AdminReservationPage,
-  AdminRescheduleReservationRequest
+  AdminRescheduleReservationRequest,
+  AuditFilters,
+  AuditPage,
+  ConfirmCashPaymentResponse
 } from './admin.models';
 
 @Injectable({
@@ -54,6 +57,25 @@ export class AdminService {
     return this.api.post<AdminReservationDetail>(
       apiPaths.admin.reservations.reschedule(reservationId),
       request
+    );
+  }
+
+  listAudit(filters: AuditFilters): Observable<AuditPage> {
+    return this.api.get<AuditPage>(apiPaths.admin.audit.list, compactParams(filters));
+  }
+
+  /**
+   * Administrative confirmation that cash for a payment was physically
+   * received. Reuses the same `POST /payments/{paymentId}/cash/confirm`
+   * endpoint the resident-facing flow (#49) already calls — there is no
+   * separate `/admin/payments/.../confirm` route, and this method never
+   * invents one. Body is `null`: the backend derives everything from the
+   * payment itself and the authenticated Administrator.
+   */
+  confirmCashPayment(paymentId: string): Observable<ConfirmCashPaymentResponse> {
+    return this.api.post<ConfirmCashPaymentResponse, null>(
+      apiPaths.payments.confirmCash(paymentId),
+      null
     );
   }
 }

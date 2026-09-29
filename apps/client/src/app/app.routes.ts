@@ -85,6 +85,22 @@ export const routes: Routes = [
           )
       },
       {
+        path: 'audit',
+        pathMatch: 'full',
+        loadComponent: () =>
+          import('./features/admin/audit/admin-audit.page').then(
+            (module) => module.AdminAuditPage
+          )
+      },
+      {
+        path: 'payment-review',
+        pathMatch: 'full',
+        loadComponent: () =>
+          import('./features/admin/payment-review/admin-payment-review.page').then(
+            (module) => module.AdminPaymentReviewPage
+          )
+      },
+      {
         path: '**',
         redirectTo: ''
       }

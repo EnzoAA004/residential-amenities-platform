@@ -1,4 +1,5 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
   IonButton,
   IonInput,
@@ -12,7 +13,12 @@ import {
 import { Subject, catchError, map, of, startWith, switchMap } from 'rxjs';
 
 import { ApiError } from '../../../core/api/api-error';
-import { AdminPaymentFilters, AdminPaymentPage } from '../admin.models';
+import {
+  AdminPayment,
+  AdminPaymentFilters,
+  AdminPaymentPage,
+  ConfirmCashPaymentResponse
+} from '../admin.models';
 import { AdminService } from '../admin.service';
 
 type PaymentsState =
@@ -20,6 +26,19 @@ type PaymentsState =
   | { status: 'success'; page: AdminPaymentPage }
   | { status: 'empty'; page: AdminPaymentPage }
   | { status: 'error'; error: ApiError };
+
+/**
+ * Cash-confirmation state for the payment list, keyed by `paymentId`. Only
+ * one confirmation can be in flight/armed at a time — confirming cash
+ * receipt is a financial mutation, so it always requires an explicit
+ * "Sí, confirmar" step (`'armed'`) before the POST fires, and the UI blocks
+ * a second submit while `'confirming'`.
+ */
+type CashConfirmState =
+  | { status: 'idle' }
+  | { status: 'armed'; paymentId: string }
+  | { status: 'confirming'; paymentId: string }
+  | { status: 'error'; paymentId: string; error: ApiError };
 
 const methods = ['MercadoPago', 'Cash'] as const;
 const statuses = ['Created', 'Pending', 'Approved', 'Rejected', 'Cancelled'] as const;
@@ -189,6 +208,46 @@ const pageSizes = [25, 50, 100] as const;
                 @if (payment.cashConfirmedAtUtc) {
                   <p>Efectivo confirmado: {{ payment.cashConfirmedAtUtc }}</p>
                 }
+
+                @if (canConfirmCash(payment)) {
+                  @if (isArmed(payment.paymentId)) {
+                    <p role="alert">
+                      <ion-text color="warning">¿Confirmar que se recibió el efectivo de este pago?</ion-text>
+                    </p>
+                    <div class="admin-card__meta">
+                      <ion-button
+                        type="button"
+                        color="warning"
+                        [disabled]="isConfirming(payment.paymentId)"
+                        (click)="confirmCash(payment.paymentId)"
+                      >
+                        {{ isConfirming(payment.paymentId) ? 'Confirmando…' : 'Sí, confirmar' }}
+                      </ion-button>
+                      <ion-button
+                        type="button"
+                        fill="outline"
+                        [disabled]="isConfirming(payment.paymentId)"
+                        (click)="cancelConfirmCash()"
+                      >
+                        Cancelar
+                      </ion-button>
+                    </div>
+                  } @else {
+                    <ion-button type="button" fill="outline" (click)="armConfirmCash(payment.paymentId)">
+                      Confirmar efectivo
+                    </ion-button>
+                  }
+
+                  @if (confirmErrorFor(payment.paymentId); as confirmError) {
+                    <p role="alert">
+                      <ion-text color="danger">{{ confirmError.title }}</ion-text>
+                      @if (confirmError.detail; as detail) {
+                        <br />
+                        <ion-text color="danger">{{ detail }}</ion-text>
+                      }
+                    </p>
+                  }
+                }
               </li>
             }
           </ul>
@@ -206,7 +265,10 @@ const pageSizes = [25, 50, 100] as const;
 })
 export class AdminPaymentsPage {
   private readonly admin = inject(AdminService);
+  private readonly destroyRef = inject(DestroyRef);
   private readonly reloadSubject = new Subject<AdminPaymentFilters>();
+
+  protected readonly confirmState = signal<CashConfirmState>({ status: 'idle' });
 
   protected readonly methods = methods;
   protected readonly statuses = statuses;
@@ -288,5 +350,91 @@ export class AdminPaymentsPage {
     this.filters.set(next);
     this.draft.set(next);
     this.reload();
+  }
+
+  canConfirmCash(payment: AdminPayment): boolean {
+    return payment.method === 'Cash' && payment.status === 'Pending';
+  }
+
+  isArmed(paymentId: string): boolean {
+    const state = this.confirmState();
+    return state.status === 'armed' && state.paymentId === paymentId;
+  }
+
+  isConfirming(paymentId: string): boolean {
+    const state = this.confirmState();
+    return state.status === 'confirming' && state.paymentId === paymentId;
+  }
+
+  confirmErrorFor(paymentId: string): ApiError | null {
+    const state = this.confirmState();
+    return state.status === 'error' && state.paymentId === paymentId ? state.error : null;
+  }
+
+  armConfirmCash(paymentId: string): void {
+    if (this.confirmState().status === 'confirming') {
+      return;
+    }
+
+    this.confirmState.set({ status: 'armed', paymentId });
+  }
+
+  cancelConfirmCash(): void {
+    if (this.confirmState().status === 'confirming') {
+      return;
+    }
+
+    this.confirmState.set({ status: 'idle' });
+  }
+
+  confirmCash(paymentId: string): void {
+    if (this.confirmState().status === 'confirming') {
+      return;
+    }
+
+    this.confirmState.set({ status: 'confirming', paymentId });
+
+    this.admin
+      .confirmCashPayment(paymentId)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => {
+          this.applyCashConfirmation(response);
+          this.confirmState.set({ status: 'idle' });
+        },
+        error: (error: ApiError) => {
+          this.confirmState.set({ status: 'error', paymentId, error });
+        }
+      });
+  }
+
+  /**
+   * Merges the confirm response's real fields into the currently rendered
+   * page — never assumes `Approved` implies `ReservationConfirmed`, always
+   * takes `reservationOutcome`/`requiresManualReview` from the response.
+   */
+  private applyCashConfirmation(response: ConfirmCashPaymentResponse): void {
+    this.state.update((current) => {
+      if (current.status !== 'success' && current.status !== 'empty') {
+        return current;
+      }
+
+      const items = current.page.items.map((item): AdminPayment =>
+        item.paymentId === response.paymentId
+          ? {
+              ...item,
+              status: response.status,
+              amount: response.amount,
+              currency: response.currency,
+              cashConfirmedAtUtc: response.cashConfirmedAtUtc,
+              cashConfirmedByUserId: response.cashConfirmedByUserId,
+              reservationOutcome: response.reservationOutcome,
+              requiresManualReview: response.requiresManualReview
+            }
+          : item
+      );
+
+      return { ...current, page: { ...current.page, items } };
+    });
   }
 }

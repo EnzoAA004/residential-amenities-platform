@@ -121,3 +121,113 @@ export interface AdminRescheduleReservationRequest {
   endsAtUtc: string;
   reason: string;
 }
+
+/**
+ * Response of the administrative `POST /payments/{paymentId}/cash/confirm`
+ * (`ConfirmCashResponse` in `Modules/Payments/PaymentEndpoints.cs`). Reuses
+ * the same resident-facing cash-confirm endpoint — there is no separate
+ * `/admin/payments/.../confirm` route — but this record includes
+ * `cashConfirmedByUserId`, which the resident-facing `GET /payments/{id}`
+ * deliberately omits.
+ */
+export interface ConfirmCashPaymentResponse {
+  paymentId: string;
+  reservationId: string;
+  status: AdminPaymentStatus | string;
+  amount: number;
+  currency: string;
+  cashConfirmedAtUtc: string | null;
+  cashConfirmedByUserId: string | null;
+  reservationOutcome: string;
+  requiresManualReview: boolean;
+}
+
+/**
+ * Matches `Modules/Audit/Domain/AuditActorType.cs`. Not every audited event
+ * has an authenticated user (a failed login, a background job, a Mercado
+ * Pago webhook) — see `actorUserId` on {@link AuditItem}.
+ */
+export type AuditActorType = 'User' | 'System' | 'ExternalProvider';
+
+/**
+ * The stable audit action catalog, copied verbatim (including casing) from
+ * `Modules/Audit/Domain/AuditAction.cs`. Never invent, rename or guess a
+ * value here — this list only grows when the backend enum does.
+ */
+export const AUDIT_ACTIONS = [
+  'AuthenticationSucceeded',
+  'AuthenticationFailed',
+  'Logout',
+  'ReservationCreated',
+  'ReservationConfirmed',
+  'ReservationExpired',
+  'ReservationCancelled',
+  'ReservationRescheduled',
+  'MercadoPagoPaymentInitiated',
+  'PaymentApproved',
+  'PaymentRejected',
+  'PaymentCancelled',
+  'CashPaymentDeclared',
+  'CashPaymentConfirmed',
+  'PaymentRequiresManualReview',
+  'PriceRuleCreated',
+  'PriceRuleSuperseded',
+  'AmenityAvailabilityChanged',
+  'EventSlotCreated',
+  'EventSlotUpdated',
+  'EventSlotDeactivated',
+  'MercadoPagoWebhookProcessed'
+] as const;
+
+export type AuditAction = (typeof AUDIT_ACTIONS)[number];
+
+/**
+ * Copied verbatim from `Modules/Audit/Domain/AuditTargetType.cs`.
+ */
+export const AUDIT_TARGET_TYPES = [
+  'Reservation',
+  'Payment',
+  'User',
+  'PriceRule',
+  'Amenity',
+  'EventSlot'
+] as const;
+
+export type AuditTargetType = (typeof AUDIT_TARGET_TYPES)[number];
+
+/**
+ * Matches `AuditItemResponse` in `Modules/Audit/AuditEndpoints.cs` exactly.
+ * `metadata` is rendered as-is (pretty-printed JSON) — it is never
+ * reconstructed, enriched or cross-referenced with other data.
+ */
+export interface AuditItem {
+  id: string;
+  occurredAtUtc: string;
+  buildingId: string | null;
+  actorType: AuditActorType | string;
+  actorUserId: string | null;
+  action: AuditAction | string;
+  targetType: AuditTargetType | string;
+  targetId: string | null;
+  correlationId: string | null;
+  metadata: unknown | null;
+}
+
+export type AuditPage = AdminPage<AuditItem>;
+
+/**
+ * The exact filters `GET /admin/audit` accepts — no more, no less
+ * (`Modules/Audit/AuditEndpoints.cs`). Backend clamps `pageSize` to
+ * [1, 100] and `page` to >= 1 itself; the client never reimplements that.
+ */
+export interface AuditFilters {
+  buildingId?: string;
+  actorUserId?: string;
+  action?: AuditAction;
+  targetType?: AuditTargetType;
+  targetId?: string;
+  fromUtc?: string;
+  toUtc?: string;
+  page: number;
+  pageSize: number;
+}

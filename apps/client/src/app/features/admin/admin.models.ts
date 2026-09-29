@@ -98,3 +98,26 @@ export interface AdminPaymentFilters {
   page: number;
   pageSize: number;
 }
+
+/**
+ * Body for `POST /admin/reservations/{id}/cancel` (issue #52). `reason` is
+ * the only field the client ever sends — the actor comes from the session
+ * cookie, never from a client-supplied id/role.
+ */
+export interface AdminCancelReservationRequest {
+  reason: string;
+}
+
+/**
+ * Body for `POST /admin/reservations/{id}/reschedule` (issue #52).
+ * `startsAtUtc`/`endsAtUtc` must be genuine UTC ISO-8601 instants built
+ * without a browser-local `Date` parse — there is no `Building.TimeZoneId`
+ * contract yet, so the UI never guesses an offset. `buildingId`, resources,
+ * price/currency and `expiresAtUtc` are deliberately not part of this
+ * request; the backend owns all of those.
+ */
+export interface AdminRescheduleReservationRequest {
+  startsAtUtc: string;
+  endsAtUtc: string;
+  reason: string;
+}

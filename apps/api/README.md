@@ -196,11 +196,13 @@ validation (`409`/`422`) when a resident actually tries to book one.
 }
 ```
 
-Event reservations add `addOnAmenityIds` (0–2 amenities of kind `Pool` or
-`Barbecue`); `amenityId` is the base resource, which must be an active
-amenity of kind `Sum`. The requested range must match a configured
-`EventSlotDefinition` exactly — an arbitrary range that merely falls inside
-the SUM's general availability is rejected:
+Event reservations may include optional `addOnAmenityIds`; `amenityId` is
+the base resource, which must be an active amenity of kind `Sum`. Each
+add-on must be a distinct, active amenity from the same building, of kind
+`Pool` or `Barbecue`, and must allow exclusive use — the backend does not
+impose a separate numeric maximum on the number of add-ons. The requested
+range must match a configured `EventSlotDefinition` exactly — an arbitrary
+range that merely falls inside the SUM's general availability is rejected:
 
 ```json
 {

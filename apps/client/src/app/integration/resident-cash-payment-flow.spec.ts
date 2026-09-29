@@ -128,9 +128,16 @@ describe('resident cash payment flow (integration)', () => {
   it('bootstraps a resident session, loads amenities, creates a Leisure reservation and declares cash — without ever showing it as confirmed', async () => {
     // --- 1. Session bootstrap: authenticatedGuard's own /auth/me check --------
     const harness = await RouterTestingHarness.create();
-    const amenitiesComponent = await harness.navigateByUrl('/amenities', AmenitiesPage);
 
+    // Unlike every other spec in this codebase, this test uses the REAL
+    // app.routes.ts — including `/amenities`' actual `canMatch:
+    // [authenticatedGuard]`. That guard is async (`await auth.initialize()`),
+    // so navigateByUrl()'s own returned promise cannot resolve until the
+    // GET it triggers is flushed. It must therefore be flushed while the
+    // navigation promise is still in flight, not awaited first.
+    const amenitiesNavigation = harness.navigateByUrl('/amenities', AmenitiesPage);
     httpMock.expectOne('/api/auth/me').flush(authenticatedMeResponse);
+    const amenitiesComponent = await amenitiesNavigation;
     await harness.fixture.whenStable();
 
     httpMock.expectOne('/api/buildings/building-a/amenities').flush([amenity]);

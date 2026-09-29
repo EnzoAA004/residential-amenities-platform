@@ -520,6 +520,71 @@ context and amenity/availability browsing" above.
   list or look up existing reservations; the `201` response is the only
   source of truth this screen ever shows.
 
+## Event reservation flow (slots + add-ons)
+
+Issue #48 adds `UseType=Event` on top of the resident-facing slot-discovery
+contract from issue #62. `EventReservationComponent` renders under a
+selected amenity only when `amenity.kind === 'Sum'`, alongside
+`AmenityAvailabilityComponent` and `LeisureReservationComponent` — the same
+SUM keeps its existing Leisure flow. It is given the full, already-loaded
+building amenities list (`AmenitiesPage.amenitiesList()`) as add-on
+candidates, never issuing a second amenities request.
+
+- **Slot discovery**: `GET /api/buildings/{buildingId}/event-slots?date=`
+  (issue #62). The resident picks a plain calendar date
+  (`<input type="date">`, `YYYY-MM-DD`) and only ever selects one of the
+  `EventSlotOccurrence`s the backend actually returns — never a free
+  start/end range. `startsAtUtc`/`endsAtUtc` on the selected occurrence are
+  sent to `POST /api/reservations` **byte-for-byte**, never reconstructed
+  from the chosen date with `new Date(...)`/`toISOString()` or any
+  device-timezone math. Since the client still doesn't know
+  `Building.TimeZoneId` (same gap as #46/#62), the confirmed slot is
+  identified to the resident as "chosen date + slot name" — never
+  re-rendered as if the raw UTC instants were the building's local time.
+- **Add-ons**: eligible candidates are derived only from the real,
+  already-loaded amenities list — `kind === 'Pool' || kind === 'Barbecue'`,
+  `allowsExclusiveUse === true`, and not the base SUM itself — mirroring
+  `ReservationCreationService`'s actual invariants. There is **no** hardcoded
+  maximum count; the backend only limits by type/duplicates/ownership/
+  exclusive-use, not a number, so any quantity of eligible amenities can be
+  selected. If the amenities list changes and a selected add-on is no longer
+  eligible, it's silently dropped from the selection (and the quote
+  invalidated) rather than kept as a stale id.
+- **Base SUM eligibility**: Event also requires the base amenity to allow
+  exclusive use (`RB-006`); when it doesn't, the component shows a neutral
+  "Este SUM no admite reservas de tipo Event." instead of a functional form
+  that would only fail at create time.
+- **Quote**: `GET /api/pricing/quote` with `buildingId`, `amenityId` (the
+  SUM), `useType=Event`, and `addOnAmenityId` repeated once per selected
+  add-on (via `ApiQueryParams`' array support — never a hand-built query
+  string or CSV). No add-ons selected means no `addOnAmenityId` at all.
+  Exactly like #47: quote and create are separate requests, the `201`'s
+  `totalAmount`/`currency`/`priceLines` are the only final price truth, and
+  a difference from the quote is surfaced ("El precio se actualizó al crear
+  la reserva…"), never hidden or rolled back automatically.
+- **Create**: `{ buildingId, amenityId, addOnAmenityIds, useType: 'Event',
+  startsAtUtc, endsAtUtc }` — never `membershipId`, the slot's own `id`, or
+  any price/status field.
+- **Context invalidation**: reuses #47's `contextVersion` approach. Changing
+  the base SUM, date, selected slot, or add-on selection all invalidate any
+  in-flight/previous quote and bump the version a quote/create request
+  captures; a late response is discarded once the version has moved on.
+  Slot discovery itself is a safe `GET`, so it's keyed through
+  `switchMap` (a genuinely stale date's response is cancelled outright);
+  `POST /api/reservations` is never wrapped in `switchMap`/`retry` — it
+  stays an explicit, single action, and a network failure
+  (`ApiError.status === 0`) is shown as an uncertain result exactly like
+  #47, blocking a second create for that context rather than allowing a
+  duplicate hold against a non-idempotent endpoint.
+- **Full-day**: not offered as an option — out of MVP scope per issue #2,
+  and the domain doesn't support it regardless.
+- **Payment**: out of scope (#49) — the confirmation only says "El pago se
+  realizará en el siguiente paso."
+
+Shared reservation DTOs (`PriceQuote`, `Reservation`, etc.) live in
+`features/resident/reservations/reservation.models.ts`, used by both the
+Leisure and Event services/components instead of being duplicated.
+
 ## `/health` vs `/api`
 
 The backend exposes `/health` as a **root-level operations endpoint**,

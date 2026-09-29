@@ -28,7 +28,10 @@ export const apiPaths = {
 
   reservations: {
     create: '/reservations',
-    byId: (id: string) => `/reservations/${id}`
+    byId: (id: string) => `/reservations/${id}`,
+    // Resident-facing Event slot discovery (issue #62) — distinct from
+    // admin.eventSlots below, which is Administrator-only.
+    eventSlotsForBuilding: (buildingId: string) => `/buildings/${buildingId}/event-slots`
   },
 
   pricing: {

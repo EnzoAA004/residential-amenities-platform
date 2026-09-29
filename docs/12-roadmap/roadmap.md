@@ -43,11 +43,10 @@
 
 ## Phase 5 — MVP client / product UI
 
-The backend MVP (Phases 1–4) is implemented, tested and merged. The Angular +
-Ionic + Capacitor client is still the Phase 1 technical scaffold (shell,
-routing stub, health check). Before any UX extension, the client needs the
-product's own screens against the existing, stable backend contracts —
-nothing here changes the backend.
+Status: **completed**. The backend MVP (Phases 1-4) and the Angular + Ionic +
+Capacitor MVP product client are implemented, tested in CI and merged. The
+client now has the product's own resident and administrator screens against
+the stable backend contracts.
 
 - Application shell, design system foundation and an authenticated HTTP/API
   client layer.
@@ -68,9 +67,12 @@ nothing here changes the backend.
 Decisions still open in issue #2 (definitive prices, event hours, full-day,
 hold duration, cancellation/refund policy, cash confirmer) are surfaced from
 the backend as configuration/state, never hardcoded in the client. See
-[the MVP client backlog](backlog-mvp-client.md) for the issue breakdown.
+[the completed MVP client backlog](backlog-mvp-client.md) for the issue
+breakdown and closure state.
 
 ## Phase 6 — UX extensions
+
+Status: **next**.
 
 - QR entry point.
 - Push notifications.

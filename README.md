@@ -2,14 +2,14 @@
 
 Private-source, cloud-hosted platform for residential amenity reservations, payments and administration.
 
-> **Project status:** Backend MVP implemented and covered by CI (issues #3–#27); product frontend, cloud deployment, and several building-specific business decisions (issue #2, still open) remain pending.  
-> **Pilot scope:** one residential building with 10 units (1A–5B).  
+> **Project status:** Backend MVP and MVP product client are implemented and covered by CI (issues #3-#27, #44-#55, #62 and #66); cloud deployment and several building-specific business decisions (issue #2, still open) remain pending.
+> **Pilot scope:** one residential building with 10 units (1A–5B).
 > **Product direction:** architecture prepared to evolve into a multi-building SaaS without expanding the MVP beyond what the pilot needs.
 
 ### What exists today
 
-- **Backend (`apps/api`):** identity/RBAC (Resident, Administrator), building/unit/membership, amenities and availability, shared/exclusive leisure and event reservations, server-authoritative pricing with historical snapshots, concurrency control (advisory locks, holds, expiration), Mercado Pago payments, cash payments, an append-only audit trail, and administrative operations (reservation/payment queries, cancel, reschedule, pricing, availability, event slots). 377 backend tests, green in CI.
-- **Client (`apps/client`):** still the Phase 1 technical scaffold (shell, routing stub, health check screen) — the product frontend (authentication, browsing, booking, payment, admin screens) is not implemented yet. See [the MVP client backlog](docs/12-roadmap/backlog-mvp-client.md).
+- **Backend (`apps/api`):** identity/RBAC (Resident, Administrator), building/unit/membership, amenities and availability, shared/exclusive leisure and event reservations, server-authoritative pricing with historical snapshots, concurrency control (advisory locks, holds, expiration), Mercado Pago payments, cash payments, an append-only audit trail, and administrative operations (reservation/payment queries, cancel, reschedule, pricing, availability, event slots). Backend and full-stack validation are green in CI.
+- **Client (`apps/client`):** Angular + Ionic product client through Phase 5: authentication/session guards, resident amenity browsing, leisure/event reservation creation, Mercado Pago and cash payment flows, resident reservation history/detail, administrator dashboards/operations/configuration/audit/manual-review views, shared error handling and frontend hardening. See [the completed MVP client backlog](docs/12-roadmap/backlog-mvp-client.md).
 - **Cloud/DevOps:** local Docker Compose + GitHub Actions CI only. Azure, Terraform and production deployment are not started.
 - **Open business decisions (issue #2):** definitive prices, event time windows, full-day bookings, hold duration, cancellation/refund policy, cleaning rules, and who is authorized to confirm cash receipt remain open. Where the backend needs a value today it uses an explicit, documented, configurable placeholder — never a decision presented as final.
 

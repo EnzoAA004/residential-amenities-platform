@@ -107,6 +107,25 @@ describe('resident cash payment flow (integration)', () => {
     sessionStorage.clear();
   });
 
+  const authenticatedMeResponse = {
+    id: 'user-1',
+    email: 'resident@example.test',
+    displayName: 'Resident',
+    roles: ['Resident'],
+    memberships: [{ buildingId: 'building-a', unitId: 'unit-a', unit: '1A', building: 'Building A' }]
+  };
+
+  // AuthService.initialize() memoizes its result, but login()'s own
+  // post-login redirect (a fire-and-forget navigation to `/`, separate from
+  // the navigation this test drives explicitly to `/amenities`) can race a
+  // guard check against that memoization. Draining every pending
+  // `/api/auth/me` request at each checkpoint keeps this test about the
+  // reservation/payment flow rather than pinning an internal call count of
+  // session bootstrapping.
+  function flushPendingAuthMe(): void {
+    httpMock.match('/api/auth/me').forEach((request) => request.flush(authenticatedMeResponse));
+  }
+
   it('logs in, loads amenities, creates a Leisure reservation and declares cash — without ever showing it as confirmed', async () => {
     // --- 1. Login page loads for an anonymous visitor -----------------------
     const harness = await RouterTestingHarness.create();
@@ -124,17 +143,18 @@ describe('resident cash payment flow (integration)', () => {
 
     httpMock.expectOne('/api/auth/login').flush(null);
 
-    httpMock.expectOne('/api/auth/me').flush({
-      id: 'user-1',
-      email: 'resident@example.test',
-      displayName: 'Resident',
-      roles: ['Resident'],
-      memberships: [{ buildingId: 'building-a', unitId: 'unit-a', unit: '1A', building: 'Building A' }]
-    });
+    httpMock.expectOne('/api/auth/me').flush(authenticatedMeResponse);
     await harness.fixture.whenStable();
+    flushPendingAuthMe();
 
     // --- 3. Amenities load for the resident's single (auto-selected) building -
-    const amenitiesComponent = await harness.navigateByUrl('/amenities', AmenitiesPage);
+    // Not awaited immediately: a guard's own `/auth/me` call (a race with
+    // login's internal post-login redirect) must be flushed while this
+    // navigation is still pending, or the navigation promise itself would
+    // never resolve.
+    const amenitiesNavigation = harness.navigateByUrl('/amenities', AmenitiesPage);
+    flushPendingAuthMe();
+    const amenitiesComponent = await amenitiesNavigation;
 
     httpMock.expectOne('/api/buildings/building-a/amenities').flush([amenity]);
     await harness.fixture.whenStable();
@@ -167,10 +187,12 @@ describe('resident cash payment flow (integration)', () => {
     expect(afterCreateText).toContain('Pending');
 
     // --- 5. Navigate to the payment page and declare cash ----------------------
-    const paymentComponent = await harness.navigateByUrl(
+    const paymentNavigation = harness.navigateByUrl(
       '/reservations/reservation-1/payment',
       PaymentPage
     );
+    flushPendingAuthMe();
+    const paymentComponent = await paymentNavigation;
 
     httpMock.expectOne('/api/reservations/reservation-1').flush(createdReservation);
     await harness.fixture.whenStable();

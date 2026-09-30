@@ -70,7 +70,7 @@ jobs:
 
       - name: Run backend tests
         env:
-          ConnectionStrings__Postgres: Host=127.0.0.1;Port=5432;Database=residential_amenities;Username=residential_app;Password=local_dev_only
+          ConnectionStrings__Postgres: Host=127.0.0.1;Port=5432;Database=residential_amenities;Username=residential_app;Password=local_dev_only;Maximum Pool Size=20
           ASPNETCORE_ENVIRONMENT: Development
         run: dotnet test apps/api/ResidentialAmenities.slnx --configuration Release --no-build
 

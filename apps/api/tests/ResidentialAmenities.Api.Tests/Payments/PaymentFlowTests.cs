@@ -41,6 +41,7 @@ public sealed class PaymentFlowTests : IAsyncLifetime
     private string _residentEmail = string.Empty;
     private string _neighborEmail = string.Empty;
     private string _outsiderEmail = string.Empty;
+    private string _adminEmail = string.Empty;
 
     public PaymentFlowTests()
     {
@@ -65,6 +66,7 @@ public sealed class PaymentFlowTests : IAsyncLifetime
         _residentEmail = $"pay-resident-{Guid.NewGuid():N}@example.test";
         _neighborEmail = $"pay-neighbor-{Guid.NewGuid():N}@example.test";
         _outsiderEmail = $"pay-outsider-{Guid.NewGuid():N}@example.test";
+        _adminEmail = $"pay-admin-{Guid.NewGuid():N}@example.test";
 
         await using var scope = _factory.Services.CreateAsyncScope();
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<UserAccount>>();
@@ -76,6 +78,10 @@ public sealed class PaymentFlowTests : IAsyncLifetime
         await AddResidentAsync(userManager, dbContext, _residentEmail, unit1A, withMembership: true);
         await AddResidentAsync(userManager, dbContext, _neighborEmail, unit1B, withMembership: true);
         await AddResidentAsync(userManager, dbContext, _outsiderEmail, unit1A, withMembership: false);
+
+        var admin = new UserAccount(Guid.NewGuid(), _adminEmail, "Payment Administrator Test");
+        Assert.True((await userManager.CreateAsync(admin, Password)).Succeeded);
+        Assert.True((await userManager.AddToRoleAsync(admin, ApplicationRoles.Administrator)).Succeeded);
 
         await dbContext.SaveChangesAsync(cancellationToken);
     }
@@ -112,6 +118,21 @@ public sealed class PaymentFlowTests : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
         Assert.Equal(0, await CountPaymentsAsync(reservationId));
+    }
+
+    [Fact]
+    public async Task Initiate_NeighborInSameBuilding_Returns403()
+    {
+        using var owner = await LoginAsync(_residentEmail);
+        var reservationId = await CreateReservationAsync(owner, new DateOnly(2027, 8, 27));
+        var ordersBefore = _fake.DistinctOrdersCreated;
+
+        using var neighbor = await LoginAsync(_neighborEmail);
+        var response = await InitiateAsync(neighbor, reservationId);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Equal(0, await CountPaymentsAsync(reservationId));
+        Assert.Equal(ordersBefore, _fake.DistinctOrdersCreated);
     }
 
     [Fact]
@@ -649,7 +670,7 @@ public sealed class PaymentFlowTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task GetPayment_ReturnsBackendState_AndIsAccessControlled()
+    public async Task GetPayment_Owner_Returns200()
     {
         using var client = await LoginAsync(_residentEmail);
         var (_, payment) = await StartPaymentAsync(client, new DateOnly(2027, 8, 26));
@@ -661,11 +682,43 @@ public sealed class PaymentFlowTests : IAsyncLifetime
         var body = await ok.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         Assert.Contains("Approved", body);
         Assert.DoesNotContain(AccessToken, body);
+    }
 
-        using var outsider = await LoginAsync(_outsiderEmail);
-        var forbidden = await outsider.GetAsync(
+    [Fact]
+    public async Task GetPayment_NeighborInSameBuilding_Returns403()
+    {
+        using var client = await LoginAsync(_residentEmail);
+        var (_, payment) = await StartPaymentAsync(client, new DateOnly(2027, 8, 28));
+
+        using var neighbor = await LoginAsync(_neighborEmail);
+        var forbidden = await neighbor.GetAsync(
             $"/api/payments/{payment.Id}", TestContext.Current.CancellationToken);
+
         Assert.Equal(HttpStatusCode.Forbidden, forbidden.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetPayment_Administrator_Returns200()
+    {
+        using var client = await LoginAsync(_residentEmail);
+        var (_, payment) = await StartPaymentAsync(client, new DateOnly(2027, 8, 29));
+
+        using var admin = await LoginAsync(_adminEmail);
+        var response = await admin.GetAsync(
+            $"/api/payments/{payment.Id}", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetPayment_Missing_Returns404()
+    {
+        using var client = await LoginAsync(_residentEmail);
+
+        var response = await client.GetAsync(
+            $"/api/payments/{Guid.NewGuid()}", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     // --- helpers -----------------------------------------------------------------

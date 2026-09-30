@@ -31,6 +31,7 @@ export const apiPaths = {
     list: '/reservations',
     byId: (id: string) => `/reservations/${id}`,
     payments: (id: string) => `/reservations/${id}/payments`,
+    entryPoint: (token: string) => `/reservation-entry-points/${encodeURIComponent(token)}`,
     // Resident-facing Event slot discovery (issue #62) — distinct from
     // admin.eventSlots below, which is Administrator-only.
     eventSlotsForBuilding: (buildingId: string) => `/buildings/${buildingId}/event-slots`

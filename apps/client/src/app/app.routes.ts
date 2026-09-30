@@ -21,6 +21,14 @@ export const routes: Routes = [
       import('./features/resident/amenities/amenities.page').then((module) => module.AmenitiesPage)
   },
   {
+    path: 'reserve/qr/:token',
+    canMatch: [authenticatedGuard],
+    loadComponent: () =>
+      import('./features/resident/reservations/entry-point/reservation-entry-point.page').then(
+        (module) => module.ReservationEntryPointPage
+      )
+  },
+  {
     path: 'reservations',
     canMatch: [authenticatedGuard],
     loadComponent: () =>

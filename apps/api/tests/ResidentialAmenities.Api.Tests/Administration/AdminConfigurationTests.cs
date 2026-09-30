@@ -271,7 +271,7 @@ public sealed class AdminConfigurationTests : AdminTestBase
 
     [Theory]
     [InlineData("12:00:00", "10:00:00")]
-    [InlineData("22:00:00", "02:00:00")] // overnight is not supported
+    [InlineData("22:00:00", "02:00:00")] // rejected without isOvernight: true (see OvernightEventReservationTests)
     [InlineData("10:00:00", "10:00:00")]
     public async Task EventSlots_InvalidOrOvernightRange_IsRejected(string start, string end)
     {
@@ -283,6 +283,23 @@ public sealed class AdminConfigurationTests : AdminTestBase
             new { name = "Bad", startTime = start, endTime = end });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task EventSlots_OvernightRange_IsAcceptedWithExplicitFlag()
+    {
+        using var admin = await LoginAdminAsync();
+
+        var response = await PostJsonAsync(
+            admin,
+            $"/api/admin/buildings/{BuildingId}/event-slots",
+            new { name = "Night", startTime = "20:00:00", endTime = "03:00:00", isOvernight = true });
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var body = await ReadAsync(response);
+        Assert.True(body.GetProperty("isOvernight").GetBoolean());
+        Assert.Equal("20:00:00", body.GetProperty("startTime").GetString());
+        Assert.Equal("03:00:00", body.GetProperty("endTime").GetString());
     }
 
     [Fact]

@@ -23,6 +23,9 @@ public sealed class EventSlotDefinitionConfiguration
         builder.Property(slot => slot.EndTime)
             .IsRequired();
 
+        builder.Property(slot => slot.IsOvernight)
+            .IsRequired();
+
         builder.Property(slot => slot.IsActive)
             .IsRequired();
 

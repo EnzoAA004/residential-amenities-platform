@@ -40,7 +40,7 @@ describe('EventReservationService', () => {
     expect(request.request.method).toBe('GET');
 
     const slots: EventSlotOccurrence[] = [
-      { id: 'slot-1', name: 'Afternoon', startsAtUtc: '2026-10-01T17:00:00Z', endsAtUtc: '2026-10-01T22:00:00Z' }
+      { id: 'slot-1', name: 'Afternoon', startsAtUtc: '2026-10-01T17:00:00Z', endsAtUtc: '2026-10-01T22:00:00Z', isOvernight: false }
     ];
     request.flush(slots);
 

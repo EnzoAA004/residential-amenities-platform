@@ -488,5 +488,6 @@ public sealed class ResidentEventSlotEndpointsTests : IAsyncLifetime
         Guid Id,
         string Name,
         DateTimeOffset StartsAtUtc,
-        DateTimeOffset EndsAtUtc);
+        DateTimeOffset EndsAtUtc,
+        bool IsOvernight);
 }

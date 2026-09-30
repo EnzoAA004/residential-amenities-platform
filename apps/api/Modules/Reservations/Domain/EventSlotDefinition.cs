@@ -24,7 +24,8 @@ public sealed class EventSlotDefinition
         Guid buildingId,
         string name,
         TimeOnly startTime,
-        TimeOnly endTime)
+        TimeOnly endTime,
+        bool isOvernight = false)
     {
         if (id == Guid.Empty)
         {
@@ -45,19 +46,14 @@ public sealed class EventSlotDefinition
             throw new ArgumentException("Name is required.", nameof(name));
         }
 
-        if (endTime <= startTime)
-        {
-            throw new ArgumentException(
-                "End time must be after start time. Overnight/full-day " +
-                "slots are not supported yet.",
-                nameof(endTime));
-        }
+        ValidateTimes(startTime, endTime, isOvernight);
 
         Id = id;
         BuildingId = buildingId;
         Name = name.Trim();
         StartTime = startTime;
         EndTime = endTime;
+        IsOvernight = isOvernight;
         IsActive = true;
     }
 
@@ -71,6 +67,18 @@ public sealed class EventSlotDefinition
 
     public TimeOnly EndTime { get; private set; }
 
+    /// <summary>
+    /// When true, this slot deliberately crosses midnight (e.g. 20:00 →
+    /// 03:00 the next day, DEC-014/OQ-002): <see cref="EndTime"/> is a
+    /// time-of-day on the calendar day *after* <see cref="StartTime"/>, not
+    /// an invalid same-day range. A slot only matches a request that spans
+    /// exactly one midnight boundary when this is true (see
+    /// <c>ReservationScheduleValidator.EnsureValidEventSlotAsync</c>) — an
+    /// arbitrary, unconfigured end-before-start range is still rejected
+    /// everywhere else.
+    /// </summary>
+    public bool IsOvernight { get; private set; }
+
     public bool IsActive { get; private set; }
 
     public bool Matches(TimeOnly startTime, TimeOnly endTime) =>
@@ -78,25 +86,42 @@ public sealed class EventSlotDefinition
 
     /// <summary>
     /// Administrative change of the name and/or times. Same invariants as
-    /// creation (no overnight). Existing reservations are unaffected.
+    /// creation. Existing reservations are unaffected.
     /// </summary>
-    public void Update(string name, TimeOnly startTime, TimeOnly endTime)
+    public void Update(string name, TimeOnly startTime, TimeOnly endTime, bool isOvernight)
     {
         if (string.IsNullOrWhiteSpace(name))
         {
             throw new ArgumentException("Name is required.", nameof(name));
         }
 
-        if (endTime <= startTime)
-        {
-            throw new ArgumentException(
-                "End time must be after start time. Overnight/full-day slots are not supported yet.",
-                nameof(endTime));
-        }
+        ValidateTimes(startTime, endTime, isOvernight);
 
         Name = name.Trim();
         StartTime = startTime;
         EndTime = endTime;
+        IsOvernight = isOvernight;
+    }
+
+    private static void ValidateTimes(TimeOnly startTime, TimeOnly endTime, bool isOvernight)
+    {
+        if (isOvernight)
+        {
+            if (endTime >= startTime)
+            {
+                throw new ArgumentException(
+                    "An overnight slot's end time must be before its " +
+                    "start time (it crosses midnight into the next day).",
+                    nameof(endTime));
+            }
+        }
+        else if (endTime <= startTime)
+        {
+            throw new ArgumentException(
+                "End time must be after start time. Pass isOvernight: " +
+                "true for a slot that deliberately crosses midnight.",
+                nameof(endTime));
+        }
     }
 
     /// <returns>true when this call changed the state.</returns>

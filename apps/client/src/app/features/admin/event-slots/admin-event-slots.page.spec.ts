@@ -16,6 +16,7 @@ const activeSlot: AdminEventSlot = {
   name: 'Example brunch',
   startTime: '10:00:00',
   endTime: '13:00:00',
+  isOvernight: false,
   isActive: true
 };
 
@@ -25,6 +26,7 @@ const inactiveSlot: AdminEventSlot = {
   name: 'Example late slot',
   startTime: '20:00:00',
   endTime: '23:00:00',
+  isOvernight: false,
   isActive: false
 };
 
@@ -159,13 +161,49 @@ describe('AdminEventSlotsPage', () => {
     httpMock.expectNone((r) => r.method === 'POST' && r.url.includes('event-slots'));
   });
 
-  it('blocks an overnight range client-side, without calling the backend', async () => {
+  it('blocks an end-before-start range client-side without the overnight flag', async () => {
     const { harness, component } = await navigate();
     await loadSlots(harness, component);
 
     component.setField('name', 'Example overnight slot');
     component.setField('startTime', '22:00');
     component.setField('endTime', '02:00');
+    component.submit(new Event('submit'));
+
+    httpMock.expectNone((r) => r.method === 'POST' && r.url.includes('event-slots'));
+  });
+
+  it('sends isOvernight and allows end-before-start once the flag is set (DEC-014/OQ-002)', async () => {
+    const { harness, component } = await navigate();
+    await loadSlots(harness, component);
+
+    component.setField('name', 'Night');
+    component.setField('startTime', '20:00');
+    component.setField('endTime', '03:00');
+    component.setOvernight(true);
+    component.submit(new Event('submit'));
+
+    const request = httpMock.expectOne((r) => r.method === 'POST' && r.url.includes('event-slots'));
+    expect(request.request.body).toEqual({
+      name: 'Night',
+      startTime: '20:00:00',
+      endTime: '03:00:00',
+      isOvernight: true
+    });
+    request.flush({ ...activeSlot, id: 'slot-3', name: 'Night', startTime: '20:00:00', endTime: '03:00:00', isOvernight: true });
+
+    const listRequest = httpMock.expectOne((r) => r.method === 'GET' && r.url.includes('event-slots'));
+    listRequest.flush([activeSlot]);
+  });
+
+  it('still rejects an overnight-flagged slot whose end is not before its start', async () => {
+    const { harness, component } = await navigate();
+    await loadSlots(harness, component);
+
+    component.setField('name', 'Bad overnight');
+    component.setField('startTime', '10:00');
+    component.setField('endTime', '11:00');
+    component.setOvernight(true);
     component.submit(new Event('submit'));
 
     httpMock.expectNone((r) => r.method === 'POST' && r.url.includes('event-slots'));

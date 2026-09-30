@@ -39,6 +39,7 @@ public sealed class EventSlotAdminService(
         string name,
         TimeOnly startTime,
         TimeOnly endTime,
+        bool isOvernight,
         Guid actorUserId,
         CancellationToken cancellationToken)
     {
@@ -49,7 +50,8 @@ public sealed class EventSlotAdminService(
 
         try
         {
-            slot = new EventSlotDefinition(Guid.NewGuid(), buildingId, name, startTime, endTime);
+            slot = new EventSlotDefinition(
+                Guid.NewGuid(), buildingId, name, startTime, endTime, isOvernight);
         }
         catch (ArgumentException error)
         {
@@ -75,6 +77,7 @@ public sealed class EventSlotAdminService(
         string name,
         TimeOnly startTime,
         TimeOnly endTime,
+        bool isOvernight,
         Guid actorUserId,
         CancellationToken cancellationToken)
     {
@@ -87,7 +90,7 @@ public sealed class EventSlotAdminService(
 
         try
         {
-            slot.Update(name, startTime, endTime);
+            slot.Update(name, startTime, endTime, isOvernight);
         }
         catch (ArgumentException error)
         {
@@ -208,5 +211,5 @@ public sealed class EventSlotAdminService(
     }
 
     private static AdminEventSlot ToView(EventSlotDefinition slot) =>
-        new(slot.Id, slot.BuildingId, slot.Name, slot.StartTime, slot.EndTime, slot.IsActive);
+        new(slot.Id, slot.BuildingId, slot.Name, slot.StartTime, slot.EndTime, slot.IsOvernight, slot.IsActive);
 }

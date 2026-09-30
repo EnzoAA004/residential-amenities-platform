@@ -24,12 +24,14 @@ interface FormDraft {
   startTime: string;
   /** `HH:mm` (time input format); converted to `HH:mm:ss` on submit. */
   endTime: string;
+  /** When true, `endTime` is on the day after `startTime` (DEC-014/OQ-002). */
+  isOvernight: boolean;
 }
 
 const MAX_NAME_LENGTH = 80;
 
 function emptyDraft(): FormDraft {
-  return { editingId: null, name: '', startTime: '', endTime: '' };
+  return { editingId: null, name: '', startTime: '', endTime: '', isOvernight: false };
 }
 
 function toWireTime(input: string): string {
@@ -117,7 +119,12 @@ function toInputTime(wire: string): string {
                 <li class="admin-card" [class.inactive]="!slot.isActive">
                   <div>
                     <h2>{{ slot.name }}</h2>
-                    <p>{{ slot.startTime }} → {{ slot.endTime }}</p>
+                    <p>
+                      {{ slot.startTime }} → {{ slot.endTime }}
+                      @if (slot.isOvernight) {
+                        <ion-text color="medium"> (día siguiente)</ion-text>
+                      }
+                    </p>
                     <p>
                       <ion-text [color]="slot.isActive ? 'success' : 'medium'">
                         {{ slot.isActive ? 'Activo' : 'Inactivo' }}
@@ -174,6 +181,16 @@ function toInputTime(wire: string): string {
             <ion-item>
               <ion-label position="stacked">Hasta</ion-label>
               <ion-input type="time" [value]="draft().endTime" (ionInput)="setField('endTime', $event.detail.value)" />
+            </ion-item>
+            <ion-item>
+              <label>
+                <input
+                  type="checkbox"
+                  [checked]="draft().isOvernight"
+                  (change)="setOvernight($any($event.target).checked)"
+                />
+                Cruza medianoche (el horario de fin es del día siguiente)
+              </label>
             </ion-item>
 
             @if (validationError(); as error) {
@@ -265,7 +282,8 @@ export class AdminEventSlotsPage {
       editingId: slot.id,
       name: slot.name,
       startTime: toInputTime(slot.startTime),
-      endTime: toInputTime(slot.endTime)
+      endTime: toInputTime(slot.endTime),
+      isOvernight: slot.isOvernight
     });
   }
 
@@ -277,6 +295,10 @@ export class AdminEventSlotsPage {
 
   setField(key: 'name' | 'startTime' | 'endTime', value: unknown): void {
     this.draft.update((current) => ({ ...current, [key]: (value as string) ?? '' }));
+  }
+
+  setOvernight(checked: boolean): void {
+    this.draft.update((current) => ({ ...current, isOvernight: checked }));
   }
 
   submit(event: Event): void {
@@ -299,12 +321,21 @@ export class AdminEventSlotsPage {
       return;
     }
 
-    if (draft.endTime <= draft.startTime) {
-      this.validationError.set('El horario de fin debe ser posterior al de inicio (no se admiten turnos nocturnos).');
+    if (draft.isOvernight) {
+      if (draft.endTime >= draft.startTime) {
+        this.validationError.set(
+          'Para un turno que cruza medianoche, el horario de fin debe ser anterior al de inicio (es del día siguiente).'
+        );
+        return;
+      }
+    } else if (draft.endTime <= draft.startTime) {
+      this.validationError.set(
+        'El horario de fin debe ser posterior al de inicio, o tildá "Cruza medianoche" para un turno nocturno.'
+      );
       return;
     }
 
-    if (draft.startTime === '00:00' && draft.endTime >= '23:59') {
+    if (!draft.isOvernight && draft.startTime === '00:00' && draft.endTime >= '23:59') {
       this.validationError.set('El turno no puede abarcar el día completo.');
       return;
     }
@@ -315,7 +346,8 @@ export class AdminEventSlotsPage {
     const request: EventSlotRequest = {
       name,
       startTime: toWireTime(draft.startTime),
-      endTime: toWireTime(draft.endTime)
+      endTime: toWireTime(draft.endTime),
+      isOvernight: draft.isOvernight
     };
 
     const result$ = draft.editingId

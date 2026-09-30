@@ -406,7 +406,8 @@ public static class AdminEndpoints
             : SlotAsync(async () =>
             {
                 var created = await slots.CreateAsync(
-                    buildingId, request.Name, request.StartTime, request.EndTime, actorUserId, cancellationToken);
+                    buildingId, request.Name, request.StartTime, request.EndTime,
+                    request.IsOvernight, actorUserId, cancellationToken);
 
                 return Results.Created($"/api/admin/event-slots/{created.Id}", created);
             });
@@ -420,7 +421,8 @@ public static class AdminEndpoints
         principal.GetUserId() is not { } actorUserId
             ? Task.FromResult(Results.Unauthorized())
             : SlotAsync(async () => Results.Ok(await slots.UpdateAsync(
-                id, request.Name, request.StartTime, request.EndTime, actorUserId, cancellationToken)));
+                id, request.Name, request.StartTime, request.EndTime,
+                request.IsOvernight, actorUserId, cancellationToken)));
 
     private static Task<IResult> DeactivateEventSlotAsync(
         Guid id,
@@ -520,5 +522,6 @@ public static class AdminEndpoints
     private sealed record EventSlotRequest(
         string Name,
         TimeOnly StartTime,
-        TimeOnly EndTime);
+        TimeOnly EndTime,
+        bool IsOvernight = false);
 }

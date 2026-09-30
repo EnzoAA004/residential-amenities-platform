@@ -144,9 +144,12 @@ public sealed class OvernightEventReservationTests : IAsyncLifetime
             },
             cancellationToken);
 
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var rawBody = await response.Content.ReadAsStringAsync(cancellationToken);
+        Assert.True(
+            response.StatusCode == HttpStatusCode.Created,
+            $"Expected 201 Created, got {response.StatusCode}. Body: {rawBody}");
 
-        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
+        using var body = JsonDocument.Parse(rawBody);
         var returnedStart = body.RootElement.GetProperty("startsAtUtc").GetDateTimeOffset();
         var returnedEnd = body.RootElement.GetProperty("endsAtUtc").GetDateTimeOffset();
 

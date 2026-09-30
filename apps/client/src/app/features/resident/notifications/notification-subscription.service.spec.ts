@@ -65,6 +65,11 @@ describe('NotificationSubscriptionService', () => {
       })
     );
 
+    // `requestPermission()` resolves via a Promise (async gateway call), so
+    // the POST is only registered with HttpTestingController after that
+    // microtask runs — flush it before asserting the request.
+    await Promise.resolve();
+
     const request = httpMock.expectOne('/api/notification-subscriptions');
     expect(request.request.method).toBe('POST');
     expect(request.request.body).toEqual({

@@ -4,7 +4,11 @@ import { Observable } from 'rxjs';
 import { ApiClient } from '../../../../core/api/api-client.service';
 import { apiPaths } from '../../../../core/api/api-paths';
 import { PriceQuote, Reservation } from '../reservation.models';
-import { CreateLeisureReservationRequest, LeisureUseType } from './leisure-reservation.models';
+import {
+  CreateLeisureReservationRequest,
+  LeisureUseType,
+  SharedOccupancy
+} from './leisure-reservation.models';
 
 /**
  * Thin wrapper over `ApiClient` for quoting and creating a Leisure
@@ -26,5 +30,24 @@ export class LeisureReservationService {
       apiPaths.reservations.create,
       request
     );
+  }
+
+  /**
+   * Issue #89: unit labels only (never a name, email, user id or membership
+   * id) already booked for this SharedLeisure amenity/period. Informational
+   * only — the backend never rejects for capacity.
+   */
+  getSharedOccupancy(
+    buildingId: string,
+    amenityId: string,
+    startsAtUtc: string,
+    endsAtUtc: string
+  ): Observable<SharedOccupancy> {
+    return this.api.get<SharedOccupancy>(apiPaths.reservations.sharedOccupancy, {
+      buildingId,
+      amenityId,
+      startsAtUtc,
+      endsAtUtc
+    });
   }
 }

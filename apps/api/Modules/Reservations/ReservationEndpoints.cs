@@ -22,10 +22,98 @@ public static class ReservationEndpoints
 
         group.MapPost("/", CreateReservationAsync);
         group.MapGet("/", ListMyReservationsAsync);
+        group.MapGet("/shared-occupancy", GetSharedOccupancyAsync);
         group.MapGet("/{id:guid}", GetReservationAsync);
 
         return endpoints;
     }
+
+    /// <summary>
+    /// Issue #89: before a resident confirms a SharedLeisure reservation,
+    /// they must see which units already hold an overlapping SharedLeisure
+    /// booking for the same amenity — DEC-014/OQ-009 removed any capacity
+    /// cap, so this is informational only, never a rejection. Returns unit
+    /// display labels only (e.g. "1A") — never a name, email, user id,
+    /// membership id or phone, from this endpoint or any other one reused
+    /// for this purpose (this is a purpose-built, minimal read, not an
+    /// extension of an endpoint that carries membership/user data).
+    /// </summary>
+    private static async Task<IResult> GetSharedOccupancyAsync(
+        Guid buildingId,
+        Guid amenityId,
+        DateTimeOffset startsAtUtc,
+        DateTimeOffset endsAtUtc,
+        ClaimsPrincipal principal,
+        AppDbContext dbContext,
+        IBuildingMembershipAuthorizer membershipAuthorizer,
+        TimeProvider timeProvider,
+        CancellationToken cancellationToken)
+    {
+        if (buildingId == Guid.Empty || amenityId == Guid.Empty)
+        {
+            return Results.Problem(
+                title: "buildingId and amenityId are required.",
+                statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        if (endsAtUtc <= startsAtUtc)
+        {
+            return Results.Problem(
+                title: "endsAtUtc must be after startsAtUtc.",
+                statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        if (!await membershipAuthorizer.HasAccessAsync(principal, buildingId, cancellationToken))
+        {
+            return Results.Problem(
+                title: "You do not have access to this building.",
+                statusCode: StatusCodes.Status403Forbidden);
+        }
+
+        var amenityExists = await dbContext.Amenities.AnyAsync(
+            amenity => amenity.Id == amenityId && amenity.BuildingId == buildingId,
+            cancellationToken);
+
+        if (!amenityExists)
+        {
+            return Results.NotFound();
+        }
+
+        var nowUtc = timeProvider.GetUtcNow();
+
+        var unitLabels = await dbContext.ReservationResources
+            .Where(resource => resource.AmenityId == amenityId)
+            .Join(
+                dbContext.Reservations,
+                resource => resource.ReservationId,
+                reservation => reservation.Id,
+                (resource, reservation) => reservation)
+            .Where(reservation =>
+                reservation.BuildingId == buildingId &&
+                reservation.UseType == ReservationUseType.SharedLeisure &&
+                (reservation.Status == ReservationStatus.Confirmed ||
+                 (reservation.Status == ReservationStatus.Pending &&
+                  reservation.ExpiresAtUtc > nowUtc)) &&
+                reservation.StartsAtUtc < endsAtUtc &&
+                startsAtUtc < reservation.EndsAtUtc)
+            .Join(
+                dbContext.ResidentMemberships,
+                reservation => reservation.CreatedByMembershipId,
+                membership => membership.Id,
+                (reservation, membership) => membership.UnitId)
+            .Join(
+                dbContext.Units,
+                unitId => unitId,
+                unit => unit.Id,
+                (unitId, unit) => unit.Label)
+            .Distinct()
+            .OrderBy(label => label)
+            .ToListAsync(cancellationToken);
+
+        return Results.Ok(new SharedOccupancyResponse(unitLabels));
+    }
+
+    private sealed record SharedOccupancyResponse(IReadOnlyList<string> UnitLabels);
 
     /// <summary>
     /// "My reservations" (issue #66): reservations created by the caller's

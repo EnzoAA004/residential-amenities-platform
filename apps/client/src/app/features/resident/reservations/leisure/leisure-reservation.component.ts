@@ -15,12 +15,18 @@ import {
 } from '../../amenities/availability-range';
 import { PriceQuote, Reservation } from '../reservation.models';
 import { LeisureReservationService } from './leisure-reservation.service';
-import { LeisureUseType } from './leisure-reservation.models';
+import { LeisureUseType, SharedOccupancy } from './leisure-reservation.models';
 
 type QuoteState =
   | { status: 'idle' }
   | { status: 'loading' }
   | { status: 'success'; quote: PriceQuote }
+  | { status: 'error'; error: ApiError };
+
+type OccupancyState =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'success'; unitLabels: string[] }
   | { status: 'error'; error: ApiError };
 
 type CreateState =
@@ -242,6 +248,27 @@ const USE_TYPE_LABELS: Record<LeisureUseType, string> = {
             }
           }
 
+          @if (occupancyState(); as occupancy) {
+            @if (occupancy.status === 'loading') {
+              <p aria-live="polite">
+                <ion-spinner name="dots" /> <ion-text color="medium">Consultando ocupación…</ion-text>
+              </p>
+            }
+            @if (occupancy.status === 'success') {
+              <section class="occupancy-notice" aria-live="polite">
+                @if (occupancy.unitLabels.length > 0) {
+                  <ion-text color="medium">
+                    Este espacio ya está reservado por: {{ occupancy.unitLabels.join(', ') }}.
+                  </ion-text>
+                } @else {
+                  <ion-text color="medium">
+                    Todavía nadie más reservó este espacio para este período.
+                  </ion-text>
+                }
+              </section>
+            }
+          }
+
           @if (quoteState().status === 'success') {
             <ion-button
               type="button"
@@ -331,6 +358,7 @@ export class LeisureReservationComponent {
   readonly rangeError = signal<string | null>(null);
   readonly useTypeError = signal<string | null>(null);
   readonly quoteState = signal<QuoteState>({ status: 'idle' });
+  readonly occupancyState = signal<OccupancyState>({ status: 'idle' });
   readonly createState = signal<CreateState>({ status: 'idle' });
 
   private readonly dateTimeFormatter = new Intl.DateTimeFormat(undefined, {
@@ -474,6 +502,7 @@ export class LeisureReservationComponent {
 
     this.rangeError.set(null);
     this.quoteState.set({ status: 'loading' });
+    this.occupancyState.set({ status: 'idle' });
 
     const requestVersion = this.contextVersion;
 
@@ -487,11 +516,45 @@ export class LeisureReservationComponent {
           // must never appear as if it did.
           if (requestVersion === this.contextVersion) {
             this.quoteState.set({ status: 'success', quote });
+
+            if (useType === 'SharedLeisure') {
+              this.fetchSharedOccupancy(buildingId, amenity.id, requestVersion);
+            }
           }
         },
         error: (error: ApiError) => {
           if (requestVersion === this.contextVersion) {
             this.quoteState.set({ status: 'error', error });
+          }
+        }
+      });
+  }
+
+  /**
+   * Issue #89: before the resident can confirm a SharedLeisure booking,
+   * show which units already overlap the same period — informational only,
+   * never a capacity rejection (DEC-014/OQ-009).
+   */
+  private fetchSharedOccupancy(buildingId: string, amenityId: string, requestVersion: number): void {
+    this.occupancyState.set({ status: 'loading' });
+
+    this.leisureService
+      .getSharedOccupancy(
+        buildingId,
+        amenityId,
+        this.fromDate().toISOString(),
+        this.toDate().toISOString()
+      )
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (occupancy: SharedOccupancy) => {
+          if (requestVersion === this.contextVersion) {
+            this.occupancyState.set({ status: 'success', unitLabels: occupancy.unitLabels });
+          }
+        },
+        error: (error: ApiError) => {
+          if (requestVersion === this.contextVersion) {
+            this.occupancyState.set({ status: 'error', error });
           }
         }
       });

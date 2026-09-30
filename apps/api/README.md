@@ -366,6 +366,25 @@ conflicts, serializing concurrent attempts on the same resource. See
 approach was chosen over a database exclusion constraint or `Serializable`
 isolation.
 
+### Shared Leisure occupancy notice (issue #89)
+
+`GET /api/reservations/shared-occupancy?buildingId=&amenityId=&startsAtUtc=&endsAtUtc=`
+requires `ResidentAccess` and building membership (403 otherwise). DEC-014/
+OQ-009 removed any maximum Shared Leisure capacity, so this endpoint never
+rejects — it only reports which units already hold a Confirmed or still-held
+Pending SharedLeisure reservation overlapping the given amenity/period, so
+the client can show a resident "this space will be shared with: 1A, 2B" before
+they confirm:
+
+```json
+{ "unitLabels": ["1A", "2B"] }
+```
+
+This is a purpose-built, minimal read: it returns unit display labels only
+and never a name, email, user id, membership id or phone — it is
+deliberately not an extension of an endpoint that carries membership/user
+data (e.g. the admin reservation reads).
+
 ### Resident reservation history and payment reads (issue #66)
 
 ```http

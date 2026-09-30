@@ -48,7 +48,8 @@ public sealed class AuditMetadata
         "previousName",
         "previousStartTime",
         "previousEndTime",
-        "active"
+        "active",
+        "previousStatus"
     };
 
     private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web);

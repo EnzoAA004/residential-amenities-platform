@@ -5,6 +5,7 @@ using ResidentialAmenities.Api.Modules.Amenities.Domain;
 using ResidentialAmenities.Api.Modules.Audit.Domain;
 using ResidentialAmenities.Api.Modules.Buildings.Domain;
 using ResidentialAmenities.Api.Modules.Identity.Domain;
+using ResidentialAmenities.Api.Modules.Media.Domain;
 using ResidentialAmenities.Api.Modules.Messaging.Domain;
 using ResidentialAmenities.Api.Modules.Notifications.Domain;
 using ResidentialAmenities.Api.Modules.Identity.Infrastructure.Persistence;
@@ -63,6 +64,9 @@ public sealed class AppDbContext(
 
     public DbSet<ReservationMessage> ReservationMessages =>
         Set<ReservationMessage>();
+
+    public DbSet<MediaAttachment> MediaAttachments =>
+        Set<MediaAttachment>();
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {

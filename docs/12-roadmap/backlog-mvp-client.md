@@ -44,11 +44,13 @@ resident-owned reservation/payment reads.
 ## What stays out of this phase
 
 - Refunds, accounting, invoice/receipt generation.
-- QR entry point, push notifications, reservation-scoped messaging (Phase 6).
+- QR entry point, push notifications, reservation-scoped messaging (Phase 6,
+  completed).
 - Full-day reservations as a shipped, user-facing option (issue #2, OQ-003).
 - Any hardcoded price, event time window, hold duration or cash-confirmer role
   — the client reads these from the backend (quotes, `EventSlotDefinition`,
-  `ExpiresAtUtc`, the `Administrator` policy) and never assumes a final value.
+  `ExpiresAtUtc`, the `Administrator` policy) and never embeds those policies
+  as UI constants.
 - New backend endpoints beyond what already exists, unless a genuine gap is
   found — that becomes its own small, separately reviewed backend issue.
 - Azure/Terraform/production deployment (Phase 7).
@@ -56,26 +58,22 @@ resident-owned reservation/payment reads.
   demonstrates local component state and Angular's built-in reactivity are
   insufficient — services with signals/RxJS are the default.
 
-## Still blocked or deferred by issue #2
+## Deferred product scope after issue #2 closure
 
-Nothing in this phase resolves issue #2. Concretely:
+Issue #2 is now closed for MVP/pilot policy. Concretely:
 
-- **Prices and event hours**: the client always reads them from
+- **Prices, event hours and hold duration**: the client always reads them from
   `GET /api/pricing/quote` and the resident-facing
   `GET /api/buildings/{id}/event-slots?date=` (issue #62) / amenity
-  availability endpoints — never a constant in the client, and never the
-  Administrator-only `GET /api/admin/buildings/{id}/event-slots`.
-- **Hold duration**: the client reads `expiresAtUtc` from the reservation
-  response and renders a countdown from it; it never assumes 30 minutes or any
-  other fixed duration.
-- **Full-day**: not exposed as a reservable option.
-- **Cancellation/refund policy**: the resident UI has no self-service
-  cancel/refund action (none exists on the backend either); the admin
-  cancel screen surfaces the existing `requiresFinancialReview` flag rather
-  than inventing refund UI.
-- **Cash confirmer**: the admin cash-confirmation action is gated by the same
-  `Administrator` policy the backend already enforces; no new role is added in
+  availability endpoints and reservation `expiresAtUtc` — never constants in
   the client.
+- **Full-day**: explicitly deferred and not exposed as a reservable option.
+- **Refund financial consequence**: still an explicit follow-up. The resident
+  UI has no self-service refund action; the admin cancel screen surfaces the
+  existing `requiresFinancialReview` flag rather than inventing refund UI.
+- **Cash confirmer**: DEC-015/RB-026 keeps the admin cash-confirmation action
+  gated by the backend `Administrator` policy; no new role is added in the
+  client.
 
 ## Definition of Done (applies to every issue below)
 

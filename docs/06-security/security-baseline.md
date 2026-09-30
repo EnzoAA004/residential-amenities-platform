@@ -37,7 +37,9 @@ Two first-party client modes are supported:
 
 There is intentionally **no public registration endpoint**.
 
-A resident must not be able to create an account and assign themselves to an arbitrary unit. User creation/invitation/onboarding will be an administrator-controlled application workflow once the stakeholder onboarding rule in issue #2 is finalized.
+A resident must not be able to create an account and assign themselves to an
+arbitrary unit. DEC-014/RB-024 decides that resident onboarding is
+Administrator-created with email verification and resident-set password.
 
 ## Password / brute-force baseline
 
@@ -141,10 +143,10 @@ Still to be addressed/refined in later issues:
 - incident response procedure.
 
 Cash (issue #25): declaring cash is limited to the reservation's creator (or
-an Administrator); confirming receipt is `Administrator`-only — provisional
-until OQ-013 defines who receives cash — with the actor always taken from the
-authenticated session and stored on the payment (`CashConfirmedByUserId`,
-`CashConfirmedAtUtc`). The resident-facing payment view never exposes that id.
+an Administrator); confirming receipt is `Administrator`-only by DEC-015/RB-026,
+with the actor always taken from the authenticated session and stored on the
+payment (`CashConfirmedByUserId`, `CashConfirmedAtUtc`). The resident-facing
+payment view never exposes that id.
 
 ## Audit trail (issue #27)
 

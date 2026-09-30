@@ -28,6 +28,8 @@ These rules are the current v0.1 model. Items marked **TBD** require stakeholder
 | RB-022 | There is no fixed damage/fine schedule. Residents and administrators can submit an incident/damage report (text plus optional photo/video evidence) to a dedicated reports channel for Administrator review; the system never calculates or charges a penalty automatically. | Accepted |
 | RB-023 | The SUM is always the base resource for an Event; Pool and Barbecue can only be included as part of an Event built on the SUM and can never be reserved on their own (finalizes OQ-014). | Accepted |
 | RB-024 | Resident accounts are Administrator-created only; there is no public self-service flow to pick a building/unit. An Administrator creates the resident record (building/unit/email), the system emails a single-use verification code, the resident verifies their identity with that code and sets their own initial password, and only then is the account enabled. The Administrator never learns, stores or sends the resident's final password. | Accepted |
+| RB-025 | For the pilot building, a pending paid reservation holds its resources for 24 hours before expiring if still unpaid. The duration remains deployment/building-policy configuration through `Reservations:Hold:DurationMinutes`; it is not a domain constant. | Accepted |
+| RB-026 | Only an authenticated `Administrator` account reserved for building administration may confirm receipt of a cash payment. The confirming actor is derived from the authenticated principal and recorded/audited server-side; the client cannot provide or override the confirmer. | Accepted |
 
 ## Implementation notes (issue #21)
 
@@ -39,13 +41,14 @@ particular:
 - RB-001 is enforced by requiring the base resource's `AmenityKind` to be
   `Sum` (never the `"SUM"` name/label).
 - RB-002's "independent" add-ons currently means "not a required part of a
-  Leisure reservation" — a resident cannot yet book Pool/Barbecue on their
-  own outside an Event (that is OQ-014, still open).
+  Leisure reservation" — a resident cannot book Pool/Barbecue on their own
+  outside an Event, matching DEC-014/RB-023.
 - RB-006's exclusivity is implemented for every resource an Event books
   (SUM and each add-on), not only the SUM.
-- Event slot windows ("afternoon"/"evening") are seeded as explicit
-  placeholders in a configurable `EventSlotDefinition` table, not hardcoded.
-  Exact Event slot times remain configurable/TBD pending issue #2.
+- Event slot windows ("afternoon"/"night") live in configurable
+  `EventSlotDefinition` rows, not hardcoded. DEC-014/RB-019 decides the pilot
+  windows as 12:00-18:00 and 20:00-03:00 next day; OQ-003 full-day remains
+  deferred.
 
 ## Implementation notes (issue #23)
 
@@ -56,12 +59,11 @@ expiration mechanism (`ReservationExpirationHostedService`) transitions
 past-due holds to `Expired`, at which point they stop blocking resources.
 See `docs/04-data/domain-model.md#concurrency-and-holds-issue-23`.
 
-The **duration value itself remains configuration, not a decided business
-value** — the 30-minute default is a placeholder for local
-development/testing, not the candidate 24/48-hour values under discussion
-for OQ-010. This issue does not close OQ-010; it only makes the hold
-duration a setting rather than a hardcoded constant, so setting the real
-value once #2 answers OQ-010 requires no code change.
+The **duration value itself remains configuration, not a domain constant**.
+DEC-015/RB-025 decides the pilot policy as 24 hours, represented as
+`Reservations:Hold:DurationMinutes = 1440` in configuration. Other
+deployments/buildings can still supply a different policy value without
+changing reservation-domain code.
 
 ## Implementation notes — RB-017/RB-018 (pilot pricing, revised 2026-09-30)
 

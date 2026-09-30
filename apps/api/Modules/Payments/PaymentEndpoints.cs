@@ -33,8 +33,8 @@ public static class PaymentEndpoints
             .WithTags("Payments")
             .RequireAuthorization(AuthorizationPolicies.ResidentAccess);
 
-        // Administrator is the initial authorized actor for confirming cash
-        // receipt until OQ-013 (issue #2) says who actually receives cash.
+        // DEC-015/RB-026: cash receipt is confirmed by an authenticated
+        // Administrator; the actor always comes from the principal.
         endpoints
             .MapPost("/api/payments/{paymentId:guid}/cash/confirm", ConfirmCashPaymentAsync)
             .WithTags("Payments")

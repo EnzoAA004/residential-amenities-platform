@@ -221,11 +221,10 @@ compatible today. Evaluated per `ReservationResource`/Amenity, never per
 building or per reservation, so booking the SUM does not block unrelated
 amenities.
 
-Maximum shared-use capacity is explicitly **not** decided (`docs/02-requirements/business-rules.md`
-RB-016 — pending issue #2). Until it exists, any number of compatible Shared
-Leisure reservations may coexist for the same resource/time; the capacity
-check has an obvious seam to add once issue #2 answers OQ-* on this, but
-inventing a number now (e.g. hardcoding "2") was explicitly out of scope.
+DEC-014/RB-020 explicitly decides that Shared Leisure has no maximum
+simultaneous capacity. Any number of compatible Shared Leisure reservations
+may coexist for the same resource/time; the product shows existing unit
+participation before confirmation instead of rejecting by count.
 
 Conflict detection now runs inside a transaction guarded by a per-Amenity
 PostgreSQL advisory lock (issue #23) — see
@@ -284,9 +283,9 @@ Event is rejected and nothing is persisted (one `SaveChanges` call for the
 whole aggregate).
 
 Pool's pilot seed data now sets `AllowsExclusiveUse = true` (previously only
-shared) specifically so it can serve as an exclusive Event add-on; a
-resident booking Pool exclusively on its own, outside an Event, is not
-implemented yet (OQ-014, still open).
+shared) specifically so it can serve as an exclusive Event inclusion. DEC-014
+/ RB-023 decides Pool and Barbecue are never independently bookable outside
+an Event built on the SUM.
 
 ### Event slots vs. amenity availability — a deliberate distinction
 
@@ -311,19 +310,16 @@ erDiagram
 
 A request's `startsAtUtc`/`endsAtUtc`, converted to the building's local
 time zone, must match an active `EventSlotDefinition`'s `StartTime`/`EndTime`
-**exactly** (and not cross midnight — overnight/full-day slots are not
-supported yet). An Event that happens to fall inside the SUM's general
+**exactly**, including whether that slot crosses midnight. An Event that
+happens to fall inside the SUM's general
 availability but does not match a configured slot (e.g. 13:17–16:43) is
 rejected — availability and slot policy are independent checks and both must
 pass.
 
-**Exact Event slot times remain configurable/TBD pending issue #2**
-(OQ-001/OQ-002: afternoon/night shift boundaries; OQ-003: whether full-day
-belongs in the MVP). Seeded slot names/times are explicit placeholders, not
-an approved policy. Full-day is not implemented; if it is added later it is
-expected to be a composition of slots (or a slot spanning the full
-day-defined-as-available-hours), not a new hardcoded rule — but that
-decision itself is not made by this issue.
+DEC-014/RB-019 decides the pilot Event slots: afternoon 12:00-18:00 and
+night 20:00-03:00 next day, building-local time. OQ-003 full-day remains
+deferred and is not implemented; if it is added later it is expected to be a
+composition of slots or a configured full-day slot, not a new hardcoded rule.
 
 ### Pricing composition
 
@@ -332,10 +328,11 @@ ReservationUseType.Event, addOnAmenityIds, atUtc)` selects the effective
 `SUM/Base/Event` rule plus one `.../AddOn/Event` rule per add-on, and
 currency consistency across all of them is already enforced by
 `PricingCalculator` itself (reused, not reimplemented). Each returned
-`PriceQuoteLine` becomes one `ReservationPriceLine`, so an Event with two
-add-ons snapshots three rows (base + 2), and the total is their sum — e.g.
-15,000 (SUM) + 3,000 (Pool) + 3,000 (Barbecue) = 21,000 ARS with the pilot's
-placeholder pricing.
+`PriceQuoteLine` becomes one `ReservationPriceLine`. DEC-014/RB-018 revised
+the pilot policy to a flat ARS 5,000 Event total inclusive of SUM, Pool and
+Barbecue, with free Leisure reservations; pricing remains effective-dated
+configuration and historical snapshots still come from the reservation's own
+price lines.
 
 ### Lifecycle and concurrency
 
@@ -413,12 +410,9 @@ stateDiagram-v2
   confirmation (#25) is still to come.
 - `Confirmed` and `Cancelled` are otherwise unchanged from #20.
 
-The hold duration default (30 minutes) is an explicit placeholder for local
-development/testing, **not** the real candidate values under discussion for
-OQ-010 (24 or 48 hours — see
-`docs/01-discovery/assumptions-and-open-questions.md`). Production must set
-`Reservations:Hold:DurationMinutes` via configuration once issue #2 answers
-OQ-010.
+DEC-015/RB-025 decides the pilot hold duration as 24 hours, represented as
+`Reservations:Hold:DurationMinutes = 1440` in configuration. The duration
+remains a deployment/building-policy setting, not a domain constant.
 
 ### Expiration mechanism (RF-012)
 
@@ -465,8 +459,8 @@ no resource, hold or price line for that Event persists partially.
 - No Mercado Pago/cash integration and no `Pending → Confirmed` transition
   (Mercado Pago and the transition arrived in #24; cash in #25).
 - No admin cancel/reschedule of a hold.
-- Hold duration remains configuration, not a decided business value
-  (OQ-010).
+- Hold duration remains configuration, even though DEC-015/RB-025 decides
+  the pilot value as 24 hours.
 
 ## Payments and Mercado Pago (issue #24)
 
@@ -690,8 +684,8 @@ Status=Pending`. `Pending` for cash means an authorized person has not
 confirmed receipt yet. There is **no** `PendingCashConfirmation`
 `ReservationStatus`: the reservation stays `Pending` and the difference lives
 inside Payments, which keeps the module boundary clean. Declaring does not
-touch `Reservation.ExpiresAtUtc` — the real hold duration is still OQ-010 /
-issue #2.
+touch `Reservation.ExpiresAtUtc`; DEC-015/RB-025 sets the pilot hold policy
+to 24 hours via configuration.
 
 Amount and currency come only from the `ReservationPriceLines` snapshot.
 
@@ -717,16 +711,14 @@ the service looks up the active payment first, and the unique index is the
 safety net for concurrent requests (the loser re-reads and reuses the
 winner's payment).
 
-### Confirming cash: Administrator until OQ-013 is answered
+### Confirming cash: Administrator
 
 `POST /api/payments/{id}/cash/confirm` requires the `Administrator` policy.
-**Administrator is the initial authorized actor until OQ-013 (who receives
-cash, issue #2) is resolved.** No `CashManager`/`PaymentManager`/`Concierge`
-role or policy is introduced without that stakeholder decision; when it
-arrives we will evaluate whether Administrator stays correct or a new
-role/policy is needed. A Resident gets `403`. The confirming actor is taken
-from the authenticated session (`UserManager.GetUserAsync`); nothing about
-who confirmed is read from the request.
+DEC-015/RB-026 decides this as the final pilot policy: cash receipt is
+confirmed by an authenticated Administrator account reserved for building
+administration. A Resident gets `403`. The confirming actor is taken from
+the authenticated session (`UserManager.GetUserAsync`); nothing about who
+confirmed is read from the request.
 
 The payment records the answer to "who confirmed receiving the money and
 when": `CashConfirmedByUserId`, `CashConfirmedAtUtc` (plus
@@ -990,10 +982,10 @@ when an **approved** payment sits on a **cancelled** reservation.
 `CancellationReason` lives on the reservation as well as in the audit entry:
 the current state must not depend on audit. Nothing is deleted (RB-013).
 **A payment is never touched by a cancellation**: an approved payment stays
-`Approved`, is not marked rejected and nothing is refunded. Cancellation and
-refund policy is still open (OQ-011, issue #2). The `ReservationCancelled`
-audit entry is written in the same transaction (actor = the administrator,
-metadata `reason`).
+`Approved`, is not marked rejected and nothing is refunded automatically. The
+financial/refund consequence remains an explicit deferred follow-up. The
+`ReservationCancelled` audit entry is written in the same transaction
+(actor = the administrator, metadata `reason`).
 
 ### Reschedule semantics
 
@@ -1046,8 +1038,9 @@ building + amenity + component + use type:
 
 It runs under the amenity advisory lock (also ordering it against reservation
 creation) and records `PriceRuleCreated` / `PriceRuleSuperseded` in the same
-transaction. Existing reservation snapshots never change. No price is final
-until issue #2 confirms it; nothing is hardcoded.
+transaction. Existing reservation snapshots never change. DEC-014/RB-018
+decides the pilot prices, and pricing remains configuration rather than
+hardcoded domain/client constants.
 
 ### Availability
 
@@ -1073,8 +1066,9 @@ period — never the window list).
 `GET/POST /api/admin/buildings/{buildingId}/event-slots`,
 `PUT /api/admin/event-slots/{id}`, `POST .../deactivate`, `POST .../activate`.
 Slots are activated/deactivated, never deleted. Invariants are the creation
-ones: start before end, no overnight, no full-day (pending issue #2); exact
-times stay configurable and the seeded slots remain placeholders. A duplicate
+ones: start before end, at most one midnight boundary, and no full-day
+(OQ-003 deferred); exact times stay configurable, with DEC-014/RB-019 as the
+pilot policy. A duplicate
 `(building, start, end)` is a 409. A deactivated slot stops matching new Event
 reservations and reschedules; existing reservations are untouched. Audit:
 `EventSlotCreated`, `EventSlotUpdated` (also used for re-activation, with the
@@ -1096,11 +1090,12 @@ Every command writes its audit entry in the same `SaveChanges`/transaction as
 the change (tests force a failing audit write on real PostgreSQL and check the
 change rolls back for cancel, reschedule and price rules).
 
-### Still open (issue #2)
+### Remaining deferred product scope
 
-Definitive prices, final Event/operating hours, cancellation and refund policy
-(OQ-011), full-day, the definitive cash-confirming actor (OQ-013), the real
-hold duration, and cleaning. Nothing in this issue decides them.
+Issue #2 is closed for MVP/pilot policy. Full-day reservations remain
+deferred (OQ-003), and the financial/refund consequence of a late/disallowed
+Event cancellation remains an explicit follow-up; no automatic refund
+behavior is assumed.
 
 ## Resident reservation history and payment reads (issue #66)
 

@@ -505,15 +505,15 @@ Hold duration is configurable, **not** hardcoded:
 ```json
 {
   "Reservations": {
-    "Hold": { "DurationMinutes": 30 },
+    "Hold": { "DurationMinutes": 1440 },
     "Expiration": { "IntervalSeconds": 60 }
   }
 }
 ```
 
-30 minutes is a placeholder for local development — production must set
-this once issue #2 answers OQ-010 (candidates under discussion: 24 or 48
-hours).
+DEC-015/RB-025 decides the pilot policy as 24 hours (`1440` minutes). The
+duration remains configuration, not a domain constant, so another deployment
+or future building policy can still provide a different value.
 
 Two truly concurrent, incompatible requests for the same resource/time can
 never both succeed: reservation creation acquires a PostgreSQL
@@ -676,10 +676,11 @@ reservation (or the reverse) the answer is `409`; switching method is not
 supported. The body is empty — amount and currency come from the price
 snapshot and the actor from the session.
 
-`POST /api/payments/{id}/cash/confirm` is restricted to `Administrator`, the
-provisional authorized actor until OQ-013 (issue #2) says who receives cash; a
-Resident gets `403`. It approves the payment, records the confirming user and
-time, and asks Reservations to confirm. Repeating it changes nothing. If the
+DEC-015/RB-026 makes cash receipt confirmation `Administrator`-only. A
+Resident gets `403`. The confirming actor is taken from the authenticated
+principal, not the request body or query string. It approves the payment,
+records the confirming user and time, and asks Reservations to confirm.
+Repeating it changes nothing. If the
 reservation already expired or was cancelled the payment is still `Approved`
 but reports `reservationOutcome: "ApprovedAfterExpiry"` (or
 `"ApprovedForCancelledReservation"`) with `requiresManualReview: true`, and the

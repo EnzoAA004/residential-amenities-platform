@@ -80,6 +80,7 @@ app.MapReservationEntryPointEndpoints();
 app.MapPaymentEndpoints();
 app.MapAuditEndpoints();
 app.MapNotificationEndpoints();
+app.MapMessagingEndpoints();
 app.MapAdminEndpoints();
 app.MapHealthEndpoints();
 app.MapGet("/", () => Results.Redirect("/health"));

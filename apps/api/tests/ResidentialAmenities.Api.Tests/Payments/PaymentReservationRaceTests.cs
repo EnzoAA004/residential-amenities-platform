@@ -44,7 +44,9 @@ public sealed class PaymentReservationRaceTests : IAsyncLifetime
     [Fact]
     public async Task ConcurrentConfirmationAndExpiration_NeverProduceBothOutcomes()
     {
-        const int count = 150;
+        // Keep this comfortably below the CI Postgres max_connections limit:
+        // the test starts two real DbContext operations per reservation.
+        const int count = 40;
         var ids = await InsertPendingReservationsAsync(count);
 
         var confirmationClock = new ManualTimeProvider(Deadline.AddSeconds(-1));

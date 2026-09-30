@@ -36,7 +36,8 @@ Two paths are currently envisioned:
 1. Mercado Pago.
 2. Cash, requiring controlled confirmation by an authorized person/admin.
 
-A booking may remain temporarily held while payment is pending. The hold duration is not finalized.
+A booking may remain temporarily held while payment is pending. DEC-015 sets
+the pilot hold duration to 24 hours, supplied through configuration.
 
 ## Administration
 

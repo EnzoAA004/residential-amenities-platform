@@ -124,10 +124,10 @@ Constraints:
 | StartTime | time | No | Local start of the operating window (building time zone). |
 | EndTime | time | No | Local end of the operating window. Must be after `StartTime`; overnight windows are not supported yet. |
 
-Exact shift boundaries remain configuration, pending validation in issue #2
-(`docs/01-discovery/assumptions-and-open-questions.md`). Development seed data
-uses a single 09:00–22:00 placeholder window per day so the availability
-endpoint has something to query locally.
+General amenity operating windows remain configuration. Event reservation
+slot policy is separate and decided for the pilot in DEC-014/RB-019.
+Development seed data uses a single 09:00-22:00 availability window per day
+so the availability endpoint has something to query locally.
 
 ## AmenityUnavailablePeriods
 
@@ -342,10 +342,9 @@ the building's local time zone, must match an active
 `EventSlotDefinition.StartTime`/`EndTime` **exactly**, or the request is
 rejected even if it falls inside the amenity's general availability.
 
-**Exact Event slot times remain configurable/TBD pending issue #2**
-(OQ-001/OQ-002 shift boundaries, OQ-003 full-day). Seeded values
-("Placeholder afternoon slot" 14:00–19:00, "Placeholder evening slot"
-19:00–22:00) are illustrative only, not an approved policy.
+DEC-014/RB-019 decides the pilot Event slots as afternoon 12:00-18:00 and
+night 20:00-03:00 next day, building-local time. OQ-003 full-day remains
+deferred.
 
 ## Separation of concerns
 

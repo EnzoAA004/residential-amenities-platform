@@ -148,6 +148,39 @@ public sealed class ReservationEndpointsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Create_ExpiresAtUtc_DerivesFromConfiguredHoldDuration()
+    {
+        using var factory = new WebApplicationFactory<Program>()
+            .WithWebHostBuilder(builder =>
+            {
+                builder.UseSetting("environment", "Development");
+                builder.UseSetting("Reservations:Hold:DurationMinutes", "1440");
+            });
+
+        using var client = factory.CreateClient(
+            new WebApplicationFactoryClientOptions { HandleCookies = true });
+
+        var login = await client.PostAsJsonAsync(
+            "/api/auth/login?useCookies=true",
+            new { email = _residentEmail, password = Password },
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+
+        var response = await client.PostAsJsonAsync(
+            "/api/reservations",
+            BuildRequest(new DateTime(2027, 3, 2, 11, 0, 0)),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<ReservationResponse>(
+            TestContext.Current.CancellationToken);
+
+        Assert.NotNull(body);
+        Assert.Equal(TimeSpan.FromHours(24), body.ExpiresAtUtc - body.CreatedAtUtc);
+    }
+
+    [Fact]
     public async Task Create_SecondCompatibleSharedLeisure_Succeeds()
     {
         var start = new DateTime(2027, 3, 3, 10, 0, 0);
@@ -476,6 +509,7 @@ public sealed class ReservationEndpointsTests : IAsyncLifetime
         DateTimeOffset StartsAtUtc,
         DateTimeOffset EndsAtUtc,
         DateTimeOffset CreatedAtUtc,
+        DateTimeOffset ExpiresAtUtc,
         List<ReservationResourceResponse> Resources,
         List<ReservationPriceLineResponse> PriceLines,
         string Currency,

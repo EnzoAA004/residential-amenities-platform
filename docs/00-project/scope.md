@@ -43,7 +43,9 @@
 - Initial population: one building and 10 residential units.
 - Users include both younger and older residents; usability has priority over novelty.
 - Cloud spending must remain predictable and intentionally enabled.
-- Prices, time windows and some operational policies are provisional and must be validated with stakeholders.
+- Pilot prices, Event time windows and payment-operation policies are decided
+  for MVP scope; full-day reservations and refund financial consequences
+  remain explicit deferred follow-ups.
 
 ## Future product boundary
 

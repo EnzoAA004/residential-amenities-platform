@@ -2,7 +2,8 @@
 
 These scenarios are intentionally technology-agnostic. They define observable product behavior, not implementation details.
 
-Items marked **BLOCKED/TBD** depend on stakeholder decisions in issue #2.
+Issue #2 is closed for MVP/pilot scope. Items that remain deferred are
+explicitly marked as deferred rather than treated as hidden assumptions.
 
 ## AC-01 — Authentication and membership
 
@@ -40,10 +41,10 @@ Availability module boundary (`docs/03-architecture/module-boundaries.md`). The
 **When** another resident requests shared leisure in the same compatible range  
 **Then** the system may accept the reservation only after clearly indicating that the space is shared.
 
-**BLOCKED/TBD:** maximum shared capacity and final compatibility policy require issue #2.
-Until answered, issue #20 accepts any number of compatible shared-leisure
-reservations for the same resource/time; the reservation response always
-identifies the use type as shared so a client can inform the user.
+DEC-014/RB-020 decides there is no maximum Shared Leisure capacity. The
+system may accept any number of compatible shared-leisure reservations for
+the same resource/time, and the resident flow must indicate that the space
+may be shared.
 
 Related: RF-004, RB-003, RB-004 — issue #20.
 
@@ -76,7 +77,9 @@ now considered satisfied.
 **When** a resident requests an event with valid optional resources  
 **Then** the system reserves the SUM plus selected resources as one booking context and delegates price calculation to Pricing.
 
-**BLOCKED/TBD:** exact event windows, full-day behavior and whether add-ons can ever be independent require issue #2.
+DEC-014/RB-019 decides pilot Event windows as 12:00-18:00 and 20:00-03:00
+next day; DEC-014/RB-023 decides Pool/Barbecue are never independent of SUM.
+OQ-003 full-day reservations remain deferred.
 
 Related: RF-006, RF-007, RB-001, RB-002, RB-006 — issue #21.
 
@@ -85,8 +88,8 @@ arbitrary time range that merely falls inside the SUM's general
 availability), with Pool/Barbecue as the only permitted add-on kinds and
 every one of the Event's resources — SUM and add-ons alike — reserved
 exclusively for the whole window. "Independent" pool/barbecue bookings
-outside an Event (OQ-014) are still not implemented.
-Exact Event slot times remain configurable/TBD pending issue #2.
+outside an Event are intentionally not implemented. Exact Event slot times
+remain configurable and are seeded with the DEC-014 pilot values.
 
 Related: RF-006, RF-007, RB-001, RB-002, RB-006 — issue #21.
 
@@ -114,7 +117,8 @@ Related: RF-008, RF-009, RF-019, RB-007, RB-008 — issue #22.
 **When** that expiration passes without valid payment confirmation  
 **Then** the reservation expires and its resources become available again.
 
-**BLOCKED/TBD:** exact hold duration requires issue #2.
+DEC-015/RB-025 decides the pilot hold duration as 24 hours, still supplied
+through `Reservations:Hold:DurationMinutes`.
 
 Related: RF-011, RF-012, RB-009, RB-010 — issue #23.
 
@@ -124,8 +128,8 @@ resources exactly like `Confirmed` while active and stops the instant it is
 past due. `ReservationExpirationHostedService` releases expired holds
 automatically (idempotent bulk `UPDATE`, safe under concurrent execution) —
 see `docs/04-data/domain-model.md#concurrency-and-holds-issue-23`. The
-30-minute default duration is an explicit placeholder, not the real value
-under discussion for OQ-010 (24/48 hours).
+pilot duration is 24 hours (`1440` minutes) by configuration, not a hardcoded
+reservation-domain constant.
 
 Since issue #24 a `Pending` hold can also move to `Confirmed`, but only via a
 server-verified payment (AC-08); the hold expiring first always wins over a
@@ -180,7 +184,8 @@ Refunds are out of scope.
 **When** they attempt to confirm their own cash payment  
 **Then** the operation is rejected.
 
-**BLOCKED/TBD:** exact authorized person/process requires issue #2.
+DEC-015/RB-026 decides the authorized confirmer as an authenticated
+Administrator account reserved for building administration.
 
 Related: RF-015, RF-016, RB-012 — issue #25.
 
@@ -188,10 +193,10 @@ Implemented (issue #25): `POST /api/reservations/{id}/payments/cash` creates a
 `Cash` payment in `Pending` (amount/currency from the price snapshot; the
 reservation stays `Pending` and its hold is **not** extended).
 `POST /api/payments/{id}/cash/confirm` is restricted to `Administrator`
-— the **provisional** authorized actor until OQ-013 (issue #2) is answered; a
-Resident gets 403. Confirmation approves the payment, records who confirmed
-and when on the payment, and asks Reservations to confirm through the same
-contract used by Mercado Pago. Repeating it is a no-op that keeps the original
+by final pilot policy; a Resident gets 403. Confirmation approves the
+payment, records who confirmed and when on the payment, and asks
+Reservations to confirm through the same contract used by Mercado Pago.
+Repeating it is a no-op that keeps the original
 actor/timestamp. If the reservation already expired or was cancelled, the
 payment is still `Approved` (the cash was received) with outcome
 `ApprovedAfterExpiry` / `ApprovedForCancelledReservation` and
@@ -222,9 +227,9 @@ detail with payments (`requiresFinancialReview` computed, `requiresManualReview`
 filter on `/api/admin/payments`), cancel and reschedule with a mandatory reason,
 price rules (effective-dated, never edited), availability windows and
 maintenance periods, and Event slots. Cancelling a paid reservation never
-changes or refunds the payment (OQ-011 stays open). Reschedule keeps resources,
-price snapshot and hold. Every change is audited atomically. Still open in issue
-#2: definitive prices and hours, refund policy, full-day, definitive cash actor.
+changes or refunds the payment; the refund financial consequence remains an
+explicit deferred follow-up. Reschedule keeps resources, price snapshot and
+hold. Every change is audited atomically. Full-day remains deferred by OQ-003.
 See `docs/04-data/domain-model.md#administrative-operations-issue-26`.
 
 Implemented (issue #27): the audit half of this criterion. Important facts are

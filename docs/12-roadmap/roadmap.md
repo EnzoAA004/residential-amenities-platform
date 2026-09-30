@@ -64,15 +64,18 @@ the stable backend contracts.
 - Audit trail and payment-manual-review views for administrators.
 - Frontend testing, accessibility and error-handling hardening.
 
-Decisions still open in issue #2 (definitive prices, event hours, full-day,
-hold duration, cancellation/refund policy, cash confirmer) are surfaced from
-the backend as configuration/state, never hardcoded in the client. See
-[the completed MVP client backlog](backlog-mvp-client.md) for the issue
-breakdown and closure state.
+Business-policy issue #2 is now closed for MVP/pilot scope: prices, Event
+hours, payment hold duration and cash-confirmation authority are decided and
+surfaced from backend configuration/state, never hardcoded in the client.
+Full-day reservations remain deferred, and the financial/refund consequence
+of a late/disallowed Event cancellation remains an explicit follow-up rather
+than invented behavior. See [the completed MVP client backlog](backlog-mvp-client.md)
+for the issue breakdown and closure state.
 
 ## Phase 6 — UX extensions
 
-Status: **next**.
+Status: **completed**. #79 remains open/deferred until real staging or pilot
+usage feedback exists; no arbitrary UX refinement was invented.
 
 - QR entry point.
 - Push notifications.

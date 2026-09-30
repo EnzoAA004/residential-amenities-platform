@@ -5,6 +5,7 @@ using ResidentialAmenities.Api.Modules.Amenities.Domain;
 using ResidentialAmenities.Api.Modules.Audit.Domain;
 using ResidentialAmenities.Api.Modules.Buildings.Domain;
 using ResidentialAmenities.Api.Modules.Identity.Domain;
+using ResidentialAmenities.Api.Modules.Notifications.Domain;
 using ResidentialAmenities.Api.Modules.Identity.Infrastructure.Persistence;
 using ResidentialAmenities.Api.Modules.Payments.Domain;
 using ResidentialAmenities.Api.Modules.Pricing.Domain;
@@ -55,6 +56,9 @@ public sealed class AppDbContext(
         Set<PaymentProviderEvent>();
 
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+
+    public DbSet<NotificationSubscription> NotificationSubscriptions =>
+        Set<NotificationSubscription>();
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {

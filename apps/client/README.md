@@ -56,6 +56,8 @@ for the full backlog.
 - Event reservation quote-and-create flow (`features/resident/reservations/event`)
 - QR/token entry point into the existing reservation flows
   (`features/resident/reservations/entry-point`)
+- Push-notification permission/registration foundation
+  (`features/resident/notifications`)
 - Payment (Mercado Pago Checkout Pro + cash) (`features/resident/payments`)
 - Resident reservation history list/detail (`features/resident/reservations/history`)
 - The full administrator workflow (`features/admin`): overview/reservations/
@@ -146,6 +148,7 @@ src/
 │   │   │   │   ├── event/    # Event slots + add-ons quote+create (#48)
 │   │   │   │   ├── entry-point/ # QR/token lookup into existing flows (#76)
 │   │   │   │   └── history/  # reservation list/detail (#50)
+│   │   │   ├── notifications/ # push permission + subscription API foundation (#77)
 │   │   │   └── payments/     # Mercado Pago / cash payment (#49)
 │   │   ├── admin/         # administrator workflow (#51-#54)
 │   │   │   ├── admin-shell.page.ts, admin-overview.page.ts
@@ -718,6 +721,34 @@ quote, invent availability, infer capacity or create anything automatically;
 pricing, Event slots, structural availability and final reservation
 conflicts remain the same backend calls used by the normal `/amenities`
 experience.
+
+## Push notifications foundation
+
+Issue #77 adds the foundation only; it does not send notifications or decide
+business rules for reminders, confirmations, cancellations or messages. The
+decision is captured in
+`docs/03-architecture/adr/ADR-011-notifications-foundation.md`.
+
+`features/resident/notifications` contains the client-side service layer for
+future opt-in UI. `NotificationSubscriptionService.registerWebPush(...)`
+checks browser notification permission through `NotificationPermissionGateway`
+and calls `POST /api/notification-subscriptions` only when permission is
+already `granted` or becomes `granted` after an explicit request. If permission
+is `denied`, the browser APIs are unavailable, or the app is not running in a
+secure context, the service returns `denied`/`unavailable` and does not send
+the endpoint or keys to the backend.
+
+The backend derives the owner from the authenticated session and returns only
+safe metadata (`id`, `platform`, `endpointHash`, enabled flag and timestamps);
+the client never sends user, membership or building ids for subscriptions.
+
+Remaining production work:
+
+- add a real opt-in settings UI instead of calling the service on startup;
+- add Service Worker registration and VAPID/public-key delivery for web push;
+- install/configure the Capacitor push plugin plus APNs/FCM for native
+  Android/iOS after native project directories exist;
+- define notification event rules and templates in a later product phase.
 
 ## Payment flows (Mercado Pago + cash)
 

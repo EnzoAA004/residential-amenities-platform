@@ -49,6 +49,11 @@ export const apiPaths = {
     byId: (paymentId: string) => `/payments/${paymentId}`
   },
 
+  notifications: {
+    subscriptions: '/notification-subscriptions',
+    subscriptionById: (id: string) => `/notification-subscriptions/${id}`
+  },
+
   admin: {
     reservations: {
       list: '/admin/reservations',

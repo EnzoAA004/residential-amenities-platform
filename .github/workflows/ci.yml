@@ -70,13 +70,13 @@ jobs:
 
       - name: Run backend tests
         env:
-          ConnectionStrings__Postgres: Host=127.0.0.1;Port=5432;Database=residential_amenities;Username=residential_app;Password=local_dev_only
+          ConnectionStrings__Postgres: Host=127.0.0.1;Port=5432;Database=residential_amenities;Username=residential_app;Password=local_dev_only;Maximum Pool Size=20
           ASPNETCORE_ENVIRONMENT: Development
         run: dotnet test apps/api/ResidentialAmenities.slnx --configuration Release --no-build
 
       - name: Start API and verify health/OpenAPI
         env:
-          ConnectionStrings__Postgres: Host=127.0.0.1;Port=5432;Database=residential_amenities;Username=residential_app;Password=local_dev_only
+          ConnectionStrings__Postgres: Host=127.0.0.1;Port=5432;Database=residential_amenities;Username=residential_app;Password=local_dev_only;Maximum Pool Size=20
           ASPNETCORE_URLS: http://127.0.0.1:8080
           ASPNETCORE_ENVIRONMENT: Development
         run: |
@@ -85,6 +85,22 @@ jobs:
             --configuration Release \
             --no-build > /tmp/api.log 2>&1 &
           API_PID=$!
+
+          cleanup_api() {
+            status=$?
+            if [ "$status" -ne 0 ]; then
+              cat /tmp/api.log || true
+            fi
+
+            if kill -0 "$API_PID" 2>/dev/null; then
+              kill "$API_PID"
+              wait "$API_PID" || true
+            fi
+
+            exit "$status"
+          }
+
+          trap cleanup_api EXIT
 
           for attempt in {1..30}; do
             if curl --fail --silent http://127.0.0.1:8080/health > /tmp/health.json; then
@@ -101,7 +117,11 @@ jobs:
             http://127.0.0.1:8080/openapi/v1.json > /tmp/openapi.json
           grep -q '"openapi"' /tmp/openapi.json
 
-          kill $API_PID
+          trap - EXIT
+          if kill -0 "$API_PID" 2>/dev/null; then
+            kill "$API_PID"
+            wait "$API_PID" || true
+          fi
 
       - name: Setup Node 24 LTS
         uses: actions/setup-node@v4

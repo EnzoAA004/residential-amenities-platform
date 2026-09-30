@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using ResidentialAmenities.Api.Infrastructure.Persistence;
+using ResidentialAmenities.Api.Modules.Amenities.Application;
 using ResidentialAmenities.Api.Modules.Amenities.Domain;
 using ResidentialAmenities.Api.Modules.Buildings.Domain;
 using ResidentialAmenities.Api.Modules.Identity;
@@ -78,7 +79,8 @@ public sealed class OvernightEventReservationTests : IAsyncLifetime
         foreach (var dayOfWeek in Enum.GetValues<DayOfWeek>())
         {
             dbContext.AmenityAvailabilityWindows.Add(new AmenityAvailabilityWindow(
-                Guid.NewGuid(), sum.Id, dayOfWeek, new TimeOnly(0, 0), TimeOnly.MaxValue));
+                Guid.NewGuid(), sum.Id, dayOfWeek, new TimeOnly(0, 0),
+                AmenityAvailabilityCalculator.EndOfDaySentinel));
         }
 
         dbContext.EventSlotDefinitions.Add(new EventSlotDefinition(

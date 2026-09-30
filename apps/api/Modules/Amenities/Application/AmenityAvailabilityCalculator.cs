@@ -14,6 +14,14 @@ public static class AmenityAvailabilityCalculator
 {
     public static readonly TimeSpan MaxQueryRange = TimeSpan.FromDays(62);
 
+    /// <summary>
+    /// An <see cref="AmenityAvailabilityWindow.EndTime"/> of exactly this
+    /// value means "open through midnight into the next day" rather than
+    /// "closes at 23:59:59" — see the comment at its use site for why this
+    /// specific value (not <see cref="TimeOnly.MaxValue"/>) was chosen.
+    /// </summary>
+    public static readonly TimeOnly EndOfDaySentinel = new(23, 59, 59);
+
     public static IReadOnlyList<AvailabilityInterval> CalculateOpenIntervals(
         IReadOnlyCollection<AmenityAvailabilityWindow> windows,
         IReadOnlyCollection<AmenityUnavailablePeriod> unavailablePeriods,
@@ -65,20 +73,23 @@ public static class AmenityAvailabilityCalculator
                 var localStart = date.Add(window.StartTime.ToTimeSpan());
 
                 // TimeOnly cannot represent midnight-at-the-end-of-this-day
-                // (its max value is 23:59:59.9999999, one tick short of the
-                // next day's 00:00:00). Treated literally, a window meant
-                // to reach "end of day" would always fall one tick short of
-                // true midnight — harmless for a same-day booking, but it
-                // silently rejects any reservation whose covered range is
-                // computed by summing this window with the next day's
-                // window (e.g. an overnight Event slot, DEC-014/OQ-002),
-                // which ends up exactly one tick short of full coverage.
-                // TimeOnly.MaxValue is never a meaningful literal end time
-                // (no real operating window would end at 23:59:59.9999999
-                // rather than a round time like 23:59 or midnight), so it is
-                // treated here as the "reaches midnight" sentinel and mapped
-                // to the exact next-day boundary instead.
-                var localEnd = window.EndTime == TimeOnly.MaxValue
+                // (the latest whole second is 23:59:59, one second short of
+                // the next day's 00:00:00). Treated literally, a window
+                // meant to reach "end of day" would always fall one second
+                // short of true midnight — harmless for a same-day booking,
+                // but it silently rejects any reservation whose covered
+                // range is computed by summing this window with the next
+                // day's window (e.g. an overnight Event slot, DEC-014/
+                // OQ-002), which ends up short of full coverage.
+                //
+                // 23:59:59 is used as the "reaches midnight" sentinel
+                // (rather than TimeOnly.MaxValue's 23:59:59.9999999)
+                // specifically because it round-trips exactly through a
+                // PostgreSQL `time` column, whose microsecond precision
+                // silently truncates .NET's 100ns tick precision — a
+                // sentinel that only matches in memory and stops matching
+                // after every save/reload is worse than no sentinel.
+                var localEnd = window.EndTime == EndOfDaySentinel
                     ? date.AddDays(1)
                     : date.Add(window.EndTime.ToTimeSpan());
 

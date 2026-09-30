@@ -6,6 +6,7 @@ using ResidentialAmenities.Api.Modules.Amenities;
 using ResidentialAmenities.Api.Modules.Audit;
 using ResidentialAmenities.Api.Modules.Buildings;
 using ResidentialAmenities.Api.Modules.Identity;
+using ResidentialAmenities.Api.Modules.Media;
 using ResidentialAmenities.Api.Modules.Messaging;
 using ResidentialAmenities.Api.Modules.Notifications;
 using ResidentialAmenities.Api.Modules.Payments;
@@ -56,6 +57,7 @@ builder.Services
     .AddAuditModule()
     .AddNotificationsModule()
     .AddMessagingModule()
+    .AddMediaModule(builder.Configuration)
     .AddReportingModule();
 
 var app = builder.Build();
@@ -81,6 +83,7 @@ app.MapPaymentEndpoints();
 app.MapAuditEndpoints();
 app.MapNotificationEndpoints();
 app.MapMessagingEndpoints();
+app.MapMediaEndpoints();
 app.MapAdminEndpoints();
 app.MapHealthEndpoints();
 app.MapGet("/", () => Results.Redirect("/health"));

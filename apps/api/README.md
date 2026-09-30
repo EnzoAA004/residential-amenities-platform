@@ -194,6 +194,45 @@ from read endpoints. `DELETE` unregisters only a subscription owned by the
 authenticated user. This phase deliberately does not send notifications,
 choose cloud infrastructure, or define reservation/payment reminder rules.
 
+### Safe media upload (issue #92)
+
+`POST /api/media` (multipart form, field name `file`) and
+`GET /api/media/{id}` — a generic, minimal upload/retrieval primitive,
+built as a prerequisite for #91's incident reports (not incident-specific
+itself). Both require `ResidentAccess`.
+
+- **Allowlist by actual content, not the client's claim**: only
+  `image/jpeg`, `image/png`, `image/webp`, `video/mp4` and `video/webm` are
+  accepted, detected by inspecting the file's real leading bytes (a magic-
+  number signature) — the client-supplied `Content-Type` header and
+  filename are never trusted for this decision. Anything else (scripts,
+  HTML, active/scriptable SVG, executables, or a claimed type that doesn't
+  match the actual bytes) is rejected with 400.
+- **Size limits**: 10 MB for images, 100 MB for videos
+  (`MediaStorage:MaxImageSizeBytes` / `MaxVideoSizeBytes`), rejected with 400
+  when exceeded.
+- **Server-generated object keys**: the client-supplied filename is never
+  read past validating the upload exists — the stored key is always a fresh
+  GUID plus an extension derived from the *detected* content type.
+- **Retrieval sets `Content-Disposition: attachment`** unconditionally (via
+  `fileDownloadName`), so a browser is never asked to render the response
+  inline, regardless of content type.
+- **Authorization**: any authenticated resident/administrator may upload;
+  only the uploader or an Administrator may retrieve a given attachment
+  (403 otherwise; 404 for an unknown id, checked first so existence is not
+  implicitly confirmed to an unauthorized caller either way).
+- **Storage abstraction**: `IFileStorage`, with `LocalDiskFileStorage` (a
+  directory outside `wwwroot`/anything statically served — the only route
+  to a file's bytes is this authenticated endpoint) as the only
+  implementation for now. No production cloud storage provider is decided;
+  a different `IFileStorage` can be registered later without touching this
+  module.
+- **Retention**: indefinite, same as every other record in this system — no
+  automatic deletion schedule exists or is invented here.
+- **Malware/content scanning**: out of scope for the pilot beyond the
+  strict MIME/magic-byte allowlist and size limits above; not deep content
+  scanning.
+
 ### Reservation-scoped messaging (issue #78)
 
 `GET/POST /api/reservations/{reservationId}/messages` is a minimal,

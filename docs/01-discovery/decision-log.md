@@ -16,6 +16,7 @@ This is the lightweight product/technical decision history. Architecture-level d
 | DEC-010 | 2026-09-27 | Preserve a future multi-building boundary in the domain model without expanding MVP scope. | Accepted |
 | DEC-011 | 2026-09-27 | Prices and time windows must be configurable rather than hard-coded. | Accepted |
 | DEC-012 | 2026-09-27 | Documentation is versioned with the code and updated with relevant PRs. | Accepted |
+| DEC-013 | 2026-09-30 | Pilot price configuration validated: SUM Event base ARS 50,000; Pool Event add-on ARS 10,000; Barbecue Event add-on ARS 10,000; Shared Leisure ARS 2,000; Exclusive Leisure ARS 5,000. Prices remain configurable/effective-dated and historical reservations retain their price snapshot (RB-007, RB-008). Does not resolve whether Pool/Barbecue can be booked independently of SUM (OQ-014, still open). | Accepted |
 
 ## Change policy
 

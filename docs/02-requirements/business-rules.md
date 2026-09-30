@@ -19,7 +19,8 @@ These rules are the current v0.1 model. Items marked **TBD** require stakeholder
 | RB-013 | Financially relevant reservations/payments are cancelled/voided through state transitions rather than silently hard-deleted. | Accepted |
 | RB-014 | Administrative reservation changes must record actor, timestamp and reason where applicable. | Accepted |
 | RB-015 | Building/unit membership must be authorized; public selection of an arbitrary unit is not sufficient for account creation. | Accepted |
-| RB-016 | Exact event windows, prices, cancellation rules, cleaning rules and shared capacity remain configurable/TBD until validated. | TBD |
+| RB-016 | Exact event windows, cancellation/refund rules, cleaning/deposit/penalty rules and shared capacity remain configurable/TBD until validated. | TBD |
+| RB-017 | For the pilot building, validated price configuration is: Event SUM Base = ARS 50,000; Event Pool AddOn = ARS 10,000; Event Barbecue AddOn = ARS 10,000; SharedLeisure SUM Base = ARS 2,000; ExclusiveLeisure SUM Base = ARS 5,000. | Accepted |
 
 ## Implementation notes (issue #21)
 
@@ -54,6 +55,29 @@ development/testing, not the candidate 24/48-hour values under discussion
 for OQ-010. This issue does not close OQ-010; it only makes the hold
 duration a setting rather than a hardcoded constant, so setting the real
 value once #2 answers OQ-010 requires no code change.
+
+## Implementation notes — RB-017 (pilot pricing decision, 2026-09-30)
+
+The product owner validated the pilot building's price amounts on
+2026-09-30 (see DEC-013 in `docs/01-discovery/decision-log.md` and the
+resolved-questions table in
+`docs/01-discovery/assumptions-and-open-questions.md`, OQ-004..OQ-008).
+
+- These are **configurable/effective-dated price rules**, applied through
+  the existing admin pricing configuration (`apps/api` price rules /
+  `admin-pricing` client page) — not client or domain constants. This does
+  not change RB-007 or RB-008: prices remain configuration data, and every
+  reservation still stores its own price snapshot.
+- The documented totals for an Event with add-ons (e.g. SUM + Pool =
+  ARS 60,000) are an arithmetic **derivation** of the three underlying price
+  components above; they are not separate price rules to configure.
+- This decision does **not** resolve OQ-014. Pool and Barbecue having their
+  own price component does not make them independently bookable — per
+  RB-002/RB-006, they remain Event add-ons under the current model until
+  OQ-014 is answered.
+- No `effectiveFromUtc`/activation date was specified by the product owner;
+  none is assumed here — applying these amounts as runtime configuration is
+  a separate, not-yet-requested action.
 
 ## Implementation notes — RB-013 and RB-014 (issue #26)
 

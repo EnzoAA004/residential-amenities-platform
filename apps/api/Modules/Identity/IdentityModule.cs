@@ -1,7 +1,10 @@
+using Fido2NetLib;
 using Microsoft.AspNetCore.Authentication.BearerToken;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 using ResidentialAmenities.Api.Infrastructure.Persistence;
 using ResidentialAmenities.Api.Modules.Identity.Application;
 using ResidentialAmenities.Api.Modules.Identity.Domain;
@@ -12,7 +15,8 @@ namespace ResidentialAmenities.Api.Modules.Identity;
 public static class IdentityModule
 {
     public static IServiceCollection AddIdentityModule(
-        this IServiceCollection services)
+        this IServiceCollection services,
+        IConfiguration configuration)
     {
         services
             .AddIdentityApiEndpoints<UserAccount>(options =>
@@ -92,6 +96,29 @@ public static class IdentityModule
             });
 
         services.AddSingleton<IEmailSender, LoggingEmailSender>();
+
+        // Issue #94 (ADR-012): WebAuthn/passkeys for biometric sign-in.
+        // Our own small WebAuthnOptions is bound from configuration and
+        // mapped into Fido2Configuration here (Origins is an
+        // IReadOnlySet<string>, which configuration binding does not
+        // populate directly).
+        services
+            .AddOptions<WebAuthnOptions>()
+            .Bind(configuration.GetSection(WebAuthnOptions.SectionName));
+
+        services.AddMemoryCache();
+
+        services.AddSingleton<IFido2>(provider =>
+        {
+            var options = provider.GetRequiredService<IOptions<WebAuthnOptions>>().Value;
+
+            return new Fido2(new Fido2Configuration
+            {
+                RPID = options.RelyingPartyId,
+                RPName = options.RelyingPartyName,
+                Origins = new HashSet<string>(options.Origins)
+            });
+        });
 
         return services;
     }

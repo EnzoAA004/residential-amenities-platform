@@ -48,7 +48,7 @@ builder.Services.AddPersistence(builder.Configuration);
 builder.Services.AddSingleton(TimeProvider.System);
 
 builder.Services
-    .AddIdentityModule()
+    .AddIdentityModule(builder.Configuration)
     .AddBuildingsModule()
     .AddAmenitiesModule()
     .AddReservationsModule(builder.Configuration)
@@ -76,6 +76,7 @@ if (app.Environment.IsDevelopment())
 
 app.MapIdentityEndpoints();
 app.MapInvitationEndpoints();
+app.MapWebAuthnEndpoints();
 app.MapAmenityEndpoints();
 app.MapPricingEndpoints();
 app.MapReservationEndpoints();

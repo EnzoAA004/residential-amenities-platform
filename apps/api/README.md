@@ -194,6 +194,41 @@ from read endpoints. `DELETE` unregisters only a subscription owned by the
 authenticated user. This phase deliberately does not send notifications,
 choose cloud infrastructure, or define reservation/payment reminder rules.
 
+### Reservation-scoped messaging (issue #78)
+
+`GET/POST /api/reservations/{reservationId}/messages` is a minimal,
+reservation-scoped conversation between the resident who owns the
+reservation and building administrators — never a building-wide chat, never
+a general message inbox. Both endpoints require `ResidentAccess`; a resident
+may only read/write messages on a reservation created by their own active
+membership (the same object-level authorization as
+`GET /api/reservations/{id}`), while an Administrator may read/write on any
+reservation. An unknown `reservationId` returns 404 before authorization is
+even evaluated, so existence is never leaked either way.
+
+```json
+POST /api/reservations/{reservationId}/messages
+{ "content": "Can I get access to the pool at 10am?" }
+```
+
+```json
+{
+  "id": "...",
+  "authorUserId": "...",
+  "authorDisplayName": "...",
+  "authorIsAdministrator": false,
+  "content": "Can I get access to the pool at 10am?",
+  "createdAtUtc": "2026-09-30T00:00:00Z"
+}
+```
+
+Content is required, trimmed, and capped at 2000 characters; it is stored
+and returned as plain text only (never as trusted HTML — the client is
+responsible for treating it as untrusted, non-executable text). This first
+slice is intentionally plain read/write with no realtime transport
+(polling or manual refresh on the client is enough for the MVP, per the
+issue's own scope) and no attachments, moderation or building-wide channel.
+
 ### Reservation entry points (issue #80)
 
 `GET /api/reservation-entry-points/{token}` resolves an opaque QR/link token

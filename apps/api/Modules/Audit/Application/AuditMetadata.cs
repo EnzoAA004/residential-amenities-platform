@@ -231,4 +231,11 @@ public sealed class AuditMetadata
     /// <summary>A general failure category only — never the submitted e-mail or password.</summary>
     public static AuditMetadata AuthenticationFailure(string failure) =>
         new(new() { ["failure"] = failure });
+
+    public static AuditMetadata IncidentReportStatusChanged(string previousStatus, string status) =>
+        new(new()
+        {
+            ["previousStatus"] = previousStatus,
+            ["status"] = status
+        });
 }

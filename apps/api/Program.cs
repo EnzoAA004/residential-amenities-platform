@@ -12,6 +12,7 @@ using ResidentialAmenities.Api.Modules.Notifications;
 using ResidentialAmenities.Api.Modules.Payments;
 using ResidentialAmenities.Api.Modules.Pricing;
 using ResidentialAmenities.Api.Modules.Reporting;
+using ResidentialAmenities.Api.Modules.Reports;
 using ResidentialAmenities.Api.Modules.Reservations;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -84,6 +85,7 @@ app.MapAuditEndpoints();
 app.MapNotificationEndpoints();
 app.MapMessagingEndpoints();
 app.MapMediaEndpoints();
+app.MapReportsEndpoints();
 app.MapAdminEndpoints();
 app.MapHealthEndpoints();
 app.MapGet("/", () => Results.Redirect("/health"));

@@ -45,5 +45,8 @@ public enum AuditAction
     EventSlotDeactivated = 62,
 
     // External provider
-    MercadoPagoWebhookProcessed = 30
+    MercadoPagoWebhookProcessed = 30,
+
+    /// <summary>Administrator reviewed/updated an incident report's status (issue #91).</summary>
+    IncidentReportStatusChanged = 70
 }

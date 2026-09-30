@@ -150,7 +150,49 @@ POST /api/reservations
 GET  /api/reservations?buildingId=&page=&pageSize=
 GET  /api/reservations/{id}
 GET  /api/reservations/{reservationId}/payments
+GET  /api/notification-subscriptions
+POST /api/notification-subscriptions
+DELETE /api/notification-subscriptions/{id}
 ```
+
+### Notification subscriptions (issue #77)
+
+`GET/POST/DELETE /api/notification-subscriptions` is the push-notification
+foundation. The endpoints require `ResidentAccess` and always derive `UserId`
+from the authenticated principal; request bodies never accept a user id,
+membership id or building id.
+
+`POST` currently accepts the minimal subscription material needed for a future
+sender:
+
+```json
+{
+  "platform": "WebPush",
+  "endpoint": "https://push.example/subscription/...",
+  "p256Dh": "...",
+  "auth": "...",
+  "userAgent": "optional client user agent"
+}
+```
+
+The endpoint validates an HTTPS endpoint and required keys, upserts by
+`UserId + endpointHash`, and returns safe metadata only:
+
+```json
+{
+  "id": "...",
+  "platform": "WebPush",
+  "endpointHash": "sha256...",
+  "isEnabled": true,
+  "createdAtUtc": "2026-09-30T00:00:00Z",
+  "updatedAtUtc": "2026-09-30T00:00:00Z"
+}
+```
+
+Raw endpoints and secrets are stored for a future sender but are never echoed
+from read endpoints. `DELETE` unregisters only a subscription owned by the
+authenticated user. This phase deliberately does not send notifications,
+choose cloud infrastructure, or define reservation/payment reminder rules.
 
 ### Reservation entry points (issue #80)
 

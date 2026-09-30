@@ -79,6 +79,7 @@ app.MapEventSlotEndpoints();
 app.MapReservationEntryPointEndpoints();
 app.MapPaymentEndpoints();
 app.MapAuditEndpoints();
+app.MapNotificationEndpoints();
 app.MapAdminEndpoints();
 app.MapHealthEndpoints();
 app.MapGet("/", () => Results.Redirect("/health"));

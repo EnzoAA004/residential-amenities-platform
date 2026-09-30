@@ -3,7 +3,9 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Hosting;
 using ResidentialAmenities.Api.Infrastructure.Persistence;
+using ResidentialAmenities.Api.Modules.Identity.Application;
 using ResidentialAmenities.Api.Modules.Identity.Domain;
+using ResidentialAmenities.Api.Modules.Identity.Infrastructure;
 
 namespace ResidentialAmenities.Api.Modules.Identity;
 
@@ -88,6 +90,8 @@ public static class IdentityModule
                 options.ValidationInterval =
                     TimeSpan.FromMinutes(5);
             });
+
+        services.AddSingleton<IEmailSender, LoggingEmailSender>();
 
         return services;
     }

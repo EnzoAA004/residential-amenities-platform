@@ -122,6 +122,50 @@ GET /api/auth/check/admin
 
 These are foundation-phase endpoints used to verify Resident/Admin policies.
 
+### Resident invitation and email verification (issue #93)
+
+DEC-014/OQ-015: resident accounts are **Administrator-created only** — there
+is no public self-service registration. An Administrator supplies
+building/unit/email only and **never learns, stores or sends the resident's
+final password**.
+
+```http
+POST /api/admin/residents   { buildingId, unitId, email, displayName }
+```
+
+(`Administrator` only.) Creates the `UserAccount` with **no password set**
+(`PasswordHash` stays null, so the account cannot sign in yet) and
+`EmailConfirmed = false`, creates the `ResidentMembership`, and emails a
+single-use, 6-digit verification code — only its SHA-256 hash is ever
+stored (the same hash-only pattern as #77's notification endpoint hash),
+expiring in 15 minutes with a 5-attempt limit. Exceeding the attempt limit
+invalidates the code even if the next guess would have been correct.
+
+```http
+POST /api/auth/activate         { email, code, newPassword }   (anonymous)
+POST /api/auth/forgot-password  { email }                      (anonymous)
+POST /api/auth/reset-password   { email, code, newPassword }   (anonymous)
+```
+
+`/activate` verifies the code and lets the resident set their own initial
+password — the server only ever forwards the *result* of that verification
+to ASP.NET Core Identity's own `ResetPasswordAsync` (its own token,
+generated server-side at that moment), so this module never reimplements
+password hashing or security-stamp handling.
+
+`/forgot-password` always returns the same response
+(`"If an account exists for this email, instructions were sent."`)
+regardless of whether the email belongs to a real account — no user
+enumeration. `/reset-password` reuses the identical code
+verification/consumption logic with a separate `PasswordReset` purpose, so
+an activation code can never be replayed as a password-reset code or vice
+versa.
+
+No production email provider is decided — `IEmailSender` is a small
+abstraction with a dev-safe `LoggingEmailSender` default (logs the email
+instead of sending it) that a real provider can replace later without
+changing any endpoint.
+
 ## Authentication defaults
 
 - unique email;

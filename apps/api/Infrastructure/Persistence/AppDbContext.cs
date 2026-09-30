@@ -26,6 +26,8 @@ public sealed class AppDbContext(
 
     public DbSet<UserAccount> UserAccounts => Set<UserAccount>();
 
+    public DbSet<VerificationCode> VerificationCodes => Set<VerificationCode>();
+
     public DbSet<ResidentMembership> ResidentMemberships =>
         Set<ResidentMembership>();
 

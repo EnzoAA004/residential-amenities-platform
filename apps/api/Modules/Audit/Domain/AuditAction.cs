@@ -12,6 +12,18 @@ public enum AuditAction
     AuthenticationFailed = 1,
     Logout = 2,
 
+    /// <summary>An Administrator created a resident account record (issue #93).</summary>
+    ResidentInvited = 3,
+
+    /// <summary>A resident verified their code and set their initial password (issue #93).</summary>
+    ResidentActivated = 4,
+
+    /// <summary>A password-reset code was issued for an existing account (issue #93).</summary>
+    PasswordResetRequested = 5,
+
+    /// <summary>A password was successfully reset via a verified code (issue #93).</summary>
+    PasswordResetCompleted = 6,
+
     // Reservations
     ReservationCreated = 10,
     ReservationConfirmed = 11,

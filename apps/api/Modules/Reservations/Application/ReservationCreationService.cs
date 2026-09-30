@@ -166,6 +166,18 @@ public sealed class ReservationCreationService(
                 nowUtc);
         }
 
+        // DEC-014/RB-018: SharedLeisure and ExclusiveLeisure are now free.
+        // A reservation whose total is exactly zero has nothing for any
+        // payment provider to collect, so it is confirmed immediately here
+        // rather than waiting on a Mercado Pago or cash payment that will
+        // never come — no synthetic/zero-amount Payment record is created
+        // for it. This reuses the same trusted-confirmation state
+        // transition (`Reservation.Confirm`) that a real payment uses
+        // (see `ReservationPaymentContract.ConfirmPaidReservationAsync`),
+        // so Reservations still has exactly one path to `Confirmed`.
+        var isFree = quote.Lines.Sum(line => line.Amount) == 0m;
+        var confirmed = isFree && reservation.Confirm(nowUtc);
+
         // Nothing is written until this single SaveChanges + commit: an
         // Event that fails any resource's validation, conflict check or
         // pricing never persists another resource partially, and rolling
@@ -187,6 +199,16 @@ public sealed class ReservationCreationService(
                 reservation.EndsAtUtc,
                 resources.Count,
                 reservation.Status.ToString())));
+
+        if (confirmed)
+        {
+            auditRecorder.Record(AuditRecord.BySystem(
+                AuditAction.ReservationConfirmed,
+                AuditTargetType.Reservation,
+                reservation.Id,
+                reservation.BuildingId,
+                AuditMetadata.ReservationConfirmed()));
+        }
 
         await dbContext.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);

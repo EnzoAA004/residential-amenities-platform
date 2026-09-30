@@ -469,8 +469,8 @@ export class AdminPricingPage {
       return;
     }
 
-    if (!Number.isFinite(amount) || amount <= 0) {
-      this.createValidationError.set('El monto debe ser mayor a 0.');
+    if (!Number.isFinite(amount) || amount < 0) {
+      this.createValidationError.set('El monto no puede ser negativo.');
       return;
     }
 

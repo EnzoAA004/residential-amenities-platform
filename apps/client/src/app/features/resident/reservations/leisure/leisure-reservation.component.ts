@@ -142,13 +142,19 @@ const USE_TYPE_LABELS: Record<LeisureUseType, string> = {
             </p>
           }
 
-          <p>
-            <ion-text color="medium">El pago se realizará en el siguiente paso.</ion-text>
-          </p>
+          @if (createStatus.reservation.status === 'Confirmed') {
+            <p>
+              <ion-text color="success">Esta reserva es gratuita y ya está confirmada. No se requiere ningún pago.</ion-text>
+            </p>
+          } @else {
+            <p>
+              <ion-text color="medium">El pago se realizará en el siguiente paso.</ion-text>
+            </p>
 
-          <ion-button [routerLink]="['/reservations', createStatus.reservation.id, 'payment']">
-            Continuar al pago
-          </ion-button>
+            <ion-button [routerLink]="['/reservations', createStatus.reservation.id, 'payment']">
+              Continuar al pago
+            </ion-button>
+          }
 
           <ion-button type="button" fill="outline" (click)="resetFlow()">
             Create another reservation

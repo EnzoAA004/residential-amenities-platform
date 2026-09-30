@@ -165,7 +165,19 @@ describe('AdminPricingPage', () => {
     httpMock.expectNone((r) => r.method === 'POST');
   });
 
-  it('blocks client-side an amount that is not greater than zero, without calling the backend', async () => {
+  it('blocks client-side a negative amount, without calling the backend', async () => {
+    const { component } = await navigate();
+
+    component.setCreateField('buildingId', 'building-1');
+    component.setCreateField('amenityId', 'amenity-1');
+    component.setCreateField('currency', 'XTS');
+    component.setCreateField('amount', '-1');
+    component.submitCreate(new Event('submit'));
+
+    httpMock.expectNone('/api/admin/pricing/rules');
+  });
+
+  it('allows a zero amount, per DEC-014 (free Leisure reservations)', async () => {
     const { component } = await navigate();
 
     component.setCreateField('buildingId', 'building-1');
@@ -174,7 +186,9 @@ describe('AdminPricingPage', () => {
     component.setCreateField('amount', '0');
     component.submitCreate(new Event('submit'));
 
-    httpMock.expectNone('/api/admin/pricing/rules');
+    const request = httpMock.expectOne('/api/admin/pricing/rules');
+    expect(request.request.body.amount).toBe(0);
+    request.flush({ created: { ...rule, amount: 0 }, superseded: [] }, { status: 201, statusText: 'Created' });
   });
 
   it('blocks client-side a currency that is not exactly 3 letters, without calling the backend', async () => {

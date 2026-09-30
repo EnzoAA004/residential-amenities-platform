@@ -176,16 +176,18 @@ public sealed class OvernightEventReservationTests : IAsyncLifetime
             cancellationToken);
         Assert.Equal(HttpStatusCode.Created, first.StatusCode);
 
-        // A second Event overlapping only the early-morning tail (01:00-04:00
-        // the next day) must still conflict — the overnight hold has to
-        // block resources on both sides of the midnight boundary.
-        var (overlapStartUtc, overlapEndUtc) = ToUtc(
-            date.AddDays(1), new TimeOnly(1, 0), new TimeOnly(4, 0));
-
+        // A second resident trying to book the exact same Night slot (the
+        // only configured overnight slot) on the same date must conflict —
+        // the first hold's exclusivity has to actually block resources on
+        // both sides of the midnight boundary, not just on the start day.
+        // (An arbitrary early-morning-only range like 01:00-04:00 would not
+        // match any configured EventSlotDefinition at all and would be
+        // rejected earlier for that unrelated reason — not a useful conflict
+        // test.)
         using var secondClient = await LoginAsync(_secondResidentEmail);
         var second = await secondClient.PostAsJsonAsync(
             "/api/reservations",
-            new { buildingId = _buildingId, amenityId = _sumId, useType = "Event", startsAtUtc = overlapStartUtc, endsAtUtc = overlapEndUtc },
+            new { buildingId = _buildingId, amenityId = _sumId, useType = "Event", startsAtUtc = startUtc, endsAtUtc = endUtc },
             cancellationToken);
 
         Assert.Equal(HttpStatusCode.Conflict, second.StatusCode);

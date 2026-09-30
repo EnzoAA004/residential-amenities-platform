@@ -273,6 +273,7 @@ export class LeisureReservationComponent {
   readonly toInputId = `leisure-reservation-to-${this.instanceId}`;
 
   private readonly amenitySignal = signal<AmenitySummary | null>(null);
+  private readonly preferredUseTypeSignal = signal<LeisureUseType | null>(null);
   private currentAmenityId: string | null = null;
 
   /**
@@ -339,8 +340,16 @@ export class LeisureReservationComponent {
     effect(() => {
       const options = this.eligibleUseTypes();
 
+      const preferred = this.preferredUseTypeSignal();
+
       untracked(() => {
-        this.form.controls.useType.setValue(options.length === 1 ? options[0] : null);
+        this.form.controls.useType.setValue(
+          preferred && options.includes(preferred)
+            ? preferred
+            : options.length === 1
+              ? options[0]
+              : null
+        );
       });
     });
 
@@ -369,6 +378,11 @@ export class LeisureReservationComponent {
     this.createState.set({ status: 'idle' });
     this.rangeError.set(null);
     this.useTypeError.set(null);
+  }
+
+  @Input()
+  set preferredUseType(value: LeisureUseType | null | undefined) {
+    this.preferredUseTypeSignal.set(value ?? null);
   }
 
   useTypeLabel(useType: string): string {

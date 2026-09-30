@@ -7,7 +7,8 @@ Angular + Ionic + Capacitor client for Residential Amenities Platform.
 This is no longer an early scaffold: the client implements the full resident
 and administrator product surface through issue #55 — web authentication,
 resident amenity/availability browsing, both reservation flows, payment,
-resident reservation history/detail, and the complete administrator
+resident reservation history/detail, a QR/token entry point into those
+reservation flows, and the complete administrator
 workflow, plus a testing/accessibility/error-handling hardening pass.
 
 **Resident** (issues #44–#50): a real application shell, a small design
@@ -53,6 +54,8 @@ for the full backlog.
 - Shared/Exclusive Leisure reservation quote-and-create flow
   (`features/resident/reservations/leisure`)
 - Event reservation quote-and-create flow (`features/resident/reservations/event`)
+- QR/token entry point into the existing reservation flows
+  (`features/resident/reservations/entry-point`)
 - Payment (Mercado Pago Checkout Pro + cash) (`features/resident/payments`)
 - Resident reservation history list/detail (`features/resident/reservations/history`)
 - The full administrator workflow (`features/admin`): overview/reservations/
@@ -141,6 +144,7 @@ src/
 │   │   │   │   ├── reservation.models.ts # DTOs shared by Leisure and Event
 │   │   │   │   ├── leisure/  # Shared/Exclusive Leisure quote+create (#47)
 │   │   │   │   ├── event/    # Event slots + add-ons quote+create (#48)
+│   │   │   │   ├── entry-point/ # QR/token lookup into existing flows (#76)
 │   │   │   │   └── history/  # reservation list/detail (#50)
 │   │   │   └── payments/     # Mercado Pago / cash payment (#49)
 │   │   ├── admin/         # administrator workflow (#51-#54)
@@ -685,6 +689,35 @@ candidates, never issuing a second amenities request.
 Shared reservation DTOs (`PriceQuote`, `Reservation`, etc.) live in
 `features/resident/reservations/reservation.models.ts`, used by both the
 Leisure and Event services/components instead of being duplicated.
+
+## QR reservation entry point
+
+Issue #76 adds `/reserve/qr/:token` as an authenticated resident route for
+QRs or opaque links placed on amenities or building communications. The
+analysis found a real backend gap in the pre-Phase-6 contract: a frontend
+route containing `buildingId`/`amenityId` would expose editable internal ids
+and would not give the backend a place to reject inactive/unknown/revoked
+entry points before the UI showed context. That gap is closed by issue #80:
+the client calls `GET /api/reservation-entry-points/{token}` and treats that
+response as the only authority for the QR context.
+
+The QR page never accepts free `buildingId` or `amenityId` inputs. It sends
+only the opaque token, then the backend validates authentication,
+`ResidentAccess`, building membership and active amenity/entry-point state
+before returning safe context (`buildingId`, `amenityId`, labels, amenity
+kind, allowed modes and optional `suggestedUseType`). `404` is rendered as
+an invalid/inactive QR, `403` as no access, and a backend-authorized
+building that the current `/auth/me` memberships cannot activate is shown as
+a local session-context mismatch rather than silently falling through.
+
+The route reuses existing flows instead of duplicating them:
+`AmenityAvailabilityComponent`, `LeisureReservationComponent` and, for SUMs
+that allow exclusive use, `EventReservationComponent`. QR context may prefer
+`SharedLeisure`, `ExclusiveLeisure` or `Event`, but the page still does not
+quote, invent availability, infer capacity or create anything automatically;
+pricing, Event slots, structural availability and final reservation
+conflicts remain the same backend calls used by the normal `/amenities`
+experience.
 
 ## Payment flows (Mercado Pago + cash)
 

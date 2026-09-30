@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using ResidentialAmenities.Api.Infrastructure.Persistence;
@@ -11,9 +12,11 @@ using ResidentialAmenities.Api.Infrastructure.Persistence;
 namespace ResidentialAmenities.Api.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260930201526_VerificationCodes")]
+    partial class VerificationCodes
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -832,65 +835,6 @@ namespace ResidentialAmenities.Api.Infrastructure.Persistence.Migrations
                     b.ToTable("PriceRules", (string)null);
                 });
 
-            modelBuilder.Entity("ResidentialAmenities.Api.Modules.Reports.Domain.IncidentReport", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("BuildingId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Content")
-                        .IsRequired()
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)");
-
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("ReportedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("ReservationId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ReportedByUserId");
-
-                    b.HasIndex("BuildingId", "CreatedAtUtc");
-
-                    b.ToTable("IncidentReports", (string)null);
-                });
-
-            modelBuilder.Entity("ResidentialAmenities.Api.Modules.Reports.Domain.IncidentReportAttachment", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("IncidentReportId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("MediaAttachmentId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("IncidentReportId");
-
-                    b.HasIndex("MediaAttachmentId")
-                        .IsUnique();
-
-                    b.ToTable("IncidentReportAttachments", (string)null);
-                });
-
             modelBuilder.Entity("ResidentialAmenities.Api.Modules.Reservations.Domain.EventSlotDefinition", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1206,15 +1150,6 @@ namespace ResidentialAmenities.Api.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("ResidentialAmenities.Api.Modules.Reports.Domain.IncidentReportAttachment", b =>
-                {
-                    b.HasOne("ResidentialAmenities.Api.Modules.Reports.Domain.IncidentReport", null)
-                        .WithMany("Attachments")
-                        .HasForeignKey("IncidentReportId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
             modelBuilder.Entity("ResidentialAmenities.Api.Modules.Reservations.Domain.ReservationPriceLine", b =>
                 {
                     b.HasOne("ResidentialAmenities.Api.Modules.Reservations.Domain.Reservation", "Reservation")
@@ -1257,11 +1192,6 @@ namespace ResidentialAmenities.Api.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("ResidentialAmenities.Api.Modules.Identity.Domain.UserAccount", b =>
                 {
                     b.Navigation("Memberships");
-                });
-
-            modelBuilder.Entity("ResidentialAmenities.Api.Modules.Reports.Domain.IncidentReport", b =>
-                {
-                    b.Navigation("Attachments");
                 });
 
             modelBuilder.Entity("ResidentialAmenities.Api.Modules.Reservations.Domain.Reservation", b =>

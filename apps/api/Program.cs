@@ -75,6 +75,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.MapIdentityEndpoints();
+app.MapInvitationEndpoints();
 app.MapAmenityEndpoints();
 app.MapPricingEndpoints();
 app.MapReservationEndpoints();

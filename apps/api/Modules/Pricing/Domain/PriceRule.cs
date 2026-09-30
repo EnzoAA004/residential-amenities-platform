@@ -43,11 +43,12 @@ public sealed class PriceRule
                 nameof(amenityId));
         }
 
-        if (amount <= 0)
+        if (amount < 0)
         {
             throw new ArgumentOutOfRangeException(
                 nameof(amount),
-                "Amount must be positive.");
+                "Amount must not be negative. Zero is allowed for a free " +
+                "reservation type (e.g. Leisure, per DEC-014/RB-018).");
         }
 
         if (effectiveToUtc is { } endUtc && endUtc <= effectiveFromUtc)

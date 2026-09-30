@@ -96,9 +96,9 @@ public sealed class AdminPricingTests : AdminTestBase
     }
 
     [Theory]
-    [InlineData(0)]
     [InlineData(-5)]
-    public async Task CreateRule_InvalidAmount_IsRejected_AndNothingChanges(decimal amount)
+    [InlineData(-0.01)]
+    public async Task CreateRule_NegativeAmount_IsRejected_AndNothingChanges(decimal amount)
     {
         using var admin = await LoginAdminAsync();
         var before = (await RulesAsync(admin)).GetProperty("totalCount").GetInt32();
@@ -107,6 +107,20 @@ public sealed class AdminPricingTests : AdminTestBase
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal(before, (await RulesAsync(admin)).GetProperty("totalCount").GetInt32());
+    }
+
+    [Fact]
+    public async Task CreateRule_ZeroAmount_IsAccepted()
+    {
+        // DEC-014/RB-018: SharedLeisure and ExclusiveLeisure are now free
+        // (ARS 0) — a zero amount is a valid price rule, not an error.
+        using var admin = await LoginAdminAsync();
+
+        var response = await CreateRuleAsync(admin, amount: 0m);
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var body = await ReadAsync(response);
+        Assert.Equal(0m, body.GetProperty("created").GetProperty("amount").GetDecimal());
     }
 
     [Fact]

@@ -141,9 +141,15 @@ const OUTCOME_EXPLANATIONS: Record<ResidentReservationPayment['reservationOutcom
             <section class="detail-card">
               <h3>Historial de pagos</h3>
               @if (payments().length === 0) {
-                <p>
-                  <ion-text color="medium">Esta reserva todavía no tiene intentos de pago.</ion-text>
-                </p>
+                @if (reservation.totalAmount === 0) {
+                  <p>
+                    <ion-text color="medium">Esta reserva es gratuita y no requiere ningún pago.</ion-text>
+                  </p>
+                } @else {
+                  <p>
+                    <ion-text color="medium">Esta reserva todavía no tiene intentos de pago.</ion-text>
+                  </p>
+                }
               } @else {
                 <ul class="payment-list" role="list">
                   @for (payment of payments(); track payment.paymentId) {

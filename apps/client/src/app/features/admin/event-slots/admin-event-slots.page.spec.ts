@@ -90,9 +90,22 @@ describe('AdminEventSlotsPage', () => {
 
     const created = httpMock.expectOne('/api/admin/buildings/building-1/event-slots');
     expect(created.request.method).toBe('POST');
-    expect(created.request.body).toEqual({ name: 'Example workshop', startTime: '09:00:00', endTime: '10:00:00' });
+    expect(created.request.body).toEqual({
+      name: 'Example workshop',
+      startTime: '09:00:00',
+      endTime: '10:00:00',
+      isOvernight: false
+    });
     created.flush(
-      { id: 'slot-3', buildingId: 'building-1', name: 'Example workshop', startTime: '09:00:00', endTime: '10:00:00', isActive: true },
+      {
+        id: 'slot-3',
+        buildingId: 'building-1',
+        name: 'Example workshop',
+        startTime: '09:00:00',
+        endTime: '10:00:00',
+        isOvernight: false,
+        isActive: true
+      },
       { status: 201, statusText: 'Created' }
     );
 

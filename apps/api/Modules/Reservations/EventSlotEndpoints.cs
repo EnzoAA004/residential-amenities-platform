@@ -96,7 +96,14 @@ public static class EventSlotEndpoints
             try
             {
                 startsAtUtc = ToUtc(date, slot.StartTime, timeZone);
-                endsAtUtc = ToUtc(date, slot.EndTime, timeZone);
+                // An overnight slot's end time (e.g. 03:00) belongs to the
+                // calendar day *after* the requested date, not the same
+                // day — otherwise this would compute an end instant before
+                // the start instant (DEC-014/OQ-002).
+                endsAtUtc = ToUtc(
+                    slot.IsOvernight ? date.AddDays(1) : date,
+                    slot.EndTime,
+                    timeZone);
             }
             catch (EventSlotTimeZoneException error)
             {
@@ -116,7 +123,8 @@ public static class EventSlotEndpoints
                 slot.Id,
                 slot.Name,
                 startsAtUtc,
-                endsAtUtc));
+                endsAtUtc,
+                slot.IsOvernight));
         }
 
         return Results.Ok(occurrences);
@@ -163,5 +171,6 @@ public static class EventSlotEndpoints
         Guid Id,
         string Name,
         DateTimeOffset StartsAtUtc,
-        DateTimeOffset EndsAtUtc);
+        DateTimeOffset EndsAtUtc,
+        bool IsOvernight);
 }

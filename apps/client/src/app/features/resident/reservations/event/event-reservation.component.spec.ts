@@ -75,8 +75,8 @@ const quote: PriceQuote = {
   lines: [{ priceRuleId: 'rule-1', amenityId: 'sum-1', componentType: 'Base', currency: 'ARS', amount: 15000 }]
 };
 
-const slot1 = { id: 'slot-1', name: 'Afternoon', startsAtUtc: '2026-10-01T17:00:00Z', endsAtUtc: '2026-10-01T22:00:00Z' };
-const slot2 = { id: 'slot-2', name: 'Evening', startsAtUtc: '2026-10-01T22:00:00Z', endsAtUtc: '2026-10-02T01:00:00Z' };
+const slot1 = { id: 'slot-1', name: 'Afternoon', startsAtUtc: '2026-10-01T17:00:00Z', endsAtUtc: '2026-10-01T22:00:00Z', isOvernight: false };
+const slot2 = { id: 'slot-2', name: 'Evening', startsAtUtc: '2026-10-01T22:00:00Z', endsAtUtc: '2026-10-02T01:00:00Z', isOvernight: false };
 
 describe('EventReservationComponent', () => {
   let fixture: ComponentFixture<EventReservationComponent>;

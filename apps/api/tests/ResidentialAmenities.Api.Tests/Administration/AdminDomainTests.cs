@@ -105,17 +105,31 @@ public sealed class AdminDomainTests
             NewReservation().TryReschedule(Start, Start, Created));
 
     [Fact]
-    public void EventSlot_Update_KeepsTheNoOvernightInvariant()
+    public void EventSlot_Update_RequiresEndAfterStart_UnlessExplicitlyOvernight()
     {
         var slot = new EventSlotDefinition(
             Guid.NewGuid(), Guid.NewGuid(), "Slot", new TimeOnly(14, 0), new TimeOnly(19, 0));
 
-        slot.Update("Renamed", new TimeOnly(15, 0), new TimeOnly(20, 0));
+        slot.Update("Renamed", new TimeOnly(15, 0), new TimeOnly(20, 0), isOvernight: false);
 
         Assert.Equal("Renamed", slot.Name);
         Assert.Equal(new TimeOnly(15, 0), slot.StartTime);
-        Assert.Throws<ArgumentException>(() => slot.Update("x", new TimeOnly(22, 0), new TimeOnly(2, 0)));
-        Assert.Throws<ArgumentException>(() => slot.Update(" ", new TimeOnly(10, 0), new TimeOnly(11, 0)));
+        Assert.False(slot.IsOvernight);
+
+        // 22:00 -> 02:00 is only valid when explicitly marked overnight.
+        Assert.Throws<ArgumentException>(
+            () => slot.Update("x", new TimeOnly(22, 0), new TimeOnly(2, 0), isOvernight: false));
+        Assert.Throws<ArgumentException>(
+            () => slot.Update(" ", new TimeOnly(10, 0), new TimeOnly(11, 0), isOvernight: false));
+
+        slot.Update("Night", new TimeOnly(20, 0), new TimeOnly(3, 0), isOvernight: true);
+        Assert.True(slot.IsOvernight);
+        Assert.Equal(new TimeOnly(20, 0), slot.StartTime);
+        Assert.Equal(new TimeOnly(3, 0), slot.EndTime);
+
+        // Overnight requires end strictly before start; equal/greater is invalid either way.
+        Assert.Throws<ArgumentException>(
+            () => slot.Update("Bad", new TimeOnly(10, 0), new TimeOnly(11, 0), isOvernight: true));
     }
 
     [Fact]

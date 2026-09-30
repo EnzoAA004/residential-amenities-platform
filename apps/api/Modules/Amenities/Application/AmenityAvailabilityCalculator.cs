@@ -14,6 +14,14 @@ public static class AmenityAvailabilityCalculator
 {
     public static readonly TimeSpan MaxQueryRange = TimeSpan.FromDays(62);
 
+    /// <summary>
+    /// An <see cref="AmenityAvailabilityWindow.EndTime"/> of exactly this
+    /// value means "open through midnight into the next day" rather than
+    /// "closes at 23:59:59" — see the comment at its use site for why this
+    /// specific value (not <see cref="TimeOnly.MaxValue"/>) was chosen.
+    /// </summary>
+    public static readonly TimeOnly EndOfDaySentinel = new(23, 59, 59);
+
     public static IReadOnlyList<AvailabilityInterval> CalculateOpenIntervals(
         IReadOnlyCollection<AmenityAvailabilityWindow> windows,
         IReadOnlyCollection<AmenityUnavailablePeriod> unavailablePeriods,
@@ -63,7 +71,27 @@ public static class AmenityAvailabilityCalculator
             foreach (var window in dayWindows)
             {
                 var localStart = date.Add(window.StartTime.ToTimeSpan());
-                var localEnd = date.Add(window.EndTime.ToTimeSpan());
+
+                // TimeOnly cannot represent midnight-at-the-end-of-this-day
+                // (the latest whole second is 23:59:59, one second short of
+                // the next day's 00:00:00). Treated literally, a window
+                // meant to reach "end of day" would always fall one second
+                // short of true midnight — harmless for a same-day booking,
+                // but it silently rejects any reservation whose covered
+                // range is computed by summing this window with the next
+                // day's window (e.g. an overnight Event slot, DEC-014/
+                // OQ-002), which ends up short of full coverage.
+                //
+                // 23:59:59 is used as the "reaches midnight" sentinel
+                // (rather than TimeOnly.MaxValue's 23:59:59.9999999)
+                // specifically because it round-trips exactly through a
+                // PostgreSQL `time` column, whose microsecond precision
+                // silently truncates .NET's 100ns tick precision — a
+                // sentinel that only matches in memory and stops matching
+                // after every save/reload is worse than no sentinel.
+                var localEnd = window.EndTime == EndOfDaySentinel
+                    ? date.AddDays(1)
+                    : date.Add(window.EndTime.ToTimeSpan());
 
                 var windowStartUtc = ToUtc(localStart, timeZone);
                 var windowEndUtc = ToUtc(localEnd, timeZone);

@@ -348,6 +348,11 @@ export interface AdminEventSlot {
   startTime: string;
   /** `HH:mm:ss`. */
   endTime: string;
+  /**
+   * When true, `endTime` is on the calendar day after `startTime` (e.g.
+   * 20:00 -> 03:00, DEC-014/OQ-002) rather than an invalid same-day range.
+   */
+  isOvernight: boolean;
   isActive: boolean;
 }
 
@@ -357,4 +362,5 @@ export interface EventSlotRequest {
   startTime: string;
   /** `HH:mm:ss`. */
   endTime: string;
+  isOvernight?: boolean;
 }

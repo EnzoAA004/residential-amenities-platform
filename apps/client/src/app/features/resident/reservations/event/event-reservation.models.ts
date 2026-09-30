@@ -11,6 +11,8 @@ export interface EventSlotOccurrence {
   name: string;
   startsAtUtc: string;
   endsAtUtc: string;
+  /** True when `endsAtUtc` falls on the calendar day after `startsAtUtc` (DEC-014/OQ-002). */
+  isOvernight: boolean;
 }
 
 /**

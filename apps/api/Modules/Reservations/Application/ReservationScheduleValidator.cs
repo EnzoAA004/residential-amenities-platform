@@ -68,29 +68,36 @@ public sealed class ReservationScheduleValidator(AppDbContext dbContext)
 
         var localStart = TimeZoneInfo.ConvertTime(startsAtUtc, timeZone);
         var localEnd = TimeZoneInfo.ConvertTime(endsAtUtc, timeZone);
+        var localDayDelta = (localEnd.Date - localStart.Date).Days;
 
-        if (localStart.Date != localEnd.Date)
+        // A same-day slot spans zero local calendar days; a deliberately
+        // configured overnight slot (DEC-014/OQ-002, e.g. 20:00 → 03:00 the
+        // next day) spans exactly one. Anything else is never a supported
+        // Event window, regardless of what EventSlotDefinition rows exist.
+        if (localDayDelta is not (0 or 1))
         {
             throw new ReservationRequestException(
-                "Event reservations may not cross midnight in the " +
-                "building's local time zone yet.",
+                "Event reservations may span at most one midnight " +
+                "boundary (a configured overnight slot).",
                 StatusCodes.Status422UnprocessableEntity);
         }
 
         var startTime = TimeOnly.FromDateTime(localStart.DateTime);
         var endTime = TimeOnly.FromDateTime(localEnd.DateTime);
+        var isOvernightRequest = localDayDelta == 1;
 
         var slots = await dbContext.EventSlotDefinitions
             .AsNoTracking()
             .Where(slot => slot.BuildingId == buildingId)
             .ToListAsync(cancellationToken);
 
-        if (!slots.Any(slot => slot.Matches(startTime, endTime)))
+        if (!slots.Any(slot =>
+                slot.Matches(startTime, endTime) &&
+                slot.IsOvernight == isOvernightRequest))
         {
             throw new ReservationRequestException(
                 "The requested range does not match a configured Event " +
-                "slot for this building. Exact Event slot times remain " +
-                "configurable/TBD pending issue #2.",
+                "slot for this building.",
                 StatusCodes.Status422UnprocessableEntity);
         }
     }

@@ -114,6 +114,7 @@ public sealed record AdminEventSlot(
     string Name,
     TimeOnly StartTime,
     TimeOnly EndTime,
+    bool IsOvernight,
     bool IsActive);
 
 /// <summary>Event slot configuration (owned by Reservations). Slots are deactivated, never deleted.</summary>
@@ -128,6 +129,7 @@ public interface IEventSlotAdminContract
         string name,
         TimeOnly startTime,
         TimeOnly endTime,
+        bool isOvernight,
         Guid actorUserId,
         CancellationToken cancellationToken);
 
@@ -136,6 +138,7 @@ public interface IEventSlotAdminContract
         string name,
         TimeOnly startTime,
         TimeOnly endTime,
+        bool isOvernight,
         Guid actorUserId,
         CancellationToken cancellationToken);
 

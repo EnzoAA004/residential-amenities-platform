@@ -317,6 +317,18 @@ range that merely falls inside the SUM's general availability is rejected:
 The membership, price and availability are always derived/validated
 server-side — a client cannot influence them by sending extra fields.
 
+**Overnight Event slots (DEC-014/OQ-002, issue #88):** an `EventSlotDefinition`
+may be explicitly configured as overnight (`isOvernight: true`), meaning its
+`endTime` (e.g. `03:00`) is a time-of-day on the calendar day *after*
+`startTime` (e.g. `20:00`) rather than an invalid same-day range. A
+reservation request may span at most one midnight boundary in the building's
+local time zone; it is matched against configured slots by both its exact
+start/end time-of-day *and* whether it actually crosses a day boundary the
+same way the slot does — an overnight-*shaped* request that does not exactly
+match a configured overnight slot's boundaries is still rejected, and a
+request spanning more than one midnight is always rejected regardless of
+configuration.
+
 ### Holds and concurrency (issue #23)
 
 Every reservation is created as a `Pending` **hold** (RB-009) — there is no

@@ -216,6 +216,9 @@ type CreateState =
                         (click)="selectSlot(slot)"
                       >
                         {{ slot.name }}
+                        @if (slot.isOvernight) {
+                          <span class="slot-overnight-note"> (día siguiente)</span>
+                        }
                       </button>
                     }
                   </div>

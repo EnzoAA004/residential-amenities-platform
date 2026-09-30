@@ -125,6 +125,42 @@ public sealed class AmenityAvailabilityCalculatorTests
     }
 
     [Fact]
+    public void EndOfDaySentinel_ReachesExactMidnight_WithNoGap()
+    {
+        // DEC-014/OQ-002 (overnight Event slots): an amenity that must be
+        // available right through midnight (e.g. to host a 20:00 -> 03:00
+        // Event) is configured as two adjacent day windows —
+        // Monday 20:00 -> "end of day" (EndOfDaySentinel, 23:59:59) and
+        // Tuesday 00:00 -> 03:00. Taken literally (23:59:59 as a normal
+        // time-of-day, or TimeOnly.MaxValue's 23:59:59.9999999 — which does
+        // not survive round-tripping through a PostgreSQL `time` column's
+        // microsecond precision), this pair would always fall short of full
+        // coverage for any request spanning the boundary.
+        var eveningWindow = new AmenityAvailabilityWindow(
+            Guid.NewGuid(), AmenityId, DayOfWeek.Monday, new TimeOnly(20, 0),
+            AmenityAvailabilityCalculator.EndOfDaySentinel);
+        var morningWindow = new AmenityAvailabilityWindow(
+            Guid.NewGuid(), AmenityId, DayOfWeek.Tuesday, new TimeOnly(0, 0), new TimeOnly(3, 0));
+
+        // 2026-10-05 is a Monday, 2026-10-06 a Tuesday, in the pilot time zone.
+        var requestStartUtc = new DateTimeOffset(2026, 10, 5, 20, 0, 0, TimeSpan.FromHours(-3));
+        var requestEndUtc = new DateTimeOffset(2026, 10, 6, 3, 0, 0, TimeSpan.FromHours(-3));
+
+        var result = AmenityAvailabilityCalculator.CalculateOpenIntervals(
+            [eveningWindow, morningWindow],
+            [],
+            TimeZoneId,
+            requestStartUtc,
+            requestEndUtc);
+
+        var coveredDuration = result.Aggregate(
+            TimeSpan.Zero,
+            (total, interval) => total + (interval.EndUtc - interval.StartUtc));
+
+        Assert.Equal(requestEndUtc - requestStartUtc, coveredDuration);
+    }
+
+    [Fact]
     public void EndBeforeStart_Throws()
     {
         Assert.Throws<ArgumentException>(() =>

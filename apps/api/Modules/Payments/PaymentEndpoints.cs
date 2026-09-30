@@ -98,6 +98,17 @@ public static class PaymentEndpoints
                 statusCode: StatusCodes.Status403Forbidden);
         }
 
+        if (!await CanAccessResidentPaymentAsync(
+                principal,
+                reservation,
+                membershipAuthorizer,
+                cancellationToken))
+        {
+            return Results.Problem(
+                title: "Only the resident who created the reservation can initiate its payment.",
+                statusCode: StatusCodes.Status403Forbidden);
+        }
+
         try
         {
             var initiated = await creationService.InitiateMercadoPagoAsync(
@@ -156,19 +167,15 @@ public static class PaymentEndpoints
 
         // Only the membership that created the reservation may declare how it
         // is paid; an Administrator keeps privileged access.
-        if (!principal.IsInRole(ApplicationRoles.Administrator))
-        {
-            var membershipId = await membershipAuthorizer.GetActiveMembershipIdAsync(
+        if (!await CanAccessResidentPaymentAsync(
                 principal,
-                reservation.BuildingId,
-                cancellationToken);
-
-            if (membershipId != reservation.CreatedByMembershipId)
-            {
-                return Results.Problem(
-                    title: "Only the resident who created the reservation can declare its payment.",
-                    statusCode: StatusCodes.Status403Forbidden);
-            }
+                reservation,
+                membershipAuthorizer,
+                cancellationToken))
+        {
+            return Results.Problem(
+                title: "Only the resident who created the reservation can declare its payment.",
+                statusCode: StatusCodes.Status403Forbidden);
         }
 
         try
@@ -266,6 +273,17 @@ public static class PaymentEndpoints
                 statusCode: StatusCodes.Status403Forbidden);
         }
 
+        if (!await CanAccessResidentPaymentAsync(
+                principal,
+                reservation,
+                membershipAuthorizer,
+                cancellationToken))
+        {
+            return Results.Problem(
+                title: "You do not have access to this payment.",
+                statusCode: StatusCodes.Status403Forbidden);
+        }
+
         // The browser's return from Mercado Pago lands on a screen that
         // asks THIS endpoint; the return URL itself never confirms anything.
         return Results.Ok(new PaymentResponse(
@@ -342,6 +360,26 @@ public static class PaymentEndpoints
                 payment.RequiresManualReview,
                 payment.CashConfirmedAtUtc))
             .ToList());
+    }
+
+    private static async Task<bool> CanAccessResidentPaymentAsync(
+        System.Security.Claims.ClaimsPrincipal principal,
+        PayableReservation reservation,
+        IBuildingMembershipAuthorizer membershipAuthorizer,
+        CancellationToken cancellationToken)
+    {
+        if (principal.IsInRole(ApplicationRoles.Administrator))
+        {
+            return true;
+        }
+
+        var membershipId = await membershipAuthorizer.GetActiveMembershipIdAsync(
+            principal,
+            reservation.BuildingId,
+            cancellationToken);
+
+        return membershipId is not null &&
+            membershipId == reservation.CreatedByMembershipId;
     }
 
     private static async Task<IResult> ReceiveMercadoPagoWebhookAsync(

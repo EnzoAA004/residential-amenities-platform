@@ -64,6 +64,19 @@ public sealed class ZeroCostLeisureReservationTests : IAsyncLifetime
         dbContext.Amenities.Add(amenity);
         _amenityId = amenity.Id;
 
+        // Open every day of the week, all day — an amenity with no
+        // AmenityAvailabilityWindow rows is never available (empty windows
+        // means zero open intervals), not unrestricted.
+        foreach (var dayOfWeek in Enum.GetValues<DayOfWeek>())
+        {
+            dbContext.AmenityAvailabilityWindows.Add(new AmenityAvailabilityWindow(
+                Guid.NewGuid(),
+                amenity.Id,
+                dayOfWeek,
+                new TimeOnly(0, 0),
+                new TimeOnly(23, 59, 59)));
+        }
+
         var nowUtc = DateTimeOffset.UtcNow;
 
         dbContext.PriceRules.Add(new PriceRule(

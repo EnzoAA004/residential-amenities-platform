@@ -11,6 +11,7 @@ using ResidentialAmenities.Api.Modules.Notifications.Domain;
 using ResidentialAmenities.Api.Modules.Identity.Infrastructure.Persistence;
 using ResidentialAmenities.Api.Modules.Payments.Domain;
 using ResidentialAmenities.Api.Modules.Pricing.Domain;
+using ResidentialAmenities.Api.Modules.Reports.Domain;
 using ResidentialAmenities.Api.Modules.Reservations.Domain;
 
 namespace ResidentialAmenities.Api.Infrastructure.Persistence;
@@ -67,6 +68,12 @@ public sealed class AppDbContext(
 
     public DbSet<MediaAttachment> MediaAttachments =>
         Set<MediaAttachment>();
+
+    public DbSet<IncidentReport> IncidentReports =>
+        Set<IncidentReport>();
+
+    public DbSet<IncidentReportAttachment> IncidentReportAttachments =>
+        Set<IncidentReportAttachment>();
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {

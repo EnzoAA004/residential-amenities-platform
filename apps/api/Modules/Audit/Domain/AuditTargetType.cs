@@ -8,5 +8,6 @@ public enum AuditTargetType
     User = 2,
     PriceRule = 3,
     Amenity = 4,
-    EventSlot = 5
+    EventSlot = 5,
+    IncidentReport = 6
 }

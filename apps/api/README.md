@@ -194,6 +194,45 @@ from read endpoints. `DELETE` unregisters only a subscription owned by the
 authenticated user. This phase deliberately does not send notifications,
 choose cloud infrastructure, or define reservation/payment reminder rules.
 
+### Incident reports (issue #91)
+
+`POST/GET /api/reports` (`ResidentAccess`) and `GET/POST /api/admin/reports*`
+(`Administrator`) — evidence for an Administrator to review manually,
+**never an automatic penalty/fine engine**. Deliberately a separate section
+from #78's reservation messaging, not an extension of it: a report is
+building-scoped (so an Administrator reviews every report for their
+building) with an *optional* reservation reference, while a message is
+always tied to exactly one reservation.
+
+```json
+POST /api/reports
+{
+  "buildingId": "...",
+  "reservationId": null,
+  "content": "Someone left the pool gate open again.",
+  "mediaAttachmentIds": ["..."]
+}
+```
+
+- Any resident or Administrator may submit a report; `reportedByUserId` is
+  always derived from the session, never accepted from the client.
+- `reservationId` is optional; when given, it must belong to the same
+  `buildingId`.
+- `mediaAttachmentIds` (up to 5 per report) must each reference a
+  `MediaAttachment` (#92) **uploaded by the same caller** and not already
+  linked to another report — this module never re-implements upload/
+  storage/validation, it only stores the reference. Retrieving an
+  attachment's actual bytes goes through `GET /api/media/{id}` as-is.
+- `GET /api/reports?buildingId=` and `GET /api/reports/{id}` are scoped to
+  the caller's **own** reports only — not a public feed, and not visible to
+  other residents.
+- `GET /api/admin/reports?buildingId=&status=` and
+  `GET /api/admin/reports/{id}` give an Administrator full visibility into
+  every report for a building; `POST /api/admin/reports/{id}/status`
+  (`{ "status": "Open" | "Reviewed" | "Resolved" }`) is audited.
+- **No automatic penalty/fine/charge exists anywhere in this flow.** Any
+  consequence of a report is a manual, out-of-band administrative decision.
+
 ### Safe media upload (issue #92)
 
 `POST /api/media` (multipart form, field name `file`) and

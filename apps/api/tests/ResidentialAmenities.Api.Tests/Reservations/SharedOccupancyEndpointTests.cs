@@ -242,6 +242,12 @@ public sealed class SharedOccupancyEndpointTests : IAsyncLifetime
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
         var nowUtc = DateTimeOffset.UtcNow;
+        // Reservation requires expiresAtUtc > createdAtUtc even for a hold
+        // that is meant to already be expired relative to "now" — back-date
+        // createdAtUtc too whenever an explicit (past) expiresAtUtc is
+        // given, so the domain invariant holds while the hold is still
+        // expired by the time the test's request runs.
+        var createdAtUtc = expiresAtUtc.HasValue ? expiresAtUtc.Value.AddMinutes(-1) : nowUtc;
         var reservation = new Reservation(
             Guid.NewGuid(),
             _buildingId,
@@ -249,7 +255,7 @@ public sealed class SharedOccupancyEndpointTests : IAsyncLifetime
             ReservationUseType.SharedLeisure,
             startsAtUtc,
             endsAtUtc,
-            nowUtc,
+            createdAtUtc,
             expiresAtUtc ?? nowUtc.AddMinutes(30));
 
         reservation.AddResource(Guid.NewGuid(), _amenityId, isExclusive: false);

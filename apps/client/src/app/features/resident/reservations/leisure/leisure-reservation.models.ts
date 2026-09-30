@@ -22,3 +22,13 @@ export interface CreateLeisureReservationRequest {
   startsAtUtc: string;
   endsAtUtc: string;
 }
+
+/**
+ * Issue #89: unit display labels only (e.g. `"1A"`) already booked for the
+ * same SharedLeisure amenity/period — never a name, email, user id,
+ * membership id or phone. Informational only; the backend never rejects for
+ * capacity (DEC-014/OQ-009).
+ */
+export interface SharedOccupancy {
+  unitLabels: string[];
+}

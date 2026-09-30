@@ -34,7 +34,10 @@ export const apiPaths = {
     entryPoint: (token: string) => `/reservation-entry-points/${encodeURIComponent(token)}`,
     // Resident-facing Event slot discovery (issue #62) — distinct from
     // admin.eventSlots below, which is Administrator-only.
-    eventSlotsForBuilding: (buildingId: string) => `/buildings/${buildingId}/event-slots`
+    eventSlotsForBuilding: (buildingId: string) => `/buildings/${buildingId}/event-slots`,
+    // Issue #89: unit labels only (never PII) already booked for the same
+    // SharedLeisure amenity/period, shown before final confirmation.
+    sharedOccupancy: '/reservations/shared-occupancy'
   },
 
   pricing: {

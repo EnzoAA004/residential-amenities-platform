@@ -160,6 +160,10 @@ describe('resident cash payment flow (integration)', () => {
 
     leisureComponent.requestQuote();
     httpMock.expectOne((req) => req.url === '/api/pricing/quote').flush(quote);
+    // A successful SharedLeisure quote synchronously triggers a follow-up
+    // GET for the shared-occupancy notice (issue #89) — flush it too so it
+    // doesn't leak as an unflushed request into httpMock.verify().
+    httpMock.expectOne((req) => req.url === '/api/reservations/shared-occupancy').flush({ unitLabels: [] });
     await harness.fixture.whenStable();
     harness.fixture.detectChanges();
 

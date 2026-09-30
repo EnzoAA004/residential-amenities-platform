@@ -51,6 +51,17 @@ const quote: PriceQuote = {
   lines: [{ priceRuleId: 'rule-1', amenityId: 'amenity-both', componentType: 'Base', currency: 'ARS', amount: 5000 }]
 };
 
+/**
+ * A successful SharedLeisure quote synchronously triggers a follow-up
+ * GET to `/api/reservations/shared-occupancy` (issue #89) — flush both in
+ * one step so every existing quote-success test doesn't have to know about
+ * the occupancy notice individually.
+ */
+function flushSharedQuote(httpMock: HttpTestingController, unitLabels: string[] = []): void {
+  httpMock.expectOne((req) => req.url === '/api/pricing/quote').flush(quote);
+  httpMock.expectOne((req) => req.url === '/api/reservations/shared-occupancy').flush({ unitLabels });
+}
+
 function reservationWith(overrides: Partial<Reservation> = {}): Reservation {
   return {
     id: 'reservation-1',
@@ -183,18 +194,59 @@ describe('LeisureReservationComponent', () => {
       (req) => req.url === '/api/pricing/quote' && req.params.get('buildingId') === 'building-a'
     );
     request.flush(quote);
+    httpMock.expectOne((req) => req.url === '/api/reservations/shared-occupancy').flush({ unitLabels: [] });
   });
 
   it('shows currency and totalAmount on a successful quote', async () => {
     createFixture(sharedOnlyAmenity);
     component.requestQuote();
 
-    httpMock.expectOne((req) => req.url === '/api/pricing/quote').flush(quote);
+    flushSharedQuote(httpMock);
     await fixture.whenStable();
     fixture.detectChanges();
 
     expect(component.quoteState()).toEqual({ status: 'success', quote });
     expect(fixture.nativeElement.textContent).toContain(component.formatAmount(5000, 'ARS'));
+  });
+
+  it('shows the overlapping units before confirmation, never a name/email/id (issue #89)', async () => {
+    createFixture(sharedOnlyAmenity);
+    component.requestQuote();
+
+    httpMock.expectOne((req) => req.url === '/api/pricing/quote').flush(quote);
+    httpMock
+      .expectOne((req) => req.url === '/api/reservations/shared-occupancy')
+      .flush({ unitLabels: ['1A', '2B', '4A'] });
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const text = fixture.nativeElement.textContent as string;
+    expect(text).toContain('1A');
+    expect(text).toContain('2B');
+    expect(text).toContain('4A');
+    expect(text).not.toContain('@');
+  });
+
+  it('shows an empty-occupancy notice when no one else has booked yet (issue #89)', async () => {
+    createFixture(sharedOnlyAmenity);
+    component.requestQuote();
+
+    flushSharedQuote(httpMock, []);
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('Todavía nadie más reservó este espacio');
+  });
+
+  it('never requests shared occupancy for ExclusiveLeisure', async () => {
+    createFixture(bothAmenity);
+    component.selectUseType('ExclusiveLeisure');
+    component.requestQuote();
+
+    httpMock.expectOne((req) => req.url === '/api/pricing/quote').flush(quote);
+    await fixture.whenStable();
+
+    httpMock.expectNone((req) => req.url === '/api/reservations/shared-occupancy');
   });
 
   it('shows the real title and detail when the quote fails with 422 (no active price rule)', async () => {
@@ -245,7 +297,7 @@ describe('LeisureReservationComponent', () => {
     createFixture(bothAmenity);
     component.selectUseType('SharedLeisure');
     component.requestQuote();
-    httpMock.expectOne((req) => req.url === '/api/pricing/quote').flush(quote);
+    flushSharedQuote(httpMock);
     await fixture.whenStable();
     expect(component.quoteState().status).toBe('success');
 
@@ -303,7 +355,7 @@ describe('LeisureReservationComponent', () => {
   it('sends exactly buildingId/amenityId/useType/startsAtUtc/endsAtUtc on create, and shows the 201 hold', async () => {
     createFixture(sharedOnlyAmenity);
     component.requestQuote();
-    httpMock.expectOne((req) => req.url === '/api/pricing/quote').flush(quote);
+    flushSharedQuote(httpMock);
     await fixture.whenStable();
 
     component.create();
@@ -329,7 +381,7 @@ describe('LeisureReservationComponent', () => {
   it('shows the real 201 price snapshot and flags when it differs from the quote, without rollback', async () => {
     createFixture(sharedOnlyAmenity);
     component.requestQuote();
-    httpMock.expectOne((req) => req.url === '/api/pricing/quote').flush(quote); // totalAmount 5000
+    flushSharedQuote(httpMock); // totalAmount 5000
     await fixture.whenStable();
 
     component.create();
@@ -349,7 +401,7 @@ describe('LeisureReservationComponent', () => {
   it('offers a link to continue to payment for the created reservation, not a query-string price', async () => {
     createFixture(sharedOnlyAmenity);
     component.requestQuote();
-    httpMock.expectOne((req) => req.url === '/api/pricing/quote').flush(quote);
+    flushSharedQuote(httpMock);
     await fixture.whenStable();
 
     component.create();
@@ -370,7 +422,7 @@ describe('LeisureReservationComponent', () => {
   it('shows a clear 409 conflict message and leaves no phantom reservation state', async () => {
     createFixture(sharedOnlyAmenity);
     component.requestQuote();
-    httpMock.expectOne((req) => req.url === '/api/pricing/quote').flush(quote);
+    flushSharedQuote(httpMock);
     await fixture.whenStable();
 
     component.create();
@@ -389,7 +441,7 @@ describe('LeisureReservationComponent', () => {
   it('shows a clear 422 business-validation message on create', async () => {
     createFixture(sharedOnlyAmenity);
     component.requestQuote();
-    httpMock.expectOne((req) => req.url === '/api/pricing/quote').flush(quote);
+    flushSharedQuote(httpMock);
     await fixture.whenStable();
 
     component.create();
@@ -408,7 +460,7 @@ describe('LeisureReservationComponent', () => {
   it('shows a clear 400 invalid-range message on create', async () => {
     createFixture(sharedOnlyAmenity);
     component.requestQuote();
-    httpMock.expectOne((req) => req.url === '/api/pricing/quote').flush(quote);
+    flushSharedQuote(httpMock);
     await fixture.whenStable();
 
     component.create();
@@ -427,7 +479,7 @@ describe('LeisureReservationComponent', () => {
   it('shows a clear 403 message on create without signing the user out', async () => {
     createFixture(sharedOnlyAmenity);
     component.requestQuote();
-    httpMock.expectOne((req) => req.url === '/api/pricing/quote').flush(quote);
+    flushSharedQuote(httpMock);
     await fixture.whenStable();
 
     const session = TestBed.inject(AuthSessionStore);
@@ -445,7 +497,7 @@ describe('LeisureReservationComponent', () => {
   it('treats a network failure during create as an uncertain result, never a confirmed non-creation', async () => {
     createFixture(sharedOnlyAmenity);
     component.requestQuote();
-    httpMock.expectOne((req) => req.url === '/api/pricing/quote').flush(quote);
+    flushSharedQuote(httpMock);
     await fixture.whenStable();
 
     component.create();
@@ -466,7 +518,7 @@ describe('LeisureReservationComponent', () => {
     async () => {
       createFixture(sharedOnlyAmenity);
       component.requestQuote();
-      httpMock.expectOne((req) => req.url === '/api/pricing/quote').flush(quote);
+      flushSharedQuote(httpMock);
       await fixture.whenStable();
 
       component.create();
@@ -495,7 +547,7 @@ describe('LeisureReservationComponent', () => {
   it('disables further submits while creating and never sends a second POST for one click storm', async () => {
     createFixture(sharedOnlyAmenity);
     component.requestQuote();
-    httpMock.expectOne((req) => req.url === '/api/pricing/quote').flush(quote);
+    flushSharedQuote(httpMock);
     await fixture.whenStable();
 
     component.create();
@@ -514,7 +566,7 @@ describe('LeisureReservationComponent', () => {
   it('resets the whole flow only through the explicit "create another" action, not automatically', async () => {
     createFixture(sharedOnlyAmenity);
     component.requestQuote();
-    httpMock.expectOne((req) => req.url === '/api/pricing/quote').flush(quote);
+    flushSharedQuote(httpMock);
     await fixture.whenStable();
 
     component.create();
@@ -531,7 +583,7 @@ describe('LeisureReservationComponent', () => {
   it('clears quote/creation state when the amenity changes', async () => {
     createFixture(sharedOnlyAmenity);
     component.requestQuote();
-    httpMock.expectOne((req) => req.url === '/api/pricing/quote').flush(quote);
+    flushSharedQuote(httpMock);
     await fixture.whenStable();
     expect(component.quoteState().status).toBe('success');
 
@@ -547,7 +599,7 @@ describe('LeisureReservationComponent', () => {
     async () => {
       createFixture(sharedOnlyAmenity);
       component.requestQuote();
-      httpMock.expectOne((req) => req.url === '/api/pricing/quote').flush(quote);
+      flushSharedQuote(httpMock);
       await fixture.whenStable();
 
       component.create();
@@ -581,5 +633,6 @@ describe('LeisureReservationComponent', () => {
     expect(request.request.params.has('addOnAmenityId')).toBe(false);
     expect(request.request.params.has('membershipId')).toBe(false);
     request.flush(quote);
+    httpMock.expectOne((req) => req.url === '/api/reservations/shared-occupancy').flush({ unitLabels: [] });
   });
 });

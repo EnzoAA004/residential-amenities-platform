@@ -109,4 +109,29 @@ describe('LeisureReservationService', () => {
 
     await expect(promise).resolves.toEqual(reservation);
   });
+
+  it('requests shared occupancy with exactly buildingId, amenityId, startsAtUtc, endsAtUtc', async () => {
+    const promise = firstValueFrom(
+      service.getSharedOccupancy(
+        'building-1',
+        'amenity-1',
+        '2026-01-05T10:00:00.000Z',
+        '2026-01-05T12:00:00.000Z'
+      )
+    );
+
+    const request = httpMock.expectOne(
+      (req) =>
+        req.url === '/api/reservations/shared-occupancy' &&
+        req.params.get('buildingId') === 'building-1' &&
+        req.params.get('amenityId') === 'amenity-1' &&
+        req.params.get('startsAtUtc') === '2026-01-05T10:00:00.000Z' &&
+        req.params.get('endsAtUtc') === '2026-01-05T12:00:00.000Z'
+    );
+    expect(request.request.method).toBe('GET');
+
+    request.flush({ unitLabels: ['1A', '2B'] });
+
+    await expect(promise).resolves.toEqual({ unitLabels: ['1A', '2B'] });
+  });
 });

@@ -24,6 +24,12 @@ public enum AuditAction
     /// <summary>A password was successfully reset via a verified code (issue #93).</summary>
     PasswordResetCompleted = 6,
 
+    /// <summary>A resident registered a WebAuthn/passkey credential for biometric sign-in (issue #94).</summary>
+    BiometricCredentialRegistered = 7,
+
+    /// <summary>A resident signed in via a WebAuthn/passkey biometric credential (issue #94).</summary>
+    BiometricSignInSucceeded = 8,
+
     // Reservations
     ReservationCreated = 10,
     ReservationConfirmed = 11,

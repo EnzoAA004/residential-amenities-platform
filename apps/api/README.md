@@ -166,6 +166,41 @@ abstraction with a dev-safe `LoggingEmailSender` default (logs the email
 instead of sending it) that a real provider can replace later without
 changing any endpoint.
 
+### Biometric sign-in (issue #94)
+
+ADR-012: biometric sign-in is implemented as **WebAuthn/passkeys**
+([Fido2NetLib](https://github.com/passwordless-lib/fido2-net-lib)), not a
+Capacitor native-biometric API — this repo has no native `android/`/`ios/`
+project committed yet (see ADR-011), so there is nowhere to add a native
+plugin. The device/OS (Face ID, fingerprint, Windows Hello, ...) validates
+the biometric locally; the backend only ever receives a standard
+public-key credential (id, public key, signature counter) — it never sees
+a fingerprint template, face data, or anything derived from one.
+
+```http
+POST /api/auth/webauthn/register/options   (ResidentAccess, authenticated)
+POST /api/auth/webauthn/register           (ResidentAccess, authenticated)
+POST /api/auth/webauthn/login/options      { email }              (anonymous)
+POST /api/auth/webauthn/login              { sessionId, assertionResponse } (anonymous)
+```
+
+Registration requires an already-signed-in session — biometric sign-in
+*unlocks* an existing account (created per #93's Administrator-invitation
+flow); it never creates one. `/login/options` returns
+`{ available: false }` (not an error) whenever the email is unknown or has
+no registered credential, so the client always has a safe, silent
+fallback to the existing email/password form — it never confirms which
+case applies, to avoid user enumeration.
+
+Registration and login challenges are cached server-side
+(`IMemoryCache`, 5-minute TTL) rather than trusted from the client: a
+registration challenge is keyed by the authenticated user's id, and a
+login challenge by a random `sessionId` handed to the (necessarily
+anonymous) client, since there's no authenticated user to key by yet at
+that point. A successful assertion signs the user in through the same
+`SignInManager` the password login endpoint uses, so cookie/session
+handling is never reimplemented.
+
 ## Authentication defaults
 
 - unique email;

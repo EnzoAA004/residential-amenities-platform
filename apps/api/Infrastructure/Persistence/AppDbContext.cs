@@ -28,6 +28,8 @@ public sealed class AppDbContext(
 
     public DbSet<VerificationCode> VerificationCodes => Set<VerificationCode>();
 
+    public DbSet<WebAuthnCredential> WebAuthnCredentials => Set<WebAuthnCredential>();
+
     public DbSet<ResidentMembership> ResidentMemberships =>
         Set<ResidentMembership>();
 

@@ -78,7 +78,7 @@ public sealed class OvernightEventReservationTests : IAsyncLifetime
         foreach (var dayOfWeek in Enum.GetValues<DayOfWeek>())
         {
             dbContext.AmenityAvailabilityWindows.Add(new AmenityAvailabilityWindow(
-                Guid.NewGuid(), sum.Id, dayOfWeek, new TimeOnly(0, 0), new TimeOnly(23, 59, 59)));
+                Guid.NewGuid(), sum.Id, dayOfWeek, new TimeOnly(0, 0), TimeOnly.MaxValue));
         }
 
         dbContext.EventSlotDefinitions.Add(new EventSlotDefinition(

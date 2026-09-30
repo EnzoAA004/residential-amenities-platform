@@ -63,7 +63,24 @@ public static class AmenityAvailabilityCalculator
             foreach (var window in dayWindows)
             {
                 var localStart = date.Add(window.StartTime.ToTimeSpan());
-                var localEnd = date.Add(window.EndTime.ToTimeSpan());
+
+                // TimeOnly cannot represent midnight-at-the-end-of-this-day
+                // (its max value is 23:59:59.9999999, one tick short of the
+                // next day's 00:00:00). Treated literally, a window meant
+                // to reach "end of day" would always fall one tick short of
+                // true midnight — harmless for a same-day booking, but it
+                // silently rejects any reservation whose covered range is
+                // computed by summing this window with the next day's
+                // window (e.g. an overnight Event slot, DEC-014/OQ-002),
+                // which ends up exactly one tick short of full coverage.
+                // TimeOnly.MaxValue is never a meaningful literal end time
+                // (no real operating window would end at 23:59:59.9999999
+                // rather than a round time like 23:59 or midnight), so it is
+                // treated here as the "reaches midnight" sentinel and mapped
+                // to the exact next-day boundary instead.
+                var localEnd = window.EndTime == TimeOnly.MaxValue
+                    ? date.AddDays(1)
+                    : date.Add(window.EndTime.ToTimeSpan());
 
                 var windowStartUtc = ToUtc(localStart, timeZone);
                 var windowEndUtc = ToUtc(localEnd, timeZone);

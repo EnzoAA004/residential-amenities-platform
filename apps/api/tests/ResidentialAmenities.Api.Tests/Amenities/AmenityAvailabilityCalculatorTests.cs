@@ -125,6 +125,40 @@ public sealed class AmenityAvailabilityCalculatorTests
     }
 
     [Fact]
+    public void EndTimeMaxValue_ReachesExactMidnight_WithNoTickGap()
+    {
+        // DEC-014/OQ-002 (overnight Event slots): an amenity that must be
+        // available right through midnight (e.g. to host a 20:00 -> 03:00
+        // Event) is configured as two adjacent day windows —
+        // Monday 20:00 -> "end of day" and Tuesday 00:00 -> 03:00. Without
+        // treating TimeOnly.MaxValue as reaching exact midnight, this pair
+        // would always fall one tick (100ns) short of full coverage for any
+        // request spanning the boundary, because TimeOnly's own max value
+        // (23:59:59.9999999) is one tick before real midnight.
+        var eveningWindow = new AmenityAvailabilityWindow(
+            Guid.NewGuid(), AmenityId, DayOfWeek.Monday, new TimeOnly(20, 0), TimeOnly.MaxValue);
+        var morningWindow = new AmenityAvailabilityWindow(
+            Guid.NewGuid(), AmenityId, DayOfWeek.Tuesday, new TimeOnly(0, 0), new TimeOnly(3, 0));
+
+        // 2026-10-05 is a Monday, 2026-10-06 a Tuesday, in the pilot time zone.
+        var requestStartUtc = new DateTimeOffset(2026, 10, 5, 20, 0, 0, TimeSpan.FromHours(-3));
+        var requestEndUtc = new DateTimeOffset(2026, 10, 6, 3, 0, 0, TimeSpan.FromHours(-3));
+
+        var result = AmenityAvailabilityCalculator.CalculateOpenIntervals(
+            [eveningWindow, morningWindow],
+            [],
+            TimeZoneId,
+            requestStartUtc,
+            requestEndUtc);
+
+        var coveredDuration = result.Aggregate(
+            TimeSpan.Zero,
+            (total, interval) => total + (interval.EndUtc - interval.StartUtc));
+
+        Assert.Equal(requestEndUtc - requestStartUtc, coveredDuration);
+    }
+
+    [Fact]
     public void EndBeforeStart_Throws()
     {
         Assert.Throws<ArgumentException>(() =>

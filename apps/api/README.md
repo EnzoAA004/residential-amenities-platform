@@ -537,7 +537,12 @@ POST /api/admin/event-slots/{id}/deactivate | /activate
 - **Cancel** (`Pending`/`Confirmed` only; `Expired` 409; repeating is a no-op)
   never touches a payment: no refund exists yet (OQ-011). The reservation detail
   shows `requiresFinancialReview` when an approved payment sits on a cancelled
-  reservation or a payment needs manual review.
+  reservation or a payment needs manual review. **Event reservations** (DEC-014/
+  RB-021) can only be cancelled 24 hours or more before `startsAtUtc` — exactly
+  24 hours before is the last allowed instant, anything closer is rejected
+  (409). This is the cancellation window only; it does not decide what happens
+  to money (RB-016 remains open) and does not apply to Leisure, which is free
+  (RB-018) and has no cancellation-window restriction at all.
 - **Reschedule** (`Confirmed`, or `Pending` with an active hold) moves only the
   time range, validated with the same rules as creation and excluding itself;
   resources, price snapshot and `expiresAtUtc` do not change.

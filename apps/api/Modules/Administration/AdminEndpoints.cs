@@ -132,6 +132,10 @@ public static class AdminEndpoints
                     title: "Unable to cancel this reservation.",
                     detail: "An expired reservation cannot be cancelled.",
                     statusCode: StatusCodes.Status409Conflict),
+                ReservationCancelOutcome.TooCloseToStart => Results.Problem(
+                    title: "Unable to cancel this reservation.",
+                    detail: "Event reservations can only be cancelled 24 hours or more before their start time.",
+                    statusCode: StatusCodes.Status409Conflict),
                 _ => Results.Ok(await reads.GetAsync(id, cancellationToken))
             };
         }

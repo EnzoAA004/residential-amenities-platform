@@ -72,7 +72,13 @@ public enum ReservationCancelOutcome
     NotFound = 2,
 
     /// <summary>Expired reservations are not cancelled.</summary>
-    NotCancellable = 3
+    NotCancellable = 3,
+
+    /// <summary>
+    /// An Event reservation cannot be cancelled less than 24 hours before
+    /// its start (DEC-014/RB-021, OQ-011). Does not apply to Leisure.
+    /// </summary>
+    TooCloseToStart = 4
 }
 
 public sealed record ReservationRescheduleResult(bool Changed);

@@ -50,6 +50,19 @@ public sealed class ReservationAdminService(
             return ReservationCancelOutcome.AlreadyCancelled;
         }
 
+        // DEC-014/RB-021 (OQ-011): an Event reservation may only be
+        // cancelled 24 hours or more before its start; exactly 24 hours
+        // before is the last allowed instant (>= 24h allowed, < 24h
+        // rejected). Free Leisure (RB-018) has no financial cancellation
+        // policy and is unaffected by this window. This is the
+        // cancellation window only — no refund/financial-consequence logic
+        // is implemented here (RB-016 remains open).
+        if (reservation.UseType == ReservationUseType.Event &&
+            reservation.StartsAtUtc - nowUtc < TimeSpan.FromHours(24))
+        {
+            return ReservationCancelOutcome.TooCloseToStart;
+        }
+
         if (!reservation.Cancel(nowUtc, normalizedReason))
         {
             return ReservationCancelOutcome.NotCancellable;

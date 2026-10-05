@@ -33,7 +33,7 @@ jobs:
     env:
       TF_IN_AUTOMATION: "true"
       TF_VAR_environment: "staging"
-      TF_VAR_location: "${{ vars.AZURE_LOCATION || 'brazilsouth' }}"
+      TF_VAR_location: "${{ vars.AZURE_LOCATION || 'canadacentral' }}"
       ARM_CLIENT_ID: "${{ secrets.AZURE_CLIENT_ID }}"
       ARM_TENANT_ID: "${{ secrets.AZURE_TENANT_ID }}"
       ARM_SUBSCRIPTION_ID: "${{ secrets.AZURE_SUBSCRIPTION_ID }}"

@@ -18,7 +18,7 @@ variable "environment" {
 variable "location" {
   description = "Azure region."
   type        = string
-  default     = "brazilsouth"
+  default     = "canadacentral"
 }
 
 variable "postgres_version" {

@@ -48,6 +48,11 @@ resource "azurerm_subnet" "postgres" {
   virtual_network_name = azurerm_virtual_network.main.name
   address_prefixes     = ["10.40.2.0/28"]
 
+  lifecycle {
+    # Azure adds Microsoft.Storage to the delegated PostgreSQL subnet.
+    ignore_changes = [service_endpoints]
+  }
+
   delegation {
     name = "postgres-flexible-server"
 
@@ -91,6 +96,11 @@ resource "azurerm_container_app_environment" "main" {
   log_analytics_workspace_id = azurerm_log_analytics_workspace.main.id
   infrastructure_subnet_id   = azurerm_subnet.container_apps.id
   tags                       = local.tags
+
+  lifecycle {
+    # Azure materializes the implicit Consumption workload profile.
+    ignore_changes = [workload_profile]
+  }
 }
 
 resource "azurerm_container_registry" "main" {
@@ -166,6 +176,11 @@ resource "azurerm_postgresql_flexible_server" "main" {
   backup_retention_days         = 7
   geo_redundant_backup_enabled  = false
   tags                          = local.tags
+
+  lifecycle {
+    # Azure selects the availability zone when none is requested.
+    ignore_changes = [zone]
+  }
 
   depends_on = [
     azurerm_private_dns_zone_virtual_network_link.postgres
@@ -307,7 +322,8 @@ resource "azurerm_container_app" "api" {
 
   lifecycle {
     ignore_changes = [
-      template[0].container[0].image
+      template[0].container[0].image,
+      workload_profile_name
     ]
   }
 
@@ -365,7 +381,8 @@ resource "azurerm_container_app" "client" {
 
   lifecycle {
     ignore_changes = [
-      template[0].container[0].image
+      template[0].container[0].image,
+      workload_profile_name
     ]
   }
 

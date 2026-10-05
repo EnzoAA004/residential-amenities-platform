@@ -141,3 +141,17 @@ jobs:
       - name: Build Angular/Ionic client
         working-directory: apps/client
         run: npm run build
+
+
+  validate-containers:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build API production image
+        run: docker build -f apps/api/Dockerfile -t residential-api:ci .
+
+      - name: Build client production image
+        run: docker build -f apps/client/Dockerfile -t residential-client:ci apps/client

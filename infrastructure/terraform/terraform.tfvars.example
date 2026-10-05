@@ -1,6 +1,6 @@
 project_name = "resamen"
 environment  = "staging"
-location     = "brazilsouth"
+location     = "canadacentral"
 
 postgres_version    = "16"
 postgres_sku_name   = "B_Standard_B1ms"

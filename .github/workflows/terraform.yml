@@ -27,7 +27,7 @@ jobs:
           terraform_version: "1.9.8"
 
       - name: Terraform format
-        run: terraform fmt -check -recursive
+        run: terraform fmt -check -recursive -diff
 
       - name: Terraform init without remote backend
         run: terraform init -backend=false

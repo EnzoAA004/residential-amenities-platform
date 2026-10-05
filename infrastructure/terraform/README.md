@@ -46,7 +46,7 @@ For Windows/PowerShell, the preferred bootstrap automates the first account-side
 .\scripts\bootstrap-azure-staging.ps1
 ```
 
-It verifies Azure CLI and GitHub CLI authentication, registers required Azure providers, creates/reuses the staging application resource group plus the small Terraform remote-state Storage account, creates/reuses a user-assigned managed identity, configures a federated OIDC credential on that identity for the GitHub `staging` environment, assigns the required roles, and writes the GitHub Environment secrets/variables through `gh`. This avoids requiring tenant-level application-registration permission.
+It verifies Azure CLI and GitHub CLI authentication, registers required Azure providers, creates/reuses the staging application resource group plus the small Terraform remote-state Storage account, creates/reuses a user-assigned managed identity, configures a federated OIDC credential on that identity for the GitHub `staging` environment, assigns the required roles, and writes the GitHub Environment secrets/variables through `gh`. This avoids requiring tenant-level application-registration permission. The bootstrap derives GitHub's actual immutable OIDC subject from repository owner/repository IDs so the Azure federated credential matches the token emitted by GitHub Actions.
 
 The script first checks the subscription's `Allowed resource deployment regions` policy and fails before resource creation if the requested region is not permitted. The current Azure for Students staging default is `canadacentral`.
 

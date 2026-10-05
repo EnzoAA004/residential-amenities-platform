@@ -38,9 +38,19 @@ terraform init -backend=false
 terraform validate
 ```
 
-## Remote state bootstrap
+## Azure account + OIDC bootstrap
 
-Create the state resources once before the first real plan/apply. The helper script is intentionally manual:
+For Windows/PowerShell, the preferred bootstrap automates the first account-side setup:
+
+```powershell
+.\scripts\bootstrap-azure-staging.ps1
+```
+
+It verifies Azure CLI and GitHub CLI authentication, registers required Azure providers, creates/reuses the small Terraform remote-state Storage account, creates/reuses a Microsoft Entra application and service principal, configures the GitHub `staging` environment federated OIDC credential, assigns the required roles, and writes the GitHub Environment secrets/variables through `gh`.
+
+The script requires typing `BOOTSTRAP` before creating the remote-state Storage account. That Storage account is an Azure resource and can incur a small charge. It does **not** run `terraform apply`; the optional `-RunPlan` switch only dispatches a Terraform plan.
+
+Linux/macOS users can still bootstrap only remote state with:
 
 ```bash
 ./scripts/bootstrap-azure-state.sh \
@@ -49,15 +59,11 @@ Create the state resources once before the first real plan/apply. The helper scr
   brazilsouth
 ```
 
-Then use `backend.hcl.example` as the template for your local backend configuration:
-
-```bash
-terraform init -backend-config=backend.hcl
-```
+For local Terraform usage, `backend.hcl.example` remains available as a template.
 
 ## Real staging deployment
 
-Use GitHub Actions workflow **Deploy Azure staging** after configuring the `staging` GitHub Environment with OIDC credentials and backend variables. The workflow supports plan-only and apply modes. Apply mode additionally builds the API/client images in ACR, updates both Container Apps and performs a smoke check through the public web endpoint.
+Use GitHub Actions workflow **Deploy Azure staging** after running the OIDC bootstrap (or configuring the same values manually). The workflow supports plan-only and apply modes. Apply mode additionally builds the API/client images in ACR, updates both Container Apps and performs a smoke check through the public web endpoint.
 
 Required GitHub Environment secrets:
 

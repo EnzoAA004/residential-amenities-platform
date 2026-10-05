@@ -1,0 +1,19 @@
+project_name = "resamen"
+environment  = "staging"
+location     = "brazilsouth"
+
+postgres_version    = "16"
+postgres_sku_name   = "B_Standard_B1ms"
+postgres_storage_mb = 32768
+
+api_min_replicas    = 0
+api_max_replicas    = 1
+client_min_replicas = 0
+client_max_replicas = 2
+
+# Staging only. Production should move migrations to a dedicated deployment job.
+apply_migrations_on_startup = true
+
+tags = {
+  owner = "Enzo Asplanatti"
+}

@@ -143,7 +143,7 @@ Write-Host "Location   : $Location"
 Write-Host "App RG     : $ApplicationResourceGroup"
 Write-Host ""
 Write-Host "This bootstrap creates a small Azure Storage account for Terraform remote state,"
-Write-Host "an Entra application/service principal and role assignments. Azure resources can"
+Write-Host "a user-assigned managed identity for GitHub OIDC and role assignments. Azure resources can"
 Write-Host "incur charges. It does NOT run terraform apply. The optional -RunPlan switch"
 Write-Host "only dispatches a Terraform PLAN."
 Write-Host ""
@@ -304,49 +304,43 @@ Invoke-AzText @(
 Write-Host "Terraform state: $StateResourceGroup / $stateStorageAccount / $StateContainer" -ForegroundColor Green
 
 Write-Host ""
-Write-Host "Creating/confirming Microsoft Entra OIDC application..." -ForegroundColor Yellow
+Write-Host "Creating/confirming GitHub OIDC deployment managed identity..." -ForegroundColor Yellow
 $clientId = Invoke-AzText @(
-    "ad", "app", "list",
-    "--display-name", $ApplicationName,
-    "--query", "[0].appId",
+    "identity", "list",
+    "--resource-group", $ApplicationResourceGroup,
+    "--query", "[?name=='$ApplicationName'].clientId | [0]",
     "-o", "tsv"
 )
 
 if ([string]::IsNullOrWhiteSpace($clientId)) {
-    $clientId = Invoke-AzText @(
-        "ad", "app", "create",
-        "--display-name", $ApplicationName,
-        "--query", "appId",
-        "-o", "tsv"
-    )
+    Invoke-AzText @(
+        "identity", "create",
+        "--name", $ApplicationName,
+        "--resource-group", $ApplicationResourceGroup,
+        "--location", $Location,
+        "--output", "none"
+    ) | Out-Null
 }
 
-$applicationObjectId = Invoke-AzText @(
-    "ad", "app", "show",
-    "--id", $clientId,
-    "--query", "id",
+$clientId = Invoke-AzText @(
+    "identity", "show",
+    "--name", $ApplicationName,
+    "--resource-group", $ApplicationResourceGroup,
+    "--query", "clientId",
     "-o", "tsv"
 )
 
-$servicePrincipalObjectId = Invoke-AzText @(
-    "ad", "sp", "list",
-    "--filter", "appId eq '$clientId'",
-    "--query", "[0].id",
+$deploymentPrincipalObjectId = Invoke-AzText @(
+    "identity", "show",
+    "--name", $ApplicationName,
+    "--resource-group", $ApplicationResourceGroup,
+    "--query", "principalId",
     "-o", "tsv"
 )
-
-if ([string]::IsNullOrWhiteSpace($servicePrincipalObjectId)) {
-    $servicePrincipalObjectId = Invoke-AzText @(
-        "ad", "sp", "create",
-        "--id", $clientId,
-        "--query", "id",
-        "-o", "tsv"
-    )
-}
 
 $existingContributor = Invoke-AzText @(
     "role", "assignment", "list",
-    "--assignee-object-id", $servicePrincipalObjectId,
+    "--assignee-object-id", $deploymentPrincipalObjectId,
     "--scope", $applicationResourceGroupId,
     "--role", "Contributor",
     "--query", "[0].id",
@@ -356,7 +350,7 @@ $existingContributor = Invoke-AzText @(
 if ([string]::IsNullOrWhiteSpace($existingContributor)) {
     Invoke-AzText @(
         "role", "assignment", "create",
-        "--assignee-object-id", $servicePrincipalObjectId,
+        "--assignee-object-id", $deploymentPrincipalObjectId,
         "--assignee-principal-type", "ServicePrincipal",
         "--role", "Contributor",
         "--scope", $applicationResourceGroupId,
@@ -366,7 +360,7 @@ if ([string]::IsNullOrWhiteSpace($existingContributor)) {
 
 $existingRbacAdmin = Invoke-AzText @(
     "role", "assignment", "list",
-    "--assignee-object-id", $servicePrincipalObjectId,
+    "--assignee-object-id", $deploymentPrincipalObjectId,
     "--scope", $applicationResourceGroupId,
     "--role", "Role Based Access Control Administrator",
     "--query", "[0].id",
@@ -376,7 +370,7 @@ $existingRbacAdmin = Invoke-AzText @(
 if ([string]::IsNullOrWhiteSpace($existingRbacAdmin)) {
     Invoke-AzText @(
         "role", "assignment", "create",
-        "--assignee-object-id", $servicePrincipalObjectId,
+        "--assignee-object-id", $deploymentPrincipalObjectId,
         "--assignee-principal-type", "ServicePrincipal",
         "--role", "Role Based Access Control Administrator",
         "--scope", $applicationResourceGroupId,
@@ -386,7 +380,7 @@ if ([string]::IsNullOrWhiteSpace($existingRbacAdmin)) {
 
 $existingStateBlobRole = Invoke-AzText @(
     "role", "assignment", "list",
-    "--assignee-object-id", $servicePrincipalObjectId,
+    "--assignee-object-id", $deploymentPrincipalObjectId,
     "--scope", $stateStorageId,
     "--role", "Storage Blob Data Contributor",
     "--query", "[0].id",
@@ -396,7 +390,7 @@ $existingStateBlobRole = Invoke-AzText @(
 if ([string]::IsNullOrWhiteSpace($existingStateBlobRole)) {
     Invoke-AzText @(
         "role", "assignment", "create",
-        "--assignee-object-id", $servicePrincipalObjectId,
+        "--assignee-object-id", $deploymentPrincipalObjectId,
         "--assignee-principal-type", "ServicePrincipal",
         "--role", "Storage Blob Data Contributor",
         "--scope", $stateStorageId,
@@ -406,8 +400,9 @@ if ([string]::IsNullOrWhiteSpace($existingStateBlobRole)) {
 
 $federatedCredentialName = "github-$Environment"
 $existingFederatedCredential = Invoke-AzText @(
-    "ad", "app", "federated-credential", "list",
-    "--id", $applicationObjectId,
+    "identity", "federated-credential", "list",
+    "--identity-name", $ApplicationName,
+    "--resource-group", $ApplicationResourceGroup,
     "--query", "[?name=='$federatedCredentialName'].name | [0]",
     "-o", "tsv"
 )
@@ -415,34 +410,21 @@ $existingFederatedCredential = Invoke-AzText @(
 if ([string]::IsNullOrWhiteSpace($existingFederatedCredential)) {
     $subject = "repo:{0}:environment:{1}" -f $Repository, $Environment
 
-    $credential = @{
-        name        = $federatedCredentialName
-        issuer      = "https://token.actions.githubusercontent.com"
-        subject     = $subject
-        audiences   = @("api://AzureADTokenExchange")
-        description = "GitHub Actions OIDC for $Repository environment $Environment"
-    } | ConvertTo-Json -Depth 4
-
-    $temporaryFile = [System.IO.Path]::GetTempFileName()
-
-    try {
-        Set-Content -Path $temporaryFile -Value $credential -Encoding utf8
-
-        Invoke-AzText @(
-            "ad", "app", "federated-credential", "create",
-            "--id", $applicationObjectId,
-            "--parameters", $temporaryFile,
-            "--output", "none"
-        ) | Out-Null
-    }
-    finally {
-        Remove-Item $temporaryFile -ErrorAction SilentlyContinue
-    }
+    Invoke-AzText @(
+        "identity", "federated-credential", "create",
+        "--name", $federatedCredentialName,
+        "--identity-name", $ApplicationName,
+        "--resource-group", $ApplicationResourceGroup,
+        "--issuer", "https://token.actions.githubusercontent.com",
+        "--subject", $subject,
+        "--audiences", "api://AzureADTokenExchange",
+        "--output", "none"
+    ) | Out-Null
 }
 
+Write-Host "OIDC managed identity: $ApplicationName" -ForegroundColor Green
 Write-Host "OIDC client id: $clientId" -ForegroundColor Green
 Write-Host "Deployment permissions are scoped to: $ApplicationResourceGroup" -ForegroundColor Green
-
 Write-Host ""
 Write-Host "Configuring GitHub staging environment..." -ForegroundColor Yellow
 Invoke-Gh @("api", "--method", "PUT", "repos/$Repository/environments/$Environment", "-F", "wait_timer=0")

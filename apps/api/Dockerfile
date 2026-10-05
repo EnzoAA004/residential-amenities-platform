@@ -14,15 +14,14 @@ RUN dotnet publish apps/api/ResidentialAmenities.Api.csproj \
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 
-RUN addgroup --system appgroup \
-    && adduser --system --ingroup appgroup --home /app appuser
-
-COPY --from=build --chown=appuser:appgroup /app/publish ./
+COPY --from=build /app/publish ./
 
 ENV ASPNETCORE_URLS=http://+:8080 \
     DOTNET_EnableDiagnostics=0
 
 EXPOSE 8080
-USER appuser
+
+# Official .NET Linux images define APP_UID for the built-in non-root app user.
+USER $APP_UID
 
 ENTRYPOINT ["dotnet", "ResidentialAmenities.Api.dll"]

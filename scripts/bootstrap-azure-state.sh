@@ -8,7 +8,7 @@ fi
 
 RESOURCE_GROUP="$1"
 STORAGE_ACCOUNT="$2"
-LOCATION="\${3:-brazilsouth}"
+LOCATION="${3:-brazilsouth}"
 CONTAINER="tfstate"
 
 if ! command -v az >/dev/null 2>&1; then

@@ -52,7 +52,7 @@ The script first checks the subscription's `Allowed resource deployment regions`
 
 The script requires typing `BOOTSTRAP` before creating Azure-side bootstrap resources. The staging resource group itself has no direct charge, while the remote-state Storage account can incur a small charge. It does **not** run `terraform apply`; the optional `-RunPlan` switch only dispatches a Terraform plan.
 
-The GitHub deployment user-assigned managed identity is deliberately scoped to the staging application resource group instead of the whole subscription. It receives `Contributor` plus `Role Based Access Control Administrator` only on that resource group so Terraform can create resources and the two managed-identity role assignments declared by the stack. Terraform state access is granted separately with `Storage Blob Data Contributor` on the remote-state Storage account.
+The GitHub deployment user-assigned managed identity is deliberately scoped to the staging application resource group instead of the whole subscription. Azure Resource Provider registration is therefore performed by the local account bootstrap, while the Terraform AzureRM provider explicitly disables automatic registration (`resource_provider_registrations = "none"`). It receives `Contributor` plus `Role Based Access Control Administrator` only on that resource group so Terraform can create resources and the two managed-identity role assignments declared by the stack. Terraform state access is granted separately with `Storage Blob Data Contributor` on the remote-state Storage account.
 
 Linux/macOS users can still bootstrap only remote state with:
 

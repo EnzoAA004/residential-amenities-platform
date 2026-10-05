@@ -30,7 +30,23 @@ public static class MediaModule
             .AddOptions<MediaStorageOptions>()
             .Bind(configuration.GetSection(MediaStorageOptions.SectionName));
 
-        services.AddSingleton<IFileStorage, LocalDiskFileStorage>();
+        var storageProvider =
+            configuration[$"{MediaStorageOptions.SectionName}:Provider"]
+            ?? "LocalDisk";
+
+        if (storageProvider.Equals("AzureBlob", StringComparison.OrdinalIgnoreCase))
+        {
+            services.AddSingleton<IFileStorage, AzureBlobFileStorage>();
+        }
+        else if (storageProvider.Equals("LocalDisk", StringComparison.OrdinalIgnoreCase))
+        {
+            services.AddSingleton<IFileStorage, LocalDiskFileStorage>();
+        }
+        else
+        {
+            throw new InvalidOperationException(
+                $"Unsupported media storage provider '{storageProvider}'.");
+        }
 
         return services;
     }

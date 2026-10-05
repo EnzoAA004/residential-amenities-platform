@@ -14,6 +14,8 @@ data "azurerm_resource_group" "main" {
   name = local.resource_group_name
 }
 
+data "azurerm_client_config" "current" {}
+
 resource "azurerm_virtual_network" "main" {
   name                = "vnet-${local.name_prefix}"
   location            = var.location
@@ -111,6 +113,12 @@ resource "azurerm_role_assignment" "acr_pull" {
   scope                = azurerm_container_registry.main.id
   role_definition_name = "AcrPull"
   principal_id         = azurerm_user_assigned_identity.apps.principal_id
+}
+
+resource "azurerm_role_assignment" "acr_push_deployer" {
+  scope                = azurerm_container_registry.main.id
+  role_definition_name = "AcrPush"
+  principal_id         = data.azurerm_client_config.current.object_id
 }
 
 resource "azurerm_storage_account" "app" {

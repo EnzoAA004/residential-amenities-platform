@@ -98,23 +98,58 @@ jobs:
           echo "client_app=$(terraform output -raw client_container_app_name)" >> "$GITHUB_OUTPUT"
           echo "client_url=$(terraform output -raw client_url)" >> "$GITHUB_OUTPUT"
 
-      - name: Build API image in ACR
+      - name: Authenticate Docker to ACR
         if: "${{ inputs.action == 'apply' }}"
         run: |
-          az acr build \
-            --registry "${{ steps.infra.outputs.acr_name }}" \
-            --image "residential-api:${{ github.sha }}" \
-            --file apps/api/Dockerfile \
-            .
+          for attempt in {1..12}; do
+            if az acr login --name "${{ steps.infra.outputs.acr_name }}"; then
+              exit 0
+            fi
 
-      - name: Build client image in ACR
+            echo "Waiting for AcrPush RBAC propagation... ($attempt/12)"
+            sleep 10
+          done
+
+          echo "ACR login failed after waiting for RBAC propagation."
+          exit 1
+
+      - name: Build and push API image
         if: "${{ inputs.action == 'apply' }}"
         run: |
-          az acr build \
-            --registry "${{ steps.infra.outputs.acr_name }}" \
-            --image "residential-client:${{ github.sha }}" \
-            --file apps/client/Dockerfile \
-            apps/client
+          IMAGE="${{ steps.infra.outputs.acr_login }}/residential-api:${{ github.sha }}"
+          docker build --file apps/api/Dockerfile --tag "$IMAGE" .
+
+          for attempt in {1..12}; do
+            if docker push "$IMAGE"; then
+              exit 0
+            fi
+
+            echo "Waiting for AcrPush RBAC propagation before API push... ($attempt/12)"
+            sleep 10
+            az acr login --name "${{ steps.infra.outputs.acr_name }}" || true
+          done
+
+          echo "API image push failed."
+          exit 1
+
+      - name: Build and push client image
+        if: "${{ inputs.action == 'apply' }}"
+        run: |
+          IMAGE="${{ steps.infra.outputs.acr_login }}/residential-client:${{ github.sha }}"
+          docker build --file apps/client/Dockerfile --tag "$IMAGE" apps/client
+
+          for attempt in {1..12}; do
+            if docker push "$IMAGE"; then
+              exit 0
+            fi
+
+            echo "Waiting for AcrPush RBAC propagation before client push... ($attempt/12)"
+            sleep 10
+            az acr login --name "${{ steps.infra.outputs.acr_name }}" || true
+          done
+
+          echo "Client image push failed."
+          exit 1
 
       - name: Deploy API revision
         if: "${{ inputs.action == 'apply' }}"

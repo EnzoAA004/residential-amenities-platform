@@ -34,6 +34,11 @@ jobs:
       TF_IN_AUTOMATION: "true"
       TF_VAR_environment: "staging"
       TF_VAR_location: "${{ vars.AZURE_LOCATION || 'brazilsouth' }}"
+      ARM_CLIENT_ID: "${{ secrets.AZURE_CLIENT_ID }}"
+      ARM_TENANT_ID: "${{ secrets.AZURE_TENANT_ID }}"
+      ARM_SUBSCRIPTION_ID: "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+      ARM_USE_OIDC: "true"
+      ARM_USE_AZUREAD: "true"
 
     steps:
       - name: Guard apply behind explicit cost acknowledgement
@@ -52,6 +57,9 @@ jobs:
           tenant-id: "${{ secrets.AZURE_TENANT_ID }}"
           subscription-id: "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
 
+      - name: Install/upgrade Azure Container Apps CLI extension
+        run: az extension add --name containerapp --upgrade --yes
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
@@ -65,7 +73,9 @@ jobs:
             -backend-config="resource_group_name=${{ vars.TFSTATE_RESOURCE_GROUP }}" \
             -backend-config="storage_account_name=${{ vars.TFSTATE_STORAGE_ACCOUNT }}" \
             -backend-config="container_name=${{ vars.TFSTATE_CONTAINER }}" \
-            -backend-config="key=residential-amenities/staging.tfstate"
+            -backend-config="key=residential-amenities/staging.tfstate" \
+            -backend-config="use_azuread_auth=true" \
+            -backend-config="use_oidc=true"
 
       - name: Terraform plan
         working-directory: infrastructure/terraform

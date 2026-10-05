@@ -95,7 +95,7 @@ $providers = @(
 )
 
 foreach ($provider in $providers) {
-    Invoke-AzText @("provider", "register", "--namespace", $provider) | Out-Null
+    Invoke-AzText @("provider", "register", "--namespace", $provider, "--wait") | Out-Null
     Write-Host "  requested: $provider"
 }
 
@@ -294,7 +294,7 @@ Write-Host "OIDC client id: $clientId" -ForegroundColor Green
 
 Write-Host ""
 Write-Host "Configuring GitHub staging environment..." -ForegroundColor Yellow
-Invoke-Gh @("api", "--method", "PUT", "repos/$Repository/environments/$Environment", "-f", "wait_timer=0")
+Invoke-Gh @("api", "--method", "PUT", "repos/$Repository/environments/$Environment", "-F", "wait_timer=0")
 
 Invoke-Gh @("secret", "set", "AZURE_CLIENT_ID", "--repo", $Repository, "--env", $Environment, "--body", $clientId)
 Invoke-Gh @("secret", "set", "AZURE_TENANT_ID", "--repo", $Repository, "--env", $Environment, "--body", $tenantId)

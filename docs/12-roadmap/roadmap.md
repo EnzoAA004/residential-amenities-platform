@@ -84,19 +84,33 @@ usage feedback exists; no arbitrary UX refinement was invented.
 
 ## Phase 7 — Cloud/DevOps
 
-- Docker production images.
-- Container security.
-- Azure staging.
-- Terraform.
-- Secrets management, observability, backups.
-- Production deployment, gated by approval.
-- Cost budgets/alerts.
+Status: **implementation in repository complete; first Azure staging apply pending credentials/cost approval**.
 
-Runs after (or, where independent — e.g. Terraform authoring, container
-hardening — in parallel with) Phase 5; production deployment needs a real
-client to deploy. Puppet is not introduced here artificially: it stays a
-separate infrastructure lab unless a real host/VM configuration need appears
-(see [DevOps strategy](../07-devops/devops-strategy.md)).
+Implemented:
+
+- production API/client Docker images;
+- private API + public same-origin web topology for Azure Container Apps;
+- Terraform for VNet, private PostgreSQL Flexible Server, ACR, Blob Storage,
+  managed identity, Log Analytics and Container Apps;
+- managed-identity Azure Blob media storage;
+- persisted ASP.NET Core Data Protection keys in Blob Storage;
+- Terraform validation in CI;
+- container image builds in CI;
+- manual OIDC-based GitHub Actions workflow for plan/apply + image deployment + smoke checks;
+- scale-to-zero app defaults and cost-aware staging sizing.
+
+Pending a real Azure account/staging apply:
+
+- bootstrap remote Terraform state;
+- configure GitHub Environment OIDC credentials;
+- run Terraform plan/apply with explicit cost acknowledgement;
+- verify live managed-service networking, storage, auth persistence and smoke checks;
+- add Azure budget/alerts before sustained staging/pilot use;
+- add real Mercado Pago deployment secrets before provider payment testing.
+
+Production remains gated behind successful staging validation and explicit approval.
+Puppet is not introduced artificially: it stays separate unless a real host/VM
+configuration need appears (see [DevOps strategy](../07-devops/devops-strategy.md)).
 
 ## Phase 8 — Productization
 

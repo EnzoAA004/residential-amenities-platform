@@ -1,0 +1,4 @@
+resource_group_name  = "rg-resamen-tfstate"
+storage_account_name = "stresamentfstateUNIQUE"
+container_name       = "tfstate"
+key                  = "residential-amenities/staging.tfstate"

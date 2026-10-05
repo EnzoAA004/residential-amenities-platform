@@ -43,17 +43,25 @@ flowchart LR
 
 Do not represent environments with permanent `dev`, `staging` and `production` Git branches.
 
-## Future CI stages
+## Delivery status
+
+Implemented now:
 
 1. restore dependencies;
 2. compile backend;
 3. backend unit/integration tests;
 4. build client;
 5. client tests;
-6. lint/static checks;
-7. container build;
-8. dependency/container security scanning;
-9. Terraform validation/plan;
-10. deploy staging;
-11. health/smoke checks;
-12. gated production deployment.
+6. production API/client container builds;
+7. Terraform format/init/validate without cloud credentials;
+8. manual Azure OIDC workflow for Terraform plan/apply;
+9. ACR image builds and Container App revision updates after an approved apply;
+10. public client + proxied API smoke check.
+
+Still to add after the first real staging deployment:
+
+- dependency/container security scanning;
+- Azure budget/alerts;
+- environment-specific payment secrets;
+- a production migration strategy that does not rely on startup migrations;
+- gated production deployment after staging acceptance.

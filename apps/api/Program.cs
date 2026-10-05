@@ -1,3 +1,6 @@
+using Azure.Identity;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.EntityFrameworkCore;
 using ResidentialAmenities.Api.Endpoints;
 using ResidentialAmenities.Api.Infrastructure.Errors;
 using ResidentialAmenities.Api.Infrastructure.Persistence;
@@ -20,6 +23,17 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddOpenApi();
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+
+var dataProtectionBlobUri = builder.Configuration["DataProtection:BlobUri"];
+if (!string.IsNullOrWhiteSpace(dataProtectionBlobUri))
+{
+    builder.Services
+        .AddDataProtection()
+        .SetApplicationName("ResidentialAmenities")
+        .PersistKeysToAzureBlobStorage(
+            new Uri(dataProtectionBlobUri),
+            new DefaultAzureCredential());
+}
 
 var allowedOrigins =
     builder.Configuration
@@ -62,6 +76,13 @@ builder.Services
     .AddReportingModule();
 
 var app = builder.Build();
+
+if (builder.Configuration.GetValue<bool>("Database:ApplyMigrationsOnStartup"))
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    await dbContext.Database.MigrateAsync();
+}
 
 app.UseExceptionHandler();
 app.UseCors("Client");

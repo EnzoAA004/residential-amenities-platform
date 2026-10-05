@@ -7,6 +7,7 @@ on:
       - "infrastructure/terraform/**"
       - ".github/workflows/terraform.yml"
       - ".github/workflows/deploy-staging.yml"
+      - "scripts/bootstrap-azure-staging.ps1"
   workflow_dispatch:
 
 jobs:

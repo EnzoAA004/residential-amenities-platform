@@ -28,14 +28,53 @@ function Assert-Command {
 function Invoke-AzText {
     param([Parameter(Mandatory = $true)][string[]]$Arguments)
 
-    $output = & az @Arguments 2>&1
+    $stderrFile = [System.IO.Path]::GetTempFileName()
+    $previousErrorActionPreference = $ErrorActionPreference
 
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host $output
-        throw "Azure CLI command failed."
+    try {
+        # Windows PowerShell 5 can convert native stderr into a terminating
+        # RemoteException when ErrorActionPreference=Stop and 2>&1 is used.
+        # Capture stderr separately so Azure Conditional Access/MFA guidance
+        # remains visible instead of aborting on the warning itself.
+        $ErrorActionPreference = "Continue"
+        $stdout = & az @Arguments 2> $stderrFile
+        $exitCode = $LASTEXITCODE
+        $stderr = if (Test-Path $stderrFile) {
+            (Get-Content -Path $stderrFile -Raw -ErrorAction SilentlyContinue)
+        }
+        else {
+            ""
+        }
+    }
+    finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+        Remove-Item $stderrFile -ErrorAction SilentlyContinue
     }
 
-    return ($output | Out-String).Trim()
+    if (-not [string]::IsNullOrWhiteSpace($stderr)) {
+        if ($exitCode -eq 0) {
+            Write-Warning $stderr.Trim()
+        }
+        else {
+            Write-Host $stderr.Trim() -ForegroundColor Red
+        }
+    }
+
+    if ($exitCode -ne 0) {
+        if ($stderr -match "claims-challenge|RequestDisallowedByPolicy|MFA is required|authenticate interactively") {
+            Write-Host ""
+            Write-Host "Azure Conditional Access requires a fresh interactive MFA token for management operations." -ForegroundColor Yellow
+            Write-Host "Use the exact az login command printed by Azure above. If no claims-challenge command is shown, re-run:" -ForegroundColor Yellow
+            Write-Host "  az logout" -ForegroundColor Cyan
+            Write-Host "  az login --tenant <tenant-id> --scope 'https://management.core.windows.net//.default'" -ForegroundColor Cyan
+            Write-Host "Then select the Azure for Students subscription and run this bootstrap again." -ForegroundColor Yellow
+            Write-Host ""
+        }
+
+        throw "Azure CLI command failed with exit code $exitCode."
+    }
+
+    return ($stdout | Out-String).Trim()
 }
 
 function Invoke-Gh {

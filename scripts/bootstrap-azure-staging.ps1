@@ -87,6 +87,18 @@ function Invoke-Gh {
     }
 }
 
+function Invoke-GhText {
+    param([Parameter(Mandatory = $true)][string[]]$Arguments)
+
+    $output = & gh @Arguments
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "GitHub CLI command failed."
+    }
+
+    return ($output | Out-String).Trim()
+}
+
 
 function Ensure-ResourceGroup {
     param(
@@ -399,17 +411,42 @@ if ([string]::IsNullOrWhiteSpace($existingStateBlobRole)) {
 }
 
 $federatedCredentialName = "github-$Environment"
-$existingFederatedCredential = Invoke-AzText @(
+
+# GitHub's current OIDC subject for this repository includes immutable owner/repository
+# numeric IDs (visible in azure/login federated-token diagnostics). Build that claim
+# from the GitHub API instead of assuming the older owner/repository-only format.
+$repositoryOwnerLogin = Invoke-GhText @("api", "repos/$Repository", "--jq", ".owner.login")
+$repositoryOwnerId = Invoke-GhText @("api", "repos/$Repository", "--jq", ".owner.id")
+$repositoryName = Invoke-GhText @("api", "repos/$Repository", "--jq", ".name")
+$repositoryId = Invoke-GhText @("api", "repos/$Repository", "--jq", ".id")
+$subject = "repo:{0}@{1}/{2}@{3}:environment:{4}" -f $repositoryOwnerLogin, $repositoryOwnerId, $repositoryName, $repositoryId, $Environment
+
+$existingFederatedSubject = Invoke-AzText @(
     "identity", "federated-credential", "list",
     "--identity-name", $ApplicationName,
     "--resource-group", $ApplicationResourceGroup,
-    "--query", "[?name=='$federatedCredentialName'].name | [0]",
+    "--query", "[?name=='$federatedCredentialName'].subject | [0]",
     "-o", "tsv"
 )
 
-if ([string]::IsNullOrWhiteSpace($existingFederatedCredential)) {
-    $subject = "repo:{0}:environment:{1}" -f $Repository, $Environment
+if (
+    -not [string]::IsNullOrWhiteSpace($existingFederatedSubject) -and
+    $existingFederatedSubject -ne $subject
+) {
+    Write-Host "Updating GitHub OIDC subject claim for the existing federated credential..." -ForegroundColor Yellow
 
+    Invoke-AzText @(
+        "identity", "federated-credential", "delete",
+        "--name", $federatedCredentialName,
+        "--identity-name", $ApplicationName,
+        "--resource-group", $ApplicationResourceGroup,
+        "--yes"
+    ) | Out-Null
+
+    $existingFederatedSubject = ""
+}
+
+if ([string]::IsNullOrWhiteSpace($existingFederatedSubject)) {
     Invoke-AzText @(
         "identity", "federated-credential", "create",
         "--name", $federatedCredentialName,
@@ -421,6 +458,8 @@ if ([string]::IsNullOrWhiteSpace($existingFederatedCredential)) {
         "--output", "none"
     ) | Out-Null
 }
+
+Write-Host "OIDC subject: $subject" -ForegroundColor Green
 
 Write-Host "OIDC managed identity: $ApplicationName" -ForegroundColor Green
 Write-Host "OIDC client id: $clientId" -ForegroundColor Green

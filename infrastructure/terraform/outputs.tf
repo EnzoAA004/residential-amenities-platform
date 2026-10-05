@@ -15,7 +15,7 @@ output "api_container_app_name" {
 }
 
 output "api_internal_fqdn" {
-  value = azurerm_container_app.api.latest_revision_fqdn
+  value = local.api_host
 }
 
 output "client_container_app_name" {

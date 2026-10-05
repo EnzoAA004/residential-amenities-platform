@@ -201,7 +201,7 @@ resource "azurerm_container_app" "api" {
 
     container {
       name   = "api"
-      image  = "mcr.microsoft.com/azuredocs/containerapps-helloworld:latest"
+      image  = "mcr.microsoft.com/dotnet/samples:aspnetapp"
       cpu    = 0.5
       memory = "1Gi"
 

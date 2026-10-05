@@ -4,7 +4,7 @@ This directory contains the first deployable Azure IaC baseline for the Resident
 
 ## What the stack provisions
 
-- dedicated resource group and VNet;
+- pre-created dedicated staging resource group plus Terraform-managed VNet;
 - Azure Container Apps environment on a delegated subnet;
 - private Azure Database for PostgreSQL Flexible Server;
 - Azure Container Registry (Basic);
@@ -46,9 +46,11 @@ For Windows/PowerShell, the preferred bootstrap automates the first account-side
 .\scripts\bootstrap-azure-staging.ps1
 ```
 
-It verifies Azure CLI and GitHub CLI authentication, registers required Azure providers, creates/reuses the small Terraform remote-state Storage account, creates/reuses a Microsoft Entra application and service principal, configures the GitHub `staging` environment federated OIDC credential, assigns the required roles, and writes the GitHub Environment secrets/variables through `gh`.
+It verifies Azure CLI and GitHub CLI authentication, registers required Azure providers, creates/reuses the staging application resource group plus the small Terraform remote-state Storage account, creates/reuses a Microsoft Entra application and service principal, configures the GitHub `staging` environment federated OIDC credential, assigns the required roles, and writes the GitHub Environment secrets/variables through `gh`.
 
-The script requires typing `BOOTSTRAP` before creating the remote-state Storage account. That Storage account is an Azure resource and can incur a small charge. It does **not** run `terraform apply`; the optional `-RunPlan` switch only dispatches a Terraform plan.
+The script requires typing `BOOTSTRAP` before creating Azure-side bootstrap resources. The staging resource group itself has no direct charge, while the remote-state Storage account can incur a small charge. It does **not** run `terraform apply`; the optional `-RunPlan` switch only dispatches a Terraform plan.
+
+The GitHub deployment identity is deliberately scoped to the staging application resource group instead of the whole subscription. It receives `Contributor` plus `Role Based Access Control Administrator` only on that resource group so Terraform can create resources and the two managed-identity role assignments declared by the stack. Terraform state access is granted separately with `Storage Blob Data Contributor` on the remote-state Storage account.
 
 Linux/macOS users can still bootstrap only remote state with:
 

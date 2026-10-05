@@ -10,23 +10,21 @@ resource "random_password" "postgres" {
   override_special = "!#$%&*+-=?@_"
 }
 
-resource "azurerm_resource_group" "main" {
-  name     = "rg-${local.name_prefix}"
-  location = var.location
-  tags     = local.tags
+data "azurerm_resource_group" "main" {
+  name = local.resource_group_name
 }
 
 resource "azurerm_virtual_network" "main" {
   name                = "vnet-${local.name_prefix}"
-  location            = azurerm_resource_group.main.location
-  resource_group_name = azurerm_resource_group.main.name
+  location            = data.azurerm_resource_group.main.location
+  resource_group_name = data.azurerm_resource_group.main.name
   address_space       = ["10.40.0.0/16"]
   tags                = local.tags
 }
 
 resource "azurerm_subnet" "container_apps" {
   name                 = "snet-container-apps"
-  resource_group_name  = azurerm_resource_group.main.name
+  resource_group_name  = data.azurerm_resource_group.main.name
   virtual_network_name = azurerm_virtual_network.main.name
   address_prefixes     = ["10.40.0.0/23"]
 
@@ -44,7 +42,7 @@ resource "azurerm_subnet" "container_apps" {
 
 resource "azurerm_subnet" "postgres" {
   name                 = "snet-postgres"
-  resource_group_name  = azurerm_resource_group.main.name
+  resource_group_name  = data.azurerm_resource_group.main.name
   virtual_network_name = azurerm_virtual_network.main.name
   address_prefixes     = ["10.40.2.0/28"]
 
@@ -62,7 +60,7 @@ resource "azurerm_subnet" "postgres" {
 
 resource "azurerm_private_dns_zone" "postgres" {
   name                = "${local.name_prefix}.postgres.database.azure.com"
-  resource_group_name = azurerm_resource_group.main.name
+  resource_group_name = data.azurerm_resource_group.main.name
   tags                = local.tags
 }
 
@@ -70,15 +68,15 @@ resource "azurerm_private_dns_zone_virtual_network_link" "postgres" {
   name                  = "postgres-vnet-link"
   private_dns_zone_name = azurerm_private_dns_zone.postgres.name
   virtual_network_id    = azurerm_virtual_network.main.id
-  resource_group_name   = azurerm_resource_group.main.name
+  resource_group_name   = data.azurerm_resource_group.main.name
   registration_enabled  = false
   tags                  = local.tags
 }
 
 resource "azurerm_log_analytics_workspace" "main" {
   name                = "log-${local.name_prefix}"
-  location            = azurerm_resource_group.main.location
-  resource_group_name = azurerm_resource_group.main.name
+  location            = data.azurerm_resource_group.main.location
+  resource_group_name = data.azurerm_resource_group.main.name
   sku                 = "PerGB2018"
   retention_in_days   = 30
   tags                = local.tags
@@ -86,8 +84,8 @@ resource "azurerm_log_analytics_workspace" "main" {
 
 resource "azurerm_container_app_environment" "main" {
   name                       = "cae-${local.name_prefix}"
-  location                   = azurerm_resource_group.main.location
-  resource_group_name        = azurerm_resource_group.main.name
+  location                   = data.azurerm_resource_group.main.location
+  resource_group_name        = data.azurerm_resource_group.main.name
   log_analytics_workspace_id = azurerm_log_analytics_workspace.main.id
   infrastructure_subnet_id   = azurerm_subnet.container_apps.id
   tags                       = local.tags
@@ -95,8 +93,8 @@ resource "azurerm_container_app_environment" "main" {
 
 resource "azurerm_container_registry" "main" {
   name                = substr(replace("acr${var.project_name}${var.environment}${random_string.suffix.result}", "-", ""), 0, 50)
-  resource_group_name = azurerm_resource_group.main.name
-  location            = azurerm_resource_group.main.location
+  resource_group_name = data.azurerm_resource_group.main.name
+  location            = data.azurerm_resource_group.main.location
   sku                 = "Basic"
   admin_enabled       = false
   tags                = local.tags
@@ -104,8 +102,8 @@ resource "azurerm_container_registry" "main" {
 
 resource "azurerm_user_assigned_identity" "apps" {
   name                = "id-${local.name_prefix}-apps"
-  resource_group_name = azurerm_resource_group.main.name
-  location            = azurerm_resource_group.main.location
+  resource_group_name = data.azurerm_resource_group.main.name
+  location            = data.azurerm_resource_group.main.location
   tags                = local.tags
 }
 
@@ -117,8 +115,8 @@ resource "azurerm_role_assignment" "acr_pull" {
 
 resource "azurerm_storage_account" "app" {
   name                            = substr(replace("st${var.project_name}${var.environment}${random_string.suffix.result}", "-", ""), 0, 24)
-  resource_group_name             = azurerm_resource_group.main.name
-  location                        = azurerm_resource_group.main.location
+  resource_group_name             = data.azurerm_resource_group.main.name
+  location                        = data.azurerm_resource_group.main.location
   account_tier                    = "Standard"
   account_replication_type        = "LRS"
   min_tls_version                 = "TLS1_2"
@@ -147,8 +145,8 @@ resource "azurerm_role_assignment" "storage_blob_data" {
 
 resource "azurerm_postgresql_flexible_server" "main" {
   name                          = "psql-${local.name_prefix}-${random_string.suffix.result}"
-  resource_group_name           = azurerm_resource_group.main.name
-  location                      = azurerm_resource_group.main.location
+  resource_group_name           = data.azurerm_resource_group.main.name
+  location                      = data.azurerm_resource_group.main.location
   version                       = var.postgres_version
   delegated_subnet_id           = azurerm_subnet.postgres.id
   private_dns_zone_id           = azurerm_private_dns_zone.postgres.id
@@ -176,7 +174,7 @@ resource "azurerm_postgresql_flexible_server_database" "app" {
 resource "azurerm_container_app" "api" {
   name                         = local.api_app_name
   container_app_environment_id = azurerm_container_app_environment.main.id
-  resource_group_name          = azurerm_resource_group.main.name
+  resource_group_name          = data.azurerm_resource_group.main.name
   revision_mode                = "Single"
   tags                         = local.tags
 
@@ -201,7 +199,7 @@ resource "azurerm_container_app" "api" {
 
     container {
       name   = "api"
-      image  = "mcr.microsoft.com/azuredocs/containerapps-helloworld:latest"
+      image  = "mcr.microsoft.com/dotnet/samples:aspnetapp"
       cpu    = 0.5
       memory = "1Gi"
 
@@ -314,7 +312,7 @@ resource "azurerm_container_app" "api" {
 resource "azurerm_container_app" "client" {
   name                         = local.client_app_name
   container_app_environment_id = azurerm_container_app_environment.main.id
-  resource_group_name          = azurerm_resource_group.main.name
+  resource_group_name          = data.azurerm_resource_group.main.name
   revision_mode                = "Single"
   tags                         = local.tags
 

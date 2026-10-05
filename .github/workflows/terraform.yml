@@ -7,6 +7,7 @@ on:
       - "infrastructure/terraform/**"
       - ".github/workflows/terraform.yml"
       - ".github/workflows/deploy-staging.yml"
+      - "scripts/bootstrap-azure-staging.ps1"
   workflow_dispatch:
 
 jobs:
@@ -25,6 +26,21 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "1.9.8"
+
+      - name: Validate Azure bootstrap PowerShell syntax
+        shell: pwsh
+        run: |
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path "../../scripts/bootstrap-azure-staging.ps1"),
+            [ref]$null,
+            [ref]$errors
+          ) | Out-Null
+
+          if ($errors.Count -gt 0) {
+            $errors | ForEach-Object { Write-Error $_.Message }
+            exit 1
+          }
 
       - name: Terraform format
         run: terraform fmt -check -recursive -diff

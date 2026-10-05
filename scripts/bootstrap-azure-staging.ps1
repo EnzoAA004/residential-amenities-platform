@@ -196,6 +196,13 @@ if ([string]::IsNullOrWhiteSpace($clientId)) {
     )
 }
 
+$applicationObjectId = Invoke-AzText @(
+    "ad", "app", "show",
+    "--id", $clientId,
+    "--query", "id",
+    "-o", "tsv"
+)
+
 $servicePrincipalObjectId = Invoke-AzText @(
     "ad", "sp", "list",
     "--filter", "appId eq '$clientId'",
@@ -257,7 +264,7 @@ if ([string]::IsNullOrWhiteSpace($existingStateBlobRole)) {
 $federatedCredentialName = "github-$Environment"
 $existingFederatedCredential = Invoke-AzText @(
     "ad", "app", "federated-credential", "list",
-    "--id", $clientId,
+    "--id", $applicationObjectId,
     "--query", "[?name=='$federatedCredentialName'].name | [0]",
     "-o", "tsv"
 )
@@ -280,7 +287,7 @@ if ([string]::IsNullOrWhiteSpace($existingFederatedCredential)) {
 
         Invoke-AzText @(
             "ad", "app", "federated-credential", "create",
-            "--id", $clientId,
+            "--id", $applicationObjectId,
             "--parameters", $temporaryFile,
             "--output", "none"
         ) | Out-Null

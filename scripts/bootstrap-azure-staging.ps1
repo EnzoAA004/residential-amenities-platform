@@ -87,6 +87,43 @@ function Invoke-Gh {
     }
 }
 
+
+function Ensure-ResourceGroup {
+    param(
+        [Parameter(Mandatory = $true)][string]$Name,
+        [Parameter(Mandatory = $true)][string]$RequestedLocation
+    )
+
+    $existingLocation = Invoke-AzText @(
+        "group", "show",
+        "--name", $Name,
+        "--query", "location",
+        "-o", "tsv"
+    )
+
+    if ([string]::IsNullOrWhiteSpace($existingLocation)) {
+        Invoke-AzText @(
+            "group", "create",
+            "--name", $Name,
+            "--location", $RequestedLocation,
+            "--output", "none"
+        ) | Out-Null
+
+        Write-Host "Created resource group '$Name' in metadata location '$RequestedLocation'." -ForegroundColor Green
+        return
+    }
+
+    if ($existingLocation.ToLowerInvariant() -ne $RequestedLocation.ToLowerInvariant()) {
+        Write-Host (
+            "Reusing existing resource group '{0}' whose metadata location is '{1}'. " +
+            "Actual staging resources will still use '{2}' through explicit resource locations."
+        ) -f $Name, $existingLocation, $RequestedLocation -ForegroundColor Yellow
+    }
+    else {
+        Write-Host "Reusing existing resource group '$Name' in '$existingLocation'." -ForegroundColor Green
+    }
+}
+
 Assert-Command "az"
 Assert-Command "gh"
 
@@ -173,12 +210,7 @@ foreach ($provider in $providers) {
 
 Write-Host ""
 Write-Host "Creating/confirming staging application resource group..." -ForegroundColor Yellow
-Invoke-AzText @(
-    "group", "create",
-    "--name", $ApplicationResourceGroup,
-    "--location", $Location,
-    "--output", "none"
-) | Out-Null
+Ensure-ResourceGroup -Name $ApplicationResourceGroup -RequestedLocation $Location
 
 $applicationResourceGroupId = Invoke-AzText @(
     "group", "show",
@@ -191,12 +223,7 @@ Write-Host "Application scope: $applicationResourceGroupId" -ForegroundColor Gre
 
 Write-Host ""
 Write-Host "Creating/confirming Terraform remote-state resources..." -ForegroundColor Yellow
-Invoke-AzText @(
-    "group", "create",
-    "--name", $StateResourceGroup,
-    "--location", $Location,
-    "--output", "none"
-) | Out-Null
+Ensure-ResourceGroup -Name $StateResourceGroup -RequestedLocation $Location
 
 $existingStorage = Invoke-AzText @(
     "storage", "account", "list",

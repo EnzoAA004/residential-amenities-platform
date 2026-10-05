@@ -16,7 +16,7 @@ data "azurerm_resource_group" "main" {
 
 resource "azurerm_virtual_network" "main" {
   name                = "vnet-${local.name_prefix}"
-  location            = data.azurerm_resource_group.main.location
+  location            = var.location
   resource_group_name = data.azurerm_resource_group.main.name
   address_space       = ["10.40.0.0/16"]
   tags                = local.tags
@@ -75,7 +75,7 @@ resource "azurerm_private_dns_zone_virtual_network_link" "postgres" {
 
 resource "azurerm_log_analytics_workspace" "main" {
   name                = "log-${local.name_prefix}"
-  location            = data.azurerm_resource_group.main.location
+  location            = var.location
   resource_group_name = data.azurerm_resource_group.main.name
   sku                 = "PerGB2018"
   retention_in_days   = 30
@@ -94,7 +94,7 @@ resource "azurerm_container_app_environment" "main" {
 resource "azurerm_container_registry" "main" {
   name                = substr(replace("acr${var.project_name}${var.environment}${random_string.suffix.result}", "-", ""), 0, 50)
   resource_group_name = data.azurerm_resource_group.main.name
-  location            = data.azurerm_resource_group.main.location
+  location            = var.location
   sku                 = "Basic"
   admin_enabled       = false
   tags                = local.tags
@@ -103,7 +103,7 @@ resource "azurerm_container_registry" "main" {
 resource "azurerm_user_assigned_identity" "apps" {
   name                = "id-${local.name_prefix}-apps"
   resource_group_name = data.azurerm_resource_group.main.name
-  location            = data.azurerm_resource_group.main.location
+  location            = var.location
   tags                = local.tags
 }
 
@@ -116,7 +116,7 @@ resource "azurerm_role_assignment" "acr_pull" {
 resource "azurerm_storage_account" "app" {
   name                            = substr(replace("st${var.project_name}${var.environment}${random_string.suffix.result}", "-", ""), 0, 24)
   resource_group_name             = data.azurerm_resource_group.main.name
-  location                        = data.azurerm_resource_group.main.location
+  location                        = var.location
   account_tier                    = "Standard"
   account_replication_type        = "LRS"
   min_tls_version                 = "TLS1_2"
@@ -146,7 +146,7 @@ resource "azurerm_role_assignment" "storage_blob_data" {
 resource "azurerm_postgresql_flexible_server" "main" {
   name                          = "psql-${local.name_prefix}-${random_string.suffix.result}"
   resource_group_name           = data.azurerm_resource_group.main.name
-  location                      = data.azurerm_resource_group.main.location
+  location                      = var.location
   version                       = var.postgres_version
   delegated_subnet_id           = azurerm_subnet.postgres.id
   private_dns_zone_id           = azurerm_private_dns_zone.postgres.id

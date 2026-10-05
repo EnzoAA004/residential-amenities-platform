@@ -3,6 +3,7 @@ param(
     [string]$Repository = "EnzoAA004/residential-amenities-platform",
     [string]$Environment = "staging",
     [string]$Location = "brazilsouth",
+    [string]$ApplicationResourceGroup = "",
     [string]$StateResourceGroup = "rg-resamen-tfstate",
     [string]$StateContainer = "tfstate",
     [string]$ApplicationName = "resamen-github-staging",
@@ -11,6 +12,10 @@ param(
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
+
+if ([string]::IsNullOrWhiteSpace($ApplicationResourceGroup)) {
+    $ApplicationResourceGroup = "rg-resamen-$Environment"
+}
 
 function Assert-Command {
     param([Parameter(Mandatory = $true)][string]$Name)
@@ -51,6 +56,7 @@ Write-Host "Residential Amenities - Azure staging bootstrap" -ForegroundColor Cy
 Write-Host "Repository : $Repository"
 Write-Host "Environment: $Environment"
 Write-Host "Location   : $Location"
+Write-Host "App RG     : $ApplicationResourceGroup"
 Write-Host ""
 Write-Host "This bootstrap creates a small Azure Storage account for Terraform remote state,"
 Write-Host "an Entra application/service principal and role assignments. Azure resources can"
@@ -98,6 +104,24 @@ foreach ($provider in $providers) {
     Invoke-AzText @("provider", "register", "--namespace", $provider, "--wait") | Out-Null
     Write-Host "  requested: $provider"
 }
+
+Write-Host ""
+Write-Host "Creating/confirming staging application resource group..." -ForegroundColor Yellow
+Invoke-AzText @(
+    "group", "create",
+    "--name", $ApplicationResourceGroup,
+    "--location", $Location,
+    "--output", "none"
+) | Out-Null
+
+$applicationResourceGroupId = Invoke-AzText @(
+    "group", "show",
+    "--name", $ApplicationResourceGroup,
+    "--query", "id",
+    "-o", "tsv"
+)
+
+Write-Host "Application scope: $applicationResourceGroupId" -ForegroundColor Green
 
 Write-Host ""
 Write-Host "Creating/confirming Terraform remote-state resources..." -ForegroundColor Yellow
@@ -219,12 +243,10 @@ if ([string]::IsNullOrWhiteSpace($servicePrincipalObjectId)) {
     )
 }
 
-$subscriptionScope = "/subscriptions/$subscriptionId"
-
 $existingContributor = Invoke-AzText @(
     "role", "assignment", "list",
     "--assignee-object-id", $servicePrincipalObjectId,
-    "--scope", $subscriptionScope,
+    "--scope", $applicationResourceGroupId,
     "--role", "Contributor",
     "--query", "[0].id",
     "-o", "tsv"
@@ -236,7 +258,27 @@ if ([string]::IsNullOrWhiteSpace($existingContributor)) {
         "--assignee-object-id", $servicePrincipalObjectId,
         "--assignee-principal-type", "ServicePrincipal",
         "--role", "Contributor",
-        "--scope", $subscriptionScope,
+        "--scope", $applicationResourceGroupId,
+        "--output", "none"
+    ) | Out-Null
+}
+
+$existingRbacAdmin = Invoke-AzText @(
+    "role", "assignment", "list",
+    "--assignee-object-id", $servicePrincipalObjectId,
+    "--scope", $applicationResourceGroupId,
+    "--role", "Role Based Access Control Administrator",
+    "--query", "[0].id",
+    "-o", "tsv"
+)
+
+if ([string]::IsNullOrWhiteSpace($existingRbacAdmin)) {
+    Invoke-AzText @(
+        "role", "assignment", "create",
+        "--assignee-object-id", $servicePrincipalObjectId,
+        "--assignee-principal-type", "ServicePrincipal",
+        "--role", "Role Based Access Control Administrator",
+        "--scope", $applicationResourceGroupId,
         "--output", "none"
     ) | Out-Null
 }
@@ -298,6 +340,7 @@ if ([string]::IsNullOrWhiteSpace($existingFederatedCredential)) {
 }
 
 Write-Host "OIDC client id: $clientId" -ForegroundColor Green
+Write-Host "Deployment permissions are scoped to: $ApplicationResourceGroup" -ForegroundColor Green
 
 Write-Host ""
 Write-Host "Configuring GitHub staging environment..." -ForegroundColor Yellow

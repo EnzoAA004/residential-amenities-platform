@@ -1,0 +1,144 @@
+name: Deploy Azure staging
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Terraform action"
+        required: true
+        type: choice
+        options:
+          - plan
+          - apply
+        default: plan
+      confirm_costs:
+        description: "I understand that apply creates billable Azure resources"
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: azure-staging
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: staging
+
+    env:
+      TF_IN_AUTOMATION: "true"
+      TF_VAR_environment: "staging"
+      TF_VAR_location: "\${{ vars.AZURE_LOCATION || 'brazilsouth' }}"
+
+    steps:
+      - name: Guard apply behind explicit cost acknowledgement
+        if: "\${{ inputs.action == 'apply' && !inputs.confirm_costs }}"
+        run: |
+          echo "Refusing apply without explicit cost acknowledgement."
+          exit 1
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure login with OIDC
+        uses: azure/login@v2
+        with:
+          client-id: "\${{ secrets.AZURE_CLIENT_ID }}"
+          tenant-id: "\${{ secrets.AZURE_TENANT_ID }}"
+          subscription-id: "\${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+          terraform_wrapper: false
+
+      - name: Terraform init
+        working-directory: infrastructure/terraform
+        run: |
+          terraform init \
+            -backend-config="resource_group_name=\${{ vars.TFSTATE_RESOURCE_GROUP }}" \
+            -backend-config="storage_account_name=\${{ vars.TFSTATE_STORAGE_ACCOUNT }}" \
+            -backend-config="container_name=\${{ vars.TFSTATE_CONTAINER }}" \
+            -backend-config="key=residential-amenities/staging.tfstate"
+
+      - name: Terraform plan
+        working-directory: infrastructure/terraform
+        run: terraform plan -out=tfplan
+
+      - name: Terraform apply
+        if: "\${{ inputs.action == 'apply' }}"
+        working-directory: infrastructure/terraform
+        run: terraform apply -auto-approve tfplan
+
+      - name: Read deployment outputs
+        if: "\${{ inputs.action == 'apply' }}"
+        id: infra
+        working-directory: infrastructure/terraform
+        run: |
+          echo "resource_group=$(terraform output -raw resource_group_name)" >> "$GITHUB_OUTPUT"
+          echo "acr_name=$(terraform output -raw acr_name)" >> "$GITHUB_OUTPUT"
+          echo "acr_login=$(terraform output -raw acr_login_server)" >> "$GITHUB_OUTPUT"
+          echo "api_app=$(terraform output -raw api_container_app_name)" >> "$GITHUB_OUTPUT"
+          echo "client_app=$(terraform output -raw client_container_app_name)" >> "$GITHUB_OUTPUT"
+          echo "client_url=$(terraform output -raw client_url)" >> "$GITHUB_OUTPUT"
+
+      - name: Build API image in ACR
+        if: "\${{ inputs.action == 'apply' }}"
+        run: |
+          az acr build \
+            --registry "\${{ steps.infra.outputs.acr_name }}" \
+            --image "residential-api:\${{ github.sha }}" \
+            --file apps/api/Dockerfile \
+            .
+
+      - name: Build client image in ACR
+        if: "\${{ inputs.action == 'apply' }}"
+        run: |
+          az acr build \
+            --registry "\${{ steps.infra.outputs.acr_name }}" \
+            --image "residential-client:\${{ github.sha }}" \
+            --file apps/client/Dockerfile \
+            apps/client
+
+      - name: Deploy API revision
+        if: "\${{ inputs.action == 'apply' }}"
+        run: |
+          az containerapp update \
+            --resource-group "\${{ steps.infra.outputs.resource_group }}" \
+            --name "\${{ steps.infra.outputs.api_app }}" \
+            --image "\${{ steps.infra.outputs.acr_login }}/residential-api:\${{ github.sha }}" \
+            --output none
+
+      - name: Deploy client revision
+        if: "\${{ inputs.action == 'apply' }}"
+        run: |
+          az containerapp update \
+            --resource-group "\${{ steps.infra.outputs.resource_group }}" \
+            --name "\${{ steps.infra.outputs.client_app }}" \
+            --image "\${{ steps.infra.outputs.acr_login }}/residential-client:\${{ github.sha }}" \
+            --output none
+
+      - name: Smoke check public client and proxied API
+        if: "\${{ inputs.action == 'apply' }}"
+        run: |
+          CLIENT_URL="\${{ steps.infra.outputs.client_url }}"
+
+          for attempt in {1..30}; do
+            if curl --fail --silent "$CLIENT_URL/healthz" >/dev/null \
+              && curl --fail --silent "$CLIENT_URL/api/health" | grep -q '"status":"ok"'; then
+              echo "Staging smoke check passed: $CLIENT_URL"
+              exit 0
+            fi
+
+            echo "Waiting for revisions... ($attempt/30)"
+            sleep 10
+          done
+
+          echo "Staging smoke check failed."
+          exit 1

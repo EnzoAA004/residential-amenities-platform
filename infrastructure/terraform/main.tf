@@ -11,13 +11,13 @@ resource "random_password" "postgres" {
 }
 
 resource "azurerm_resource_group" "main" {
-  name     = "rg-\${local.name_prefix}"
+  name     = "rg-${local.name_prefix}"
   location = var.location
   tags     = local.tags
 }
 
 resource "azurerm_virtual_network" "main" {
-  name                = "vnet-\${local.name_prefix}"
+  name                = "vnet-${local.name_prefix}"
   location            = azurerm_resource_group.main.location
   resource_group_name = azurerm_resource_group.main.name
   address_space       = ["10.40.0.0/16"]
@@ -61,7 +61,7 @@ resource "azurerm_subnet" "postgres" {
 }
 
 resource "azurerm_private_dns_zone" "postgres" {
-  name                = "\${local.name_prefix}.postgres.database.azure.com"
+  name                = "${local.name_prefix}.postgres.database.azure.com"
   resource_group_name = azurerm_resource_group.main.name
   tags                = local.tags
 }
@@ -76,7 +76,7 @@ resource "azurerm_private_dns_zone_virtual_network_link" "postgres" {
 }
 
 resource "azurerm_log_analytics_workspace" "main" {
-  name                = "log-\${local.name_prefix}"
+  name                = "log-${local.name_prefix}"
   location            = azurerm_resource_group.main.location
   resource_group_name = azurerm_resource_group.main.name
   sku                 = "PerGB2018"
@@ -85,7 +85,7 @@ resource "azurerm_log_analytics_workspace" "main" {
 }
 
 resource "azurerm_container_app_environment" "main" {
-  name                       = "cae-\${local.name_prefix}"
+  name                       = "cae-${local.name_prefix}"
   location                   = azurerm_resource_group.main.location
   resource_group_name        = azurerm_resource_group.main.name
   log_analytics_workspace_id = azurerm_log_analytics_workspace.main.id
@@ -94,7 +94,7 @@ resource "azurerm_container_app_environment" "main" {
 }
 
 resource "azurerm_container_registry" "main" {
-  name                = substr(replace("acr\${var.project_name}\${var.environment}\${random_string.suffix.result}", "-", ""), 0, 50)
+  name                = substr(replace("acr${var.project_name}${var.environment}${random_string.suffix.result}", "-", ""), 0, 50)
   resource_group_name = azurerm_resource_group.main.name
   location            = azurerm_resource_group.main.location
   sku                 = "Basic"
@@ -103,7 +103,7 @@ resource "azurerm_container_registry" "main" {
 }
 
 resource "azurerm_user_assigned_identity" "apps" {
-  name                = "id-\${local.name_prefix}-apps"
+  name                = "id-${local.name_prefix}-apps"
   resource_group_name = azurerm_resource_group.main.name
   location            = azurerm_resource_group.main.location
   tags                = local.tags
@@ -116,7 +116,7 @@ resource "azurerm_role_assignment" "acr_pull" {
 }
 
 resource "azurerm_storage_account" "app" {
-  name                             = substr(replace("st\${var.project_name}\${var.environment}\${random_string.suffix.result}", "-", ""), 0, 24)
+  name                             = substr(replace("st${var.project_name}${var.environment}${random_string.suffix.result}", "-", ""), 0, 24)
   resource_group_name              = azurerm_resource_group.main.name
   location                         = azurerm_resource_group.main.location
   account_tier                     = "Standard"
@@ -146,7 +146,7 @@ resource "azurerm_role_assignment" "storage_blob_data" {
 }
 
 resource "azurerm_postgresql_flexible_server" "main" {
-  name                          = "psql-\${local.name_prefix}-\${random_string.suffix.result}"
+  name                          = "psql-${local.name_prefix}-${random_string.suffix.result}"
   resource_group_name           = azurerm_resource_group.main.name
   location                      = azurerm_resource_group.main.location
   version                       = var.postgres_version
@@ -192,7 +192,7 @@ resource "azurerm_container_app" "api" {
 
   secret {
     name  = "postgres-connection"
-    value = "Host=\${azurerm_postgresql_flexible_server.main.fqdn};Port=5432;Database=\${azurerm_postgresql_flexible_server_database.app.name};Username=\${azurerm_postgresql_flexible_server.main.administrator_login};Password=\${random_password.postgres.result};SSL Mode=Require;Trust Server Certificate=false;Maximum Pool Size=20"
+    value = "Host=${azurerm_postgresql_flexible_server.main.fqdn};Port=5432;Database=${azurerm_postgresql_flexible_server_database.app.name};Username=${azurerm_postgresql_flexible_server.main.administrator_login};Password=${random_password.postgres.result};SSL Mode=Require;Trust Server Certificate=false;Maximum Pool Size=20"
   }
 
   template {
@@ -247,7 +247,7 @@ resource "azurerm_container_app" "api" {
 
       env {
         name  = "DataProtection__BlobUri"
-        value = "\${azurerm_storage_account.app.primary_blob_endpoint}\${azurerm_storage_container.data_protection.name}/keys.xml"
+        value = "${azurerm_storage_account.app.primary_blob_endpoint}${azurerm_storage_container.data_protection.name}/keys.xml"
       }
 
       env {
@@ -272,17 +272,17 @@ resource "azurerm_container_app" "api" {
 
       env {
         name  = "MercadoPago__SuccessUrl"
-        value = "\${local.client_origin}/payments/return?status=success"
+        value = "${local.client_origin}/payments/return?status=success"
       }
 
       env {
         name  = "MercadoPago__PendingUrl"
-        value = "\${local.client_origin}/payments/return?status=pending"
+        value = "${local.client_origin}/payments/return?status=pending"
       }
 
       env {
         name  = "MercadoPago__FailureUrl"
-        value = "\${local.client_origin}/payments/return?status=failure"
+        value = "${local.client_origin}/payments/return?status=failure"
       }
     }
   }
@@ -340,7 +340,7 @@ resource "azurerm_container_app" "client" {
 
       env {
         name  = "API_UPSTREAM"
-        value = "https://\${azurerm_container_app.api.latest_revision_fqdn}"
+        value = "https://${azurerm_container_app.api.latest_revision_fqdn}"
       }
     }
   }

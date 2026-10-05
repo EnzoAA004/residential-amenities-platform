@@ -2,7 +2,7 @@
 param(
     [string]$Repository = "EnzoAA004/residential-amenities-platform",
     [string]$Environment = "staging",
-    [string]$Location = "brazilsouth",
+    [string]$Location = "canadacentral",
     [string]$ApplicationResourceGroup = "",
     [string]$StateResourceGroup = "rg-resamen-tfstate",
     [string]$StateContainer = "tfstate",
@@ -119,6 +119,33 @@ if ([string]::IsNullOrWhiteSpace($subscriptionId)) {
 }
 
 Write-Host "Azure subscription: $subscriptionName ($subscriptionId)" -ForegroundColor Green
+
+Write-Host ""
+Write-Host "Checking subscription region policy..." -ForegroundColor Yellow
+$allowedLocationsRaw = Invoke-AzText @(
+    "policy", "assignment", "list",
+    "--scope", "/subscriptions/$subscriptionId",
+    "--disable-scope-strict-match",
+    "--query", "[?displayName=='Allowed resource deployment regions'].parameters.listOfAllowedLocations.value | [0]",
+    "-o", "tsv"
+)
+
+if (-not [string]::IsNullOrWhiteSpace($allowedLocationsRaw)) {
+    $allowedLocations = @(
+        $allowedLocationsRaw -split "\r?\n" |
+            ForEach-Object { $_.Trim().ToLowerInvariant() } |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+    )
+
+    Write-Host ("Allowed regions: " + ($allowedLocations -join ", ")) -ForegroundColor Green
+
+    if ($allowedLocations -notcontains $Location.ToLowerInvariant()) {
+        throw "Azure policy does not allow region '$Location'. Allowed regions: $($allowedLocations -join ', ')."
+    }
+}
+else {
+    Write-Host "No explicit allowed-region policy was found; continuing with '$Location'." -ForegroundColor Yellow
+}
 
 Write-Host ""
 Write-Host "Checking GitHub login..." -ForegroundColor Yellow

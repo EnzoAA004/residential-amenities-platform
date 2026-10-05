@@ -362,7 +362,7 @@ resource "azurerm_container_app" "client" {
 
       env {
         name  = "API_UPSTREAM"
-        value = "https://${azurerm_container_app.api.latest_revision_fqdn}"
+        value = local.api_origin
       }
     }
   }

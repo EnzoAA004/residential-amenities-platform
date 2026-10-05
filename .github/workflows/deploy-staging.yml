@@ -175,15 +175,37 @@ jobs:
           CLIENT_URL="${{ steps.infra.outputs.client_url }}"
 
           for attempt in {1..30}; do
-            if curl --fail --silent "$CLIENT_URL/healthz" >/dev/null \
-              && curl --fail --silent "$CLIENT_URL/api/health" | grep -q '"status":"ok"'; then
+            WEB_STATUS="$(curl --silent --output /tmp/web-health.txt --write-out '%{http_code}' "$CLIENT_URL/healthz" || true)"
+            API_STATUS="$(curl --silent --output /tmp/api-health.txt --write-out '%{http_code}' "$CLIENT_URL/api/health" || true)"
+            API_BODY="$(cat /tmp/api-health.txt 2>/dev/null || true)"
+
+            if [ "$WEB_STATUS" = "200" ] && [ "$API_STATUS" = "200" ] \
+              && printf '%s' "$API_BODY" | grep -q '"status":"ok"'; then
               echo "Staging smoke check passed: $CLIENT_URL"
               exit 0
             fi
 
-            echo "Waiting for revisions... ($attempt/30)"
+            echo "Waiting for revisions... ($attempt/30) web=$WEB_STATUS api=$API_STATUS"
+            if [ -n "$API_BODY" ]; then
+              echo "API response: $API_BODY"
+            fi
             sleep 10
           done
 
-          echo "Staging smoke check failed."
+          echo "Staging smoke check failed. Container Apps diagnostics:"
+          az containerapp show \
+            --resource-group "${{ steps.infra.outputs.resource_group }}" \
+            --name "${{ steps.infra.outputs.api_app }}" \
+            --query "{provisioningState:properties.provisioningState,latestRevision:properties.latestRevisionName,latestReadyRevision:properties.latestReadyRevisionName,fqdn:properties.configuration.ingress.fqdn}" \
+            --output yaml || true
+          az containerapp revision list \
+            --resource-group "${{ steps.infra.outputs.resource_group }}" \
+            --name "${{ steps.infra.outputs.api_app }}" \
+            --query "[].{name:name,active:properties.active,health:properties.healthState,provisioning:properties.provisioningState,replicas:properties.replicas}" \
+            --output table || true
+          az containerapp logs show \
+            --resource-group "${{ steps.infra.outputs.resource_group }}" \
+            --name "${{ steps.infra.outputs.api_app }}" \
+            --type system \
+            --tail 80 || true
           exit 1

@@ -94,14 +94,13 @@ function Ensure-ResourceGroup {
         [Parameter(Mandatory = $true)][string]$RequestedLocation
     )
 
-    $existingLocation = Invoke-AzText @(
-        "group", "show",
+    $exists = Invoke-AzText @(
+        "group", "exists",
         "--name", $Name,
-        "--query", "location",
         "-o", "tsv"
     )
 
-    if ([string]::IsNullOrWhiteSpace($existingLocation)) {
+    if ($exists.Trim().ToLowerInvariant() -ne "true") {
         Invoke-AzText @(
             "group", "create",
             "--name", $Name,
@@ -112,6 +111,13 @@ function Ensure-ResourceGroup {
         Write-Host "Created resource group '$Name' in metadata location '$RequestedLocation'." -ForegroundColor Green
         return
     }
+
+    $existingLocation = Invoke-AzText @(
+        "group", "show",
+        "--name", $Name,
+        "--query", "location",
+        "-o", "tsv"
+    )
 
     if ($existingLocation.ToLowerInvariant() -ne $RequestedLocation.ToLowerInvariant()) {
         Write-Host (

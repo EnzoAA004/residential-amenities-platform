@@ -120,10 +120,12 @@ function Ensure-ResourceGroup {
     )
 
     if ($existingLocation.ToLowerInvariant() -ne $RequestedLocation.ToLowerInvariant()) {
-        Write-Host (
+        $message = (
             "Reusing existing resource group '{0}' whose metadata location is '{1}'. " +
             "Actual staging resources will still use '{2}' through explicit resource locations."
-        ) -f $Name, $existingLocation, $RequestedLocation -ForegroundColor Yellow
+        ) -f $Name, $existingLocation, $RequestedLocation
+
+        Write-Host $message -ForegroundColor Yellow
     }
     else {
         Write-Host "Reusing existing resource group '$Name' in '$existingLocation'." -ForegroundColor Green

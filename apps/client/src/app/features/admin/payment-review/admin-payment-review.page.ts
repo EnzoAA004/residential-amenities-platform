@@ -110,7 +110,7 @@ const MANUAL_REVIEW_OUTCOME_EXPLANATIONS: Record<string, string> = {
           <ion-input [value]="draft().buildingId ?? ''" (ionInput)="setDraft('buildingId', $event.detail.value)" />
         </ion-item>
         <ion-item>
-          <ion-label position="stacked">Reservation ID</ion-label>
+          <ion-label position="stacked">ID de reserva</ion-label>
           <ion-input [value]="draft().reservationId ?? ''" (ionInput)="setDraft('reservationId', $event.detail.value)" />
         </ion-item>
         <ion-item>
@@ -154,8 +154,8 @@ const MANUAL_REVIEW_OUTCOME_EXPLANATIONS: Record<string, string> = {
               <li class="admin-card">
                 <h2>{{ payment.method }} · {{ payment.status }}</h2>
                 <div class="admin-card__meta">
-                  <span>Payment {{ payment.paymentId }}</span>
-                  <span>Reservation {{ payment.reservationId }}</span>
+                  <span>Pago {{ payment.paymentId }}</span>
+                  <span>Reserva {{ payment.reservationId }}</span>
                   <span>{{ payment.amount }} {{ payment.currency }}</span>
                   <span>Creado: {{ payment.createdAtUtc }}</span>
                   @if (payment.approvedAtUtc) {
@@ -163,7 +163,7 @@ const MANUAL_REVIEW_OUTCOME_EXPLANATIONS: Record<string, string> = {
                   }
                 </div>
                 <p>
-                  Outcome: <strong>{{ payment.reservationOutcome }}</strong>
+                  Resultado: <strong>{{ payment.reservationOutcome }}</strong>
                   @if (outcomeExplanation(payment); as explanation) {
                     — {{ explanation }}
                   }

@@ -11,6 +11,8 @@ import { LoginPage } from './login.page';
 
 interface AuthServiceMock {
   login: ReturnType<typeof vi.fn>;
+  loginDemo: ReturnType<typeof vi.fn>;
+  demoStatus: ReturnType<typeof vi.fn>;
   logout: ReturnType<typeof vi.fn>;
 }
 
@@ -29,6 +31,8 @@ describe('LoginPage', () => {
   beforeEach(async () => {
     auth = {
       login: vi.fn((_: LoginCredentials, __: string | null): Observable<CurrentUser> => of(currentUser)),
+      loginDemo: vi.fn((_: string | null): Observable<CurrentUser> => of(currentUser)),
+      demoStatus: vi.fn(() => of(true)),
       logout: vi.fn(() => of(undefined))
     };
 
@@ -62,6 +66,17 @@ describe('LoginPage', () => {
     expect(inputs[0].getAttribute('autocomplete')).toBe('username');
     expect(inputs[1].getAttribute('type')).toBe('password');
     expect(inputs[1].getAttribute('autocomplete')).toBe('current-password');
+  });
+
+  it('shows the one-click live demo only when the backend enables it', () => {
+    expect(fixture.nativeElement.textContent).toContain('Explore the live resident demo');
+    expect(fixture.nativeElement.textContent).toContain('Open live demo');
+  });
+
+  it('starts the demo with the internal returnUrl', () => {
+    fixture.componentInstance.startDemo();
+
+    expect(auth.loginDemo).toHaveBeenCalledWith('/reservations');
   });
 
   it('does not submit an invalid form', () => {

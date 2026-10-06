@@ -136,7 +136,7 @@ function emptyDraft(): CreateDraft {
           <ion-input [value]="draftBuildingId()" (ionInput)="draftBuildingId.set($event.detail.value ?? '')" />
         </ion-item>
         <ion-item>
-          <ion-label position="stacked">ID del amenity (opcional)</ion-label>
+          <ion-label position="stacked">ID del espacio (opcional)</ion-label>
           <ion-input [value]="draftAmenityId()" (ionInput)="draftAmenityId.set($event.detail.value ?? '')" />
         </ion-item>
         <ion-item>
@@ -198,7 +198,7 @@ function emptyDraft(): CreateDraft {
                     }
                   </ion-text>
                 </p>
-                <p><ion-text color="medium">Amenity {{ rule.amenityId }}</ion-text></p>
+                <p><ion-text color="medium">Espacio {{ rule.amenityId }}</ion-text></p>
               </li>
             }
           </ul>
@@ -228,7 +228,7 @@ function emptyDraft(): CreateDraft {
           <ion-input [value]="createDraft().buildingId" (ionInput)="setCreateField('buildingId', $event.detail.value)" />
         </ion-item>
         <ion-item>
-          <ion-label position="stacked">ID del amenity</ion-label>
+          <ion-label position="stacked">ID del espacio</ion-label>
           <ion-input [value]="createDraft().amenityId" (ionInput)="setCreateField('amenityId', $event.detail.value)" />
         </ion-item>
         <ion-item>
@@ -460,7 +460,7 @@ export class AdminPricingPage {
     const amount = Number(draft.amount);
 
     if (!buildingId || !amenityId) {
-      this.createValidationError.set('Building ID y Amenity ID son requeridos.');
+      this.createValidationError.set('Building ID y Espacio ID son requeridos.');
       return;
     }
 

@@ -21,8 +21,8 @@ const payment: AdminPayment = {
   approvedAtUtc: '2026-10-01T10:06:00Z',
   reservationOutcome: 'ApprovedAfterExpiry',
   requiresManualReview: true,
-  providerStatus: 'approved',
-  providerStatusDetail: 'accredited',
+  providerEstado: 'approved',
+  providerEstadoDetail: 'accredited',
   cashDeclaredAtUtc: null,
   cashConfirmedAtUtc: null,
   cashConfirmedByUserId: null
@@ -35,8 +35,8 @@ const pendingCashPayment: AdminPayment = {
   status: 'Pending',
   reservationOutcome: 'None',
   requiresManualReview: false,
-  providerStatus: null,
-  providerStatusDetail: null,
+  providerEstado: null,
+  providerEstadoDetail: null,
   cashDeclaredAtUtc: '2026-10-01T10:00:00Z'
 };
 

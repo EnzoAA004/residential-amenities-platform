@@ -188,9 +188,9 @@ const pageSizes = [25, 50, 100] as const;
                 <div class="admin-card__meta">
                   <span>{{ item.occurredAtUtc }}</span>
                   <span>Actor: {{ item.actorType }}{{ item.actorUserId ? ' · ' + item.actorUserId : '' }}</span>
-                  <span>Target: {{ item.targetType }}{{ item.targetId ? ' · ' + item.targetId : '' }}</span>
+                  <span>Objetivo: {{ item.targetType }}{{ item.targetId ? ' · ' + item.targetId : '' }}</span>
                   @if (item.buildingId) {
-                    <span>Building: {{ item.buildingId }}</span>
+                    <span>Edificio: {{ item.buildingId }}</span>
                   }
                   @if (item.correlationId) {
                     <span>Correlation: {{ item.correlationId }}</span>

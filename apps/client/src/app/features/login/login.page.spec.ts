@@ -70,7 +70,7 @@ describe('LoginPage', () => {
 
   it('shows the one-click live demo only when the backend enables it', () => {
     expect(fixture.nativeElement.textContent).toContain('Explorá la demo de residente');
-    expect(fixture.nativeElement.textContent).toContain('Open live demo');
+    expect(fixture.nativeElement.textContent).toContain('Abrir demo');
   });
 
   it('starts the demo with the internal returnUrl', () => {

@@ -156,7 +156,7 @@ describe('ApiClient', () => {
 
     const error = await promise.catch((caught: ApiError) => caught);
 
-    expect(error).toEqual({ status: 500, title: 'Something went wrong. Please try again.' });
+    expect(error).toEqual({ status: 500, title: 'Ocurrió un error. Intentá nuevamente.' });
     // Never leaks the raw body into the error the UI would render.
     expect(JSON.stringify(error)).not.toContain('Internal Server Error');
   });
@@ -171,7 +171,7 @@ describe('ApiClient', () => {
 
     expect(error).toEqual({
       status: 0,
-      title: 'Could not reach the server. Check your connection and try again.'
+      title: 'No pudimos conectarnos con el servidor. Revisá tu conexión e intentá nuevamente.'
     });
   });
 

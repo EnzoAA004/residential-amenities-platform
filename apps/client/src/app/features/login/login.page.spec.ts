@@ -69,7 +69,7 @@ describe('LoginPage', () => {
   });
 
   it('shows the one-click live demo only when the backend enables it', () => {
-    expect(fixture.nativeElement.textContent).toContain('Explore the live resident demo');
+    expect(fixture.nativeElement.textContent).toContain('Explorá la demo de residente');
     expect(fixture.nativeElement.textContent).toContain('Open live demo');
   });
 
@@ -162,7 +162,7 @@ describe('LoginPage', () => {
     fixture.componentInstance.submit();
     fixture.detectChanges();
 
-    expect(fixture.nativeElement.textContent).toContain('The sign-in service is unavailable.');
+    expect(fixture.nativeElement.textContent).toContain('El servicio de inicio de sesión no está disponible.');
   });
 });
 

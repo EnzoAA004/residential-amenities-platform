@@ -37,8 +37,8 @@ type CreateState =
   | { status: 'unknown' };
 
 const USE_TYPE_LABELS: Record<LeisureUseType, string> = {
-  SharedLeisure: 'Shared',
-  ExclusiveLeisure: 'Exclusive'
+  SharedLeisure: 'Compartido',
+  ExclusiveLeisure: 'Exclusivo'
 };
 
 /**
@@ -122,15 +122,15 @@ const USE_TYPE_LABELS: Record<LeisureUseType, string> = {
     @if (createState(); as createStatus) {
       @if (createStatus.status === 'created') {
         <section class="confirmation-card" aria-live="polite">
-          <h3>Reservation hold created</h3>
+          <h3>Reserva creada</h3>
           <dl>
-            <dt>Amenity</dt>
+            <dt>Espacio</dt>
             <dd>{{ amenityName() }}</dd>
-            <dt>Use type</dt>
+            <dt>Tipo de uso</dt>
             <dd>{{ useTypeLabel(createStatus.reservation.useType) }}</dd>
-            <dt>From</dt>
+            <dt>Desde</dt>
             <dd>{{ formatDateTime(createStatus.reservation.startsAtUtc) }}</dd>
-            <dt>To</dt>
+            <dt>Hasta</dt>
             <dd>{{ formatDateTime(createStatus.reservation.endsAtUtc) }}</dd>
             <dt>Estado</dt>
             <dd>{{ createStatus.reservation.status }}</dd>
@@ -169,13 +169,13 @@ const USE_TYPE_LABELS: Record<LeisureUseType, string> = {
       } @else {
         @if (eligibleUseTypes().length === 0) {
           <p>
-            <ion-text color="medium">Esta amenity no admite reservas de ocio.</ion-text>
+            <ion-text color="medium">Este espacio no admite reservas de ocio.</ion-text>
           </p>
         } @else {
           <form class="leisure-form" [formGroup]="form" (ngSubmit)="requestQuote()">
             @if (eligibleUseTypes().length > 1) {
               <fieldset>
-                <legend>Use type</legend>
+                <legend>Tipo de uso</legend>
                 <div class="use-type-options">
                   @for (option of eligibleUseTypes(); track option) {
                     <label class="use-type-option">

@@ -61,17 +61,15 @@ public static class StagingAdminSeeder
             var updateResult = await userManager.UpdateAsync(user);
             EnsureSucceeded(updateResult, "Could not update the staging administrator");
 
-            IdentityResult passwordResult;
             if (await userManager.HasPasswordAsync(user))
             {
-                var resetToken = await userManager.GeneratePasswordResetTokenAsync(user);
-                passwordResult = await userManager.ResetPasswordAsync(user, resetToken, password);
-            }
-            else
-            {
-                passwordResult = await userManager.AddPasswordAsync(user, password);
+                var removePasswordResult = await userManager.RemovePasswordAsync(user);
+                EnsureSucceeded(
+                    removePasswordResult,
+                    "Could not remove the previous staging administrator password");
             }
 
+            var passwordResult = await userManager.AddPasswordAsync(user, password);
             EnsureSucceeded(passwordResult, "Could not refresh the staging administrator password");
         }
 

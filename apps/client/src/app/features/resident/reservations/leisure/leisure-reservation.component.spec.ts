@@ -322,7 +322,7 @@ describe('LeisureReservationComponent', () => {
 
     expect(component.quoteState()).toEqual({ status: 'idle' });
 
-    // And "Confirm reservation" must not be usable off that stale quote.
+    // And "Confirmar reserva" must not be usable off that stale quote.
     component.create();
     httpMock.expectNone((req) => req.url === '/api/reservations');
   });
@@ -534,7 +534,7 @@ describe('LeisureReservationComponent', () => {
       // the button in the DOM must actually be disabled, not just the
       // guard in create() (defense at both levels).
       const buttons = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('ion-button'));
-      const confirmButton = buttons.find((button) => button.textContent?.includes('Confirm reservation'));
+      const confirmButton = buttons.find((button) => button.textContent?.includes('Confirmar reserva'));
       expect(confirmButton?.disabled).toBe(true);
 
       component.create();

@@ -53,7 +53,7 @@ describe('AdminPricingPage', () => {
   it('does not query until a buildingId is provided, then lists and paginates', async () => {
     const { harness, component } = await navigate();
     httpMock.expectNone((request) => request.url.startsWith('/api/admin/pricing'));
-    expect(text(harness)).toContain('Ingresá un Building ID');
+    expect(text(harness)).toContain('Ingresá un ID de edificio');
 
     component.draftBuildingId.set('building-1');
     component.draftAmenityId.set('amenity-1');

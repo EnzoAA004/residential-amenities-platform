@@ -25,9 +25,9 @@ The application containers scale to zero by default. PostgreSQL and ACR are stil
 - ASP.NET Core Data Protection keys are persisted to Blob Storage so auth state survives container restarts.
 - The web client keeps `/api` same-origin through Nginx instead of exposing the API publicly.
 
-## Important scope boundary
+## Deployment boundary
 
-This code is **implemented IaC**, but it is not proof that Azure resources are currently running. Nothing in CI automatically executes `terraform apply`. The manual deployment workflow requires Azure OIDC credentials and an explicit cost acknowledgement.
+The staging stack has been applied successfully in Azure and is managed through remote Terraform state. Nothing in CI automatically executes `terraform apply`: the deployment workflow remains manual, authenticates through GitHub OIDC and requires explicit cost acknowledgement before apply.
 
 ## Validate locally without Azure credentials
 
@@ -67,7 +67,7 @@ For local Terraform usage, `backend.hcl.example` remains available as a template
 
 ## Real staging deployment
 
-Use GitHub Actions workflow **Deploy Azure staging** after running the OIDC bootstrap (or configuring the same values manually). The workflow supports plan-only and apply modes. Apply mode additionally builds the API/client images in ACR, updates both Container Apps and performs a smoke check through the public web endpoint.
+Use GitHub Actions workflow **Deploy Azure staging** after running the OIDC bootstrap (or configuring the same values manually). The workflow supports plan-only and apply modes. Apply mode builds API/client images on the GitHub runner, pushes them to ACR, updates both Container Apps and performs smoke checks through the public web endpoint. When staging demo access is enabled, the workflow also verifies the resident-only demo session and confirms it cannot pass the Administrator authorization check.
 
 Required GitHub Environment secrets:
 
@@ -83,6 +83,10 @@ Required GitHub Environment variables:
 - `AZURE_LOCATION` (for example `canadacentral`)
 
 Mercado Pago credentials are intentionally not stored in Terraform state. Add them as deployment secrets before testing real provider payments.
+
+### Public demo switch
+
+Terraform sets `Demo__Enabled=true` only for the `staging` environment. The API additionally checks that the host environment is Development or Staging before creating a demo session, so the same code path cannot accidentally enable anonymous demo access in Production. The seeded demo identity has only the Resident role and no password.
 
 ## Cost control
 

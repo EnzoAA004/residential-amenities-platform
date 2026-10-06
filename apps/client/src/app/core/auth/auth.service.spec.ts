@@ -126,6 +126,35 @@ describe('AuthService', () => {
     expect(router.navigateByUrl).toHaveBeenCalledWith('/');
   });
 
+  it('reads demo availability from the public demo status endpoint', async () => {
+    const promise = firstValueFrom(auth.demoStatus());
+
+    const request = httpMock.expectOne('/api/demo/status');
+    expect(request.request.method).toBe('GET');
+    request.flush({ enabled: true });
+
+    await expect(promise).resolves.toBe(true);
+  });
+
+  it('opens a demo cookie session and resolves the current resident', async () => {
+    const promise = firstValueFrom(auth.loginDemo('/reservations'));
+
+    const session = httpMock.expectOne('/api/demo/session');
+    expect(session.request.method).toBe('POST');
+    expect(session.request.body).toBeNull();
+    session.flush(null, { status: 204, statusText: 'No Content' });
+
+    const me = httpMock.expectOne('/api/auth/me');
+    me.flush(userResponse);
+
+    await expect(promise).resolves.toMatchObject({
+      email: 'resident@example.test',
+      roles: ['Resident']
+    });
+    expect(store.isAuthenticated()).toBe(true);
+    expect(router.navigateByUrl).toHaveBeenCalledWith('/reservations');
+  });
+
   it('does not call /auth/me after an invalid login', async () => {
     const promise = firstValueFrom(
       auth.login({ email: 'missing@example.test', password: 'wrong' })

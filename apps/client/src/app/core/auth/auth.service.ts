@@ -17,6 +17,10 @@ interface CurrentUserResponse {
   memberships: ResidentMembershipContext[];
 }
 
+interface DemoStatusResponse {
+  enabled: boolean;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -55,6 +59,28 @@ export class AuthService {
   login(credentials: LoginCredentials, returnUrl?: string | null): Observable<CurrentUser> {
     return this.api
       .post<void, LoginCredentials>(apiPaths.auth.login, credentials, { useCookies: true })
+      .pipe(
+        switchMap(() => this.loadCurrentUser()),
+        tap((user) => this.store.setAuthenticated(user)),
+        tap((user) => {
+          void this.router.navigateByUrl(this.resolvePostLoginUrl(user, returnUrl));
+        }),
+        catchError((error: ApiError) => {
+          this.store.setAnonymous();
+          return throwError(() => error);
+        })
+      );
+  }
+
+  demoStatus(): Observable<boolean> {
+    return this.api
+      .get<DemoStatusResponse>(apiPaths.demo.status)
+      .pipe(map((response) => response.enabled));
+  }
+
+  loginDemo(returnUrl?: string | null): Observable<CurrentUser> {
+    return this.api
+      .post<void, null>(apiPaths.demo.session, null)
       .pipe(
         switchMap(() => this.loadCurrentUser()),
         tap((user) => this.store.setAuthenticated(user)),

@@ -143,7 +143,7 @@ describe('AdminAvailabilityPage', () => {
     expect(created.request.method).toBe('POST');
     expect(created.request.body.buildingId).toBe('building-1');
     expect(created.request.body.reason).toBe('resurfacing');
-    created.flush({ periodId: 'period-1' }, { status: 201, statusText: 'Created' });
+    created.flush({ periodId: 'period-1' }, { status: 201, statusText: 'Creard' });
 
     const refreshed = httpMock.expectOne(
       (r) => r.url === '/api/admin/amenities/amenity-1/availability' && r.method === 'GET'

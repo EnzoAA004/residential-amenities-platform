@@ -95,7 +95,14 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
+if (builder.Configuration.GetValue<bool>("Demo:Enabled") &&
+    (app.Environment.IsDevelopment() || app.Environment.IsStaging()))
+{
+    await app.Services.SeedDemoDataAsync();
+}
+
 app.MapIdentityEndpoints();
+app.MapDemoEndpoints();
 app.MapInvitationEndpoints();
 app.MapWebAuthnEndpoints();
 app.MapAmenityEndpoints();

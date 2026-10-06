@@ -150,7 +150,7 @@ describe('LeisureReservationComponent', () => {
     createFixture(neitherAmenity);
 
     expect(component.eligibleUseTypes()).toEqual([]);
-    expect(fixture.nativeElement.textContent).toContain('Esta amenity no admite reservas de ocio.');
+    expect(fixture.nativeElement.textContent).toContain('Este espacio no admite reservas de ocio.');
     httpMock.expectNone(() => true);
   });
 
@@ -621,7 +621,7 @@ describe('LeisureReservationComponent', () => {
       fixture.detectChanges();
 
       expect(component.createState()).toEqual({ status: 'idle' });
-      expect(fixture.nativeElement.textContent).not.toContain('Reservation hold created');
+      expect(fixture.nativeElement.textContent).not.toContain('Reserva creada');
     }
   );
 

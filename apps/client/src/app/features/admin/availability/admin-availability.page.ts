@@ -124,7 +124,7 @@ function toInputTime(wire: string): string {
 
       @switch (configState().status) {
         @case ('idle') {
-          <p><ion-text color="medium">Ingresá Building ID y Espacio ID para cargar su configuración.</ion-text></p>
+          <p><ion-text color="medium">Ingresá el ID del edificio y el ID del espacio para cargar su configuración.</ion-text></p>
         }
         @case ('loading') {
           <p aria-live="polite">
@@ -319,7 +319,7 @@ export class AdminAvailabilityPage {
     if (!buildingId || !amenityId) {
       this.configState.set({
         status: 'error',
-        error: { status: 0, title: 'Building ID y Espacio ID son requeridos.' }
+        error: { status: 0, title: 'El ID del edificio y el ID del espacio son requeridos.' }
       });
       return;
     }

@@ -42,7 +42,7 @@ type CashConfirmState =
   | { status: 'error'; paymentId: string; error: ApiError };
 
 const methods = ['MercadoPago', 'Cash'] as const;
-const statuses = ['Creard', 'Pending', 'Approved', 'Rejected', 'Cancelarled'] as const;
+const statuses = ['Created', 'Pending', 'Approved', 'Rejected', 'Cancelled'] as const;
 const pageSizes = [25, 50, 100] as const;
 
 @Component({
@@ -101,11 +101,11 @@ const pageSizes = [25, 50, 100] as const;
 
       <form class="admin-filters" (submit)="applyFilters($event)">
         <ion-item>
-          <ion-label position="stacked">ID del edificio</ion-label>
+          <ion-label position="stacked">Building ID</ion-label>
           <ion-input [value]="draft().buildingId ?? ''" (ionInput)="setDraft('buildingId', $event.detail.value)" />
         </ion-item>
         <ion-item>
-          <ion-label position="stacked">Método</ion-label>
+          <ion-label position="stacked">Method</ion-label>
           <ion-select
             interface="popover"
             [value]="draft().method ?? ''"
@@ -118,7 +118,7 @@ const pageSizes = [25, 50, 100] as const;
           </ion-select>
         </ion-item>
         <ion-item>
-          <ion-label position="stacked">Estado</ion-label>
+          <ion-label position="stacked">Status</ion-label>
           <ion-select
             interface="popover"
             [value]="draft().status ?? ''"
@@ -143,19 +143,19 @@ const pageSizes = [25, 50, 100] as const;
           </ion-select>
         </ion-item>
         <ion-item>
-          <ion-label position="stacked">ID de la reserva</ion-label>
+          <ion-label position="stacked">Reservation ID</ion-label>
           <ion-input [value]="draft().reservationId ?? ''" (ionInput)="setDraft('reservationId', $event.detail.value)" />
         </ion-item>
         <ion-item>
-          <ion-label position="stacked">Desde (UTC)</ion-label>
+          <ion-label position="stacked">From UTC</ion-label>
           <ion-input [value]="draft().fromUtc ?? ''" (ionInput)="setDraft('fromUtc', $event.detail.value)" />
         </ion-item>
         <ion-item>
-          <ion-label position="stacked">Hasta (UTC)</ion-label>
+          <ion-label position="stacked">To UTC</ion-label>
           <ion-input [value]="draft().toUtc ?? ''" (ionInput)="setDraft('toUtc', $event.detail.value)" />
         </ion-item>
         <ion-item>
-          <ion-label position="stacked">Tamaño de página</ion-label>
+          <ion-label position="stacked">Page size</ion-label>
           <ion-select
             interface="popover"
             [value]="draft().pageSize"
@@ -179,7 +179,7 @@ const pageSizes = [25, 50, 100] as const;
           <app-error-state
             [title]="errorTitle()"
             [detail]="errorDetail() ?? undefined"
-            [showReintentar]="true"
+            [showRetry]="true"
             (retry)="reload()"
           />
         }
@@ -205,8 +205,8 @@ const pageSizes = [25, 50, 100] as const;
                   }
                 </div>
                 <p>Outcome: {{ payment.reservationOutcome }}</p>
-                @if (payment.providerEstado) {
-                  <p>Provider: {{ payment.providerEstado }} {{ payment.providerEstadoDetail ?? '' }}</p>
+                @if (payment.providerStatus) {
+                  <p>Provider: {{ payment.providerStatus }} {{ payment.providerStatusDetail ?? '' }}</p>
                 }
                 @if (payment.cashDeclaredAtUtc) {
                   <p>Efectivo declarado: {{ payment.cashDeclaredAtUtc }}</p>
@@ -235,7 +235,7 @@ const pageSizes = [25, 50, 100] as const;
                         [disabled]="isConfirming(payment.paymentId)"
                         (click)="cancelConfirmCash()"
                       >
-                        Cancelarar
+                        Cancelar
                       </ion-button>
                     </div>
                   } @else {
@@ -258,7 +258,7 @@ const pageSizes = [25, 50, 100] as const;
         <ion-button type="button" fill="outline" [disabled]="filters().page <= 1" (click)="previousPage()">
           Anterior
         </ion-button>
-        <ion-button type="button" fill="outline" [disabled]="!hasSiguientePage()" (click)="nextPage()">Siguiente</ion-button>
+        <ion-button type="button" fill="outline" [disabled]="!hasNextPage()" (click)="nextPage()">Siguiente</ion-button>
       </div>
     </section>
   `
@@ -290,7 +290,7 @@ export class AdminPaymentsPage {
     const state = this.state();
     return state.status === 'error' ? (state.error.detail ?? null) : null;
   });
-  protected readonly hasSiguientePage = computed(() => {
+  protected readonly hasNextPage = computed(() => {
     const page = this.page();
     return page ? page.page * page.pageSize < page.totalCount : false;
   });
@@ -344,7 +344,7 @@ export class AdminPaymentsPage {
   }
 
   nextPage(): void {
-    if (this.hasSiguientePage()) {
+    if (this.hasNextPage()) {
       this.changePage(this.filters().page + 1);
     }
   }

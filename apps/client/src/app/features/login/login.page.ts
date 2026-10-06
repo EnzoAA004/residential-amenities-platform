@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal } from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import {
@@ -50,6 +50,42 @@ import { AppErrorStateComponent } from '../../shared/error-state/app-error-state
       ion-button {
         min-height: 44px;
       }
+
+      .demo-divider {
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        align-items: center;
+        gap: var(--app-space-3);
+        margin: var(--app-space-5) 0 var(--app-space-4);
+        color: var(--ion-color-medium);
+        font-size: 0.78rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .demo-divider::before,
+      .demo-divider::after {
+        content: '';
+        height: 1px;
+        background: color-mix(in srgb, var(--ion-color-medium) 32%, transparent);
+      }
+
+      .demo-panel {
+        padding: var(--app-space-4);
+        border: 1px solid color-mix(in srgb, var(--ion-color-primary) 25%, transparent);
+        border-radius: var(--app-radius-sm);
+        background: color-mix(in srgb, var(--ion-color-primary) 6%, transparent);
+      }
+
+      .demo-panel h2 {
+        margin: 0 0 var(--app-space-2);
+        font-size: 1rem;
+      }
+
+      .demo-panel p {
+        margin: 0 0 var(--app-space-3);
+        line-height: 1.5;
+      }
     `
   ],
   template: `
@@ -92,7 +128,11 @@ import { AppErrorStateComponent } from '../../shared/error-state/app-error-state
             <app-error-state [title]="errorMessage()!" />
           }
 
-          <ion-button type="submit" expand="block" [disabled]="form.invalid || loading()">
+          <ion-button
+            type="submit"
+            expand="block"
+            [disabled]="form.invalid || loading() || demoLoading()"
+          >
             @if (loading()) {
               <ion-spinner name="dots" aria-label="Signing in" />
             } @else {
@@ -100,15 +140,43 @@ import { AppErrorStateComponent } from '../../shared/error-state/app-error-state
             }
           </ion-button>
         </form>
+
+        @if (demoAvailable()) {
+          <div class="demo-divider"><span>or</span></div>
+          <aside class="demo-panel" aria-label="Live demo access">
+            <h2>Explore the live resident demo</h2>
+            <p>
+              <ion-text color="medium">
+                No credentials required. Resident-only access with shared staging data;
+                administrator permissions are never granted.
+              </ion-text>
+            </p>
+            <ion-button
+              type="button"
+              expand="block"
+              fill="outline"
+              [disabled]="loading() || demoLoading()"
+              (click)="startDemo()"
+            >
+              @if (demoLoading()) {
+                <ion-spinner name="dots" aria-label="Opening live demo" />
+              } @else {
+                Open live demo
+              }
+            </ion-button>
+          </aside>
+        }
       </section>
     </app-shell>
   `
 })
-export class LoginPage {
+export class LoginPage implements OnInit {
   private readonly auth = inject(AuthService);
   private readonly route = inject(ActivatedRoute);
 
   readonly loading = signal(false);
+  readonly demoLoading = signal(false);
+  readonly demoAvailable = signal(false);
   readonly errorMessage = signal<string | null>(null);
   readonly form = new FormGroup({
     email: new FormControl('', {
@@ -121,6 +189,13 @@ export class LoginPage {
     })
   });
 
+  ngOnInit(): void {
+    this.auth.demoStatus().subscribe({
+      next: (enabled) => this.demoAvailable.set(enabled),
+      error: () => this.demoAvailable.set(false)
+    });
+  }
+
   get email(): FormControl<string> {
     return this.form.controls.email;
   }
@@ -130,7 +205,7 @@ export class LoginPage {
   }
 
   submit(): void {
-    if (this.form.invalid || this.loading()) {
+    if (this.form.invalid || this.loading() || this.demoLoading()) {
       this.form.markAllAsTouched();
       return;
     }
@@ -153,6 +228,27 @@ export class LoginPage {
       }
     });
   }
+
+  startDemo(): void {
+    if (!this.demoAvailable() || this.loading() || this.demoLoading()) {
+      return;
+    }
+
+    this.demoLoading.set(true);
+    this.errorMessage.set(null);
+
+    const returnUrl = this.route.snapshot.queryParamMap.get('returnUrl');
+
+    this.auth.loginDemo(returnUrl).subscribe({
+      next: () => this.demoLoading.set(false),
+      error: () => {
+        this.demoLoading.set(false);
+        this.errorMessage.set(
+          'The live demo is temporarily unavailable. Please try again.'
+        );
+      }
+    });
+  }
 }
 
 function loginErrorMessage(error: ApiError): string {
@@ -166,4 +262,3 @@ function loginErrorMessage(error: ApiError): string {
 
   return 'We could not complete sign-in. Please try again.';
 }
-

@@ -247,6 +247,11 @@ resource "azurerm_container_app" "api" {
       }
 
       env {
+        name  = "Demo__Enabled"
+        value = tostring(var.environment == "staging")
+      }
+
+      env {
         name  = "AZURE_CLIENT_ID"
         value = azurerm_user_assigned_identity.apps.client_id
       }

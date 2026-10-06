@@ -21,6 +21,11 @@ export const apiPaths = {
     checkAdmin: '/auth/check/admin'
   },
 
+  demo: {
+    status: '/demo/status',
+    session: '/demo/session'
+  },
+
   amenities: {
     listForBuilding: (buildingId: string) => `/buildings/${buildingId}/amenities`,
     availability: (amenityId: string) => `/amenities/${amenityId}/availability`

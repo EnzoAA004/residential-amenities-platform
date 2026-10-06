@@ -2,7 +2,7 @@
 
 Private-source, cloud-hosted platform for residential amenity reservations, payments and administration.
 
-> **Project status:** Backend MVP, MVP product client and Phase 6 UX/security extensions are implemented and covered by CI (issues #3-#27, #44-#55, #62, #66, #76-#80, #87-#94 and #103). Discovery/business-policy issue #2 is closed. Phase 7 cloud engineering is now implemented as code (containers + Azure/Terraform + deployment workflow), while the first real Azure staging apply remains intentionally gated behind credentials and cost approval.
+> **Project status:** Backend MVP, MVP product client and Phase 6 UX/security extensions are implemented and covered by CI (issues #3-#27, #44-#55, #62, #66, #76-#80, #87-#94 and #103). Discovery/business-policy issue #2 is closed. Phase 7 cloud engineering is running in Azure staging: Terraform-managed infrastructure, OIDC delivery, ACR image pushes, Container Apps revisions and end-to-end smoke checks are all validated.
 > **Pilot scope:** one residential building with 10 units (1A–5B).
 > **Product direction:** architecture prepared to evolve into a multi-building SaaS without expanding the MVP beyond what the pilot needs.
 
@@ -10,8 +10,14 @@ Private-source, cloud-hosted platform for residential amenity reservations, paym
 
 - **Backend (`apps/api`):** identity/RBAC (Resident, Administrator), building/unit/membership, amenities and availability, shared/exclusive leisure and event reservations, server-authoritative pricing with historical snapshots, concurrency control (advisory locks, holds, expiration), Mercado Pago payments, cash payments, an append-only audit trail, and administrative operations (reservation/payment queries, cancel, reschedule, pricing, availability, event slots). Backend and full-stack validation are green in CI.
 - **Client (`apps/client`):** Angular + Ionic product client through Phase 5: authentication/session guards, resident amenity browsing, leisure/event reservation creation, Mercado Pago and cash payment flows, resident reservation history/detail, administrator dashboards/operations/configuration/audit/manual-review views, shared error handling and frontend hardening. See [the completed MVP client backlog](docs/12-roadmap/backlog-mvp-client.md).
-- **Cloud/DevOps:** local Docker Compose + GitHub Actions CI are implemented. Phase 7 now includes production Dockerfiles, Azure/Terraform IaC, private PostgreSQL networking, managed-identity Blob Storage, persistent Data Protection keys, Terraform validation and a manual OIDC-based staging deployment workflow. No Azure resources have been applied yet; a real staging deployment still requires Azure credentials, remote-state bootstrap and explicit cost approval.
+- **Cloud/DevOps:** local Docker Compose + GitHub Actions CI are implemented. Phase 7 is deployed to Azure staging with production Dockerfiles, Terraform IaC, private PostgreSQL networking, managed-identity Blob Storage, persistent Data Protection keys, ACR, Container Apps, remote Terraform state and a manual OIDC-based deployment workflow. Apply builds/pushes versioned images, deploys revisions and validates the public client plus proxied API with smoke checks.
 - **Business decisions (issue #2):** building-operation policy is closed for MVP/pilot scope. See [DEC-014](docs/01-discovery/decision-log.md) and [DEC-015](docs/01-discovery/decision-log.md): pilot pricing (Event = ARS 5,000 flat inclusive of SUM/Pool/Barbecue, Leisure = free), Event time windows, no Shared Leisure capacity cap, the Event cancellation window, incident/damage reporting in place of a fixed fine schedule, Pool/Barbecue never independently bookable, Administrator-created resident onboarding, 24-hour pending-payment hold, and Administrator-only cash receipt confirmation. Decisions are applied as configuration/server-side policy, not client hardcoding. Full-day reservations (OQ-003) remain deferred, and the refund/financial consequence of a late/disallowed Event cancellation remains an explicit deferred follow-up rather than invented behavior.
+
+## Public staging demo
+
+The Azure staging environment supports a deliberately limited one-click resident demo. When `Demo:Enabled=true` (staging only), startup seeds the deterministic pilot catalog plus a passwordless `Demo Resident` bound to unit `1A`. `POST /api/demo/session` creates a non-persistent cookie session for that resident; the account is never granted `Administrator`.
+
+The login UI discovers availability through `GET /api/demo/status` and exposes **Open live demo** only when the backend enables it. The deployment workflow also verifies the demo end to end: session creation, `/api/auth/me`, resident role/membership and an explicit `403` on the administrator authorization probe.
 
 ## Goals
 

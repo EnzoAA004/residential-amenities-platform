@@ -95,11 +95,11 @@ type AmenitiesLoadState =
         @if (memberships().length > 1) {
           <div class="building-selector">
             <ion-item>
-              <ion-label id="building-selector-label">Building</ion-label>
+              <ion-label id="building-selector-label">Edificio</ion-label>
               <ion-select
                 aria-labelledby="building-selector-label"
                 interface="popover"
-                placeholder="Choose a building"
+                placeholder="Elegí un edificio"
                 [value]="residentContext.activeBuildingId()"
                 (ionChange)="onBuildingChange($event)"
               >
@@ -117,7 +117,7 @@ type AmenitiesLoadState =
           @switch (amenitiesState().status) {
             @case ('loading') {
               <p aria-live="polite">
-                <ion-spinner name="dots" /> <ion-text color="medium">Loading amenities…</ion-text>
+                <ion-spinner name="dots" /> <ion-text color="medium">Cargando amenities…</ion-text>
               </p>
             }
             @case ('empty') {
@@ -129,7 +129,7 @@ type AmenitiesLoadState =
               <p role="alert">
                 <ion-text color="danger">{{ amenitiesErrorTitle() }}</ion-text>
               </p>
-              <ion-button type="button" fill="outline" (click)="retryAmenities()">Retry</ion-button>
+              <ion-button type="button" fill="outline" (click)="retryAmenities()">Reintentar</ion-button>
             }
             @case ('success') {
               <ul class="amenity-list" role="list">
@@ -145,10 +145,10 @@ type AmenitiesLoadState =
                       <ion-text color="medium">{{ amenity.kind }}</ion-text>
                       <div class="amenity-card__badges">
                         @if (amenity.allowsSharedUse) {
-                          <ion-badge color="medium">Shared use</ion-badge>
+                          <ion-badge color="medium">Uso compartido</ion-badge>
                         }
                         @if (amenity.allowsExclusiveUse) {
-                          <ion-badge color="medium">Exclusive use</ion-badge>
+                          <ion-badge color="medium">Uso exclusivo</ion-badge>
                         }
                       </div>
                     </button>

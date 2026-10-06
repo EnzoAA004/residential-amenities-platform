@@ -140,9 +140,9 @@ const RESERVATION_OUTCOME_EXPLANATIONS: Record<Payment['reservationOutcome'], st
         @case ('success') {
           <section class="payment-card">
             <dl>
-              <dt>Reservation</dt>
+              <dt>Reserva</dt>
               <dd>{{ reservation()!.useType }}</dd>
-              <dt>Status</dt>
+              <dt>Estado</dt>
               <dd>{{ reservation()!.status }}</dd>
               <dt>Total</dt>
               <dd>{{ formatAmount(reservation()!.totalAmount, reservation()!.currency) }}</dd>

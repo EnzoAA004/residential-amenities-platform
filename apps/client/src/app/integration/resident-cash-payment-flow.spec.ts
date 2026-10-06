@@ -173,7 +173,7 @@ describe('resident cash payment flow (integration)', () => {
     harness.fixture.detectChanges();
 
     const afterCreateText = harness.routeNativeElement!.textContent!;
-    expect(afterCreateText).toContain('Reservation hold created');
+    expect(afterCreateText).toContain('Reserva creada');
     expect(afterCreateText).toContain('Pending');
 
     // --- 3. Navigate to the payment page and declare cash ----------------------

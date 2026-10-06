@@ -307,7 +307,7 @@ describe('AdminPaymentsPage', () => {
       await harness.fixture.whenStable();
       harness.detectChanges();
 
-      expect(text(harness)).toContain('Outcome: ApprovedAfterExpiry');
+      expect(text(harness)).toContain('Resultado: ApprovedAfterExpiry');
       expect(text(harness)).toContain('Requiere revisión administrativa');
       expect(text(harness)).not.toContain('Confirmar efectivo');
     });

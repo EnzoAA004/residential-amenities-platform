@@ -60,8 +60,8 @@ describe('LoginPage', () => {
     const text = fixture.nativeElement.textContent as string;
     const inputs = fixture.nativeElement.querySelectorAll('ion-input');
 
-    expect(text).toContain('Email');
-    expect(text).toContain('Password');
+    expect(text).toContain('Correo electrónico');
+    expect(text).toContain('Contraseña');
     expect(inputs[0].getAttribute('type')).toBe('email');
     expect(inputs[0].getAttribute('autocomplete')).toBe('username');
     expect(inputs[1].getAttribute('type')).toBe('password');
@@ -90,7 +90,7 @@ describe('LoginPage', () => {
   it('submits credentials with the internal returnUrl', () => {
     fixture.componentInstance.form.setValue({
       email: 'resident@example.test',
-      password: 'Test!Password123'
+      password: 'Test!Contraseña123'
     });
 
     fixture.componentInstance.submit();
@@ -98,7 +98,7 @@ describe('LoginPage', () => {
     expect(auth.login).toHaveBeenCalledWith(
       {
         email: 'resident@example.test',
-        password: 'Test!Password123'
+        password: 'Test!Contraseña123'
       },
       '/reservations'
     );
@@ -110,7 +110,7 @@ describe('LoginPage', () => {
     auth.login.mockReturnValue(pending.asObservable());
     fixture.componentInstance.form.setValue({
       email: 'resident@example.test',
-      password: 'Test!Password123'
+      password: 'Test!Contraseña123'
     });
 
     fixture.componentInstance.submit();
@@ -142,7 +142,7 @@ describe('LoginPage', () => {
     fixture.detectChanges();
 
     const text = fixture.nativeElement.textContent as string;
-    expect(text).toContain('We could not sign you in with those credentials.');
+    expect(text).toContain('No pudimos iniciar sesión con esas credenciales.');
     expect(text).not.toContain('email does not exist');
     expect(text).not.toContain('missing@example.test');
   });
@@ -156,7 +156,7 @@ describe('LoginPage', () => {
     );
     fixture.componentInstance.form.setValue({
       email: 'resident@example.test',
-      password: 'Test!Password123'
+      password: 'Test!Contraseña123'
     });
 
     fixture.componentInstance.submit();

@@ -16,7 +16,7 @@ import { AppShellComponent } from '../../layout/app-shell/app-shell.component';
   standalone: true,
   imports: [AppShellComponent, IonButton, IonButtons, IonText, RouterLink],
   template: `
-    <app-shell title="Amenities residenciales">
+    <app-shell title="Espacios comunes">
       @if (currentUser(); as user) {
         <ion-buttons shell-actions slot="end">
           <ion-text color="medium" class="landing-user">{{ user.displayName }}</ion-text>
@@ -38,7 +38,7 @@ import { AppShellComponent } from '../../layout/app-shell/app-shell.component';
         </p>
       }
       <p>
-        <ion-button routerLink="/amenities">Ver amenities</ion-button>
+        <ion-button routerLink="/amenities">Ver espacios comunes</ion-button>
       </p>
     </app-shell>
   `,

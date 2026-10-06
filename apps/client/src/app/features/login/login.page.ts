@@ -89,16 +89,16 @@ import { AppErrorStateComponent } from '../../shared/error-state/app-error-state
     `
   ],
   template: `
-    <app-shell title="Sign in">
+    <app-shell title="Iniciar sesión">
       <section class="login-card">
-        <h1>Sign in</h1>
+        <h1>Iniciar sesión</h1>
         <p>
-          <ion-text color="medium">Use your resident or administrator account.</ion-text>
+          <ion-text color="medium">Usá tu cuenta de residente o administrador.</ion-text>
         </p>
 
         <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
           <ion-item>
-            <ion-label position="stacked">Email</ion-label>
+            <ion-label position="stacked">Correo electrónico</ion-label>
             <ion-input
               formControlName="email"
               type="email"
@@ -108,11 +108,11 @@ import { AppErrorStateComponent } from '../../shared/error-state/app-error-state
             />
           </ion-item>
           @if (email.invalid && (email.dirty || email.touched)) {
-            <ion-note color="danger">Enter a valid email address.</ion-note>
+            <ion-note color="danger">Ingresá un correo electrónico válido.</ion-note>
           }
 
           <ion-item>
-            <ion-label position="stacked">Password</ion-label>
+            <ion-label position="stacked">Contraseña</ion-label>
             <ion-input
               formControlName="password"
               type="password"
@@ -121,7 +121,7 @@ import { AppErrorStateComponent } from '../../shared/error-state/app-error-state
             />
           </ion-item>
           @if (password.invalid && (password.dirty || password.touched)) {
-            <ion-note color="danger">Enter your password.</ion-note>
+            <ion-note color="danger">Ingresá tu contraseña.</ion-note>
           }
 
           @if (errorMessage()) {
@@ -134,21 +134,21 @@ import { AppErrorStateComponent } from '../../shared/error-state/app-error-state
             [disabled]="form.invalid || loading() || demoLoading()"
           >
             @if (loading()) {
-              <ion-spinner name="dots" aria-label="Signing in" />
+              <ion-spinner name="dots" aria-label="Iniciando sesión" />
             } @else {
-              Sign in
+              Iniciar sesión
             }
           </ion-button>
         </form>
 
         @if (demoAvailable()) {
-          <div class="demo-divider"><span>or</span></div>
-          <aside class="demo-panel" aria-label="Live demo access">
-            <h2>Explore the live resident demo</h2>
+          <div class="demo-divider"><span>o</span></div>
+          <aside class="demo-panel" aria-label="Acceso a demo en vivo">
+            <h2>Explorá la demo de residente</h2>
             <p>
               <ion-text color="medium">
-                No credentials required. Resident-only access with shared staging data;
-                administrator permissions are never granted.
+                No requiere credenciales. El acceso es solo como residente con datos compartidos de staging;
+                nunca se otorgan permisos de administrador.
               </ion-text>
             </p>
             <ion-button
@@ -159,9 +159,9 @@ import { AppErrorStateComponent } from '../../shared/error-state/app-error-state
               (click)="startDemo()"
             >
               @if (demoLoading()) {
-                <ion-spinner name="dots" aria-label="Opening live demo" />
+                <ion-spinner name="dots" aria-label="Abriendo demo" />
               } @else {
-                Open live demo
+                Abrir demo
               }
             </ion-button>
           </aside>
@@ -244,7 +244,7 @@ export class LoginPage implements OnInit {
       error: () => {
         this.demoLoading.set(false);
         this.errorMessage.set(
-          'The live demo is temporarily unavailable. Please try again.'
+          'La demo en vivo no está disponible temporalmente. Intentá nuevamente.'
         );
       }
     });
@@ -253,12 +253,12 @@ export class LoginPage implements OnInit {
 
 function loginErrorMessage(error: ApiError): string {
   if (error.status === 401) {
-    return 'We could not sign you in with those credentials.';
+    return 'No pudimos iniciar sesión con esas credenciales.';
   }
 
   if (error.status === 0 || error.status >= 500) {
-    return 'The sign-in service is unavailable. Please try again.';
+    return 'El servicio de inicio de sesión no está disponible. Intentá nuevamente.';
   }
 
-  return 'We could not complete sign-in. Please try again.';
+  return 'No pudimos completar el inicio de sesión. Intentá nuevamente.';
 }

@@ -40,7 +40,7 @@ describe('LandingPage', () => {
     const text = fixture.nativeElement.textContent as string;
 
     expect(text).toContain('Bienvenido, Resident One');
-    expect(text).toContain('Active memberships: Pilot Building 3A');
+    expect(text).toContain('Membresías activas: Pilot Building 3A');
     expect(text).toContain('Cerrar sesión');
     expect(text).toContain('Ver amenities');
     expect(text).not.toContain('Check API');

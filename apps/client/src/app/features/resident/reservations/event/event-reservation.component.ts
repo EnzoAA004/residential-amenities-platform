@@ -143,7 +143,7 @@ type CreateState =
               <dt>Add-ons</dt>
               <dd>{{ confirmedAddOnNames().join(', ') }}</dd>
             }
-            <dt>Status</dt>
+            <dt>Estado</dt>
             <dd>{{ createStatus.reservation.status }}</dd>
             <dt>Total</dt>
             <dd>{{ formatAmount(createStatus.reservation.totalAmount, createStatus.reservation.currency) }}</dd>
@@ -247,7 +247,7 @@ type CreateState =
 
           @if (selectedSlot()) {
             <ion-button type="submit" fill="outline" [disabled]="quoteState().status === 'loading'">
-              {{ quoteState().status === 'loading' ? 'Cotizando…' : 'Get quote' }}
+              {{ quoteState().status === 'loading' ? 'Cotizando…' : 'Cotizar' }}
             </ion-button>
           }
         </form>
@@ -285,7 +285,7 @@ type CreateState =
             (click)="create()"
             [disabled]="createStatus.status === 'creating' || createStatus.status === 'unknown'"
           >
-            {{ createStatus.status === 'creating' ? 'Creating…' : 'Confirm reservation' }}
+            {{ createStatus.status === 'creating' ? 'Creando…' : 'Confirmar reserva' }}
           </ion-button>
         }
 

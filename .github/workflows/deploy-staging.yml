@@ -160,6 +160,34 @@ jobs:
             --image "${{ steps.infra.outputs.acr_login }}/residential-api:${{ github.sha }}" \
             --output none
 
+      - name: Configure private staging administrator
+        if: "${{ inputs.action == 'apply' }}"
+        env:
+          STAGING_ADMIN_EMAIL: "admin@resamen.local"
+          STAGING_ADMIN_PASSWORD: "${{ secrets.STAGING_ADMIN_PASSWORD }}"
+        run: |
+          if [ -z "$STAGING_ADMIN_PASSWORD" ]; then
+            echo "Missing staging environment secret STAGING_ADMIN_PASSWORD."
+            echo "Create it in GitHub > Settings > Environments > staging > Environment secrets."
+            exit 1
+          fi
+
+          az containerapp secret set \
+            --resource-group "${{ steps.infra.outputs.resource_group }}" \
+            --name "${{ steps.infra.outputs.api_app }}" \
+            --secrets "staging-admin-password=$STAGING_ADMIN_PASSWORD" \
+            --output none
+
+          az containerapp update \
+            --resource-group "${{ steps.infra.outputs.resource_group }}" \
+            --name "${{ steps.infra.outputs.api_app }}" \
+            --set-env-vars \
+              "StagingAdmin__Enabled=true" \
+              "StagingAdmin__Email=$STAGING_ADMIN_EMAIL" \
+              "StagingAdmin__DisplayName=Administrador" \
+              "StagingAdmin__Password=secretref:staging-admin-password" \
+            --output none
+
       - name: Deploy client revision
         if: "${{ inputs.action == 'apply' }}"
         run: |
@@ -210,6 +238,44 @@ jobs:
             --tail 80 || true
           exit 1
 
+
+      - name: Smoke check private staging administrator
+        if: "${{ inputs.action == 'apply' }}"
+        env:
+          STAGING_ADMIN_EMAIL: "admin@resamen.local"
+          STAGING_ADMIN_PASSWORD: "${{ secrets.STAGING_ADMIN_PASSWORD }}"
+        run: |
+          CLIENT_URL="${{ steps.infra.outputs.client_url }}"
+          COOKIE_JAR="$(mktemp)"
+          LOGIN_BODY="$(mktemp)"
+          trap 'rm -f "$COOKIE_JAR" "$LOGIN_BODY"' EXIT
+
+          jq -n \
+            --arg email "$STAGING_ADMIN_EMAIL" \
+            --arg password "$STAGING_ADMIN_PASSWORD" \
+            '{email: $email, password: $password}' > "$LOGIN_BODY"
+
+          curl --fail --silent --show-error \
+            --cookie-jar "$COOKIE_JAR" \
+            --header "Content-Type: application/json" \
+            --data-binary "@$LOGIN_BODY" \
+            --request POST \
+            "$CLIENT_URL/api/auth/login?useCookies=true" \
+            --output /dev/null
+
+          ADMIN_USER="$(curl --fail --silent --show-error \
+            --cookie "$COOKIE_JAR" \
+            "$CLIENT_URL/api/auth/me")"
+
+          printf '%s' "$ADMIN_USER" | grep -q "\"email\":\"$STAGING_ADMIN_EMAIL\""
+          printf '%s' "$ADMIN_USER" | grep -q '"Administrator"'
+
+          curl --fail --silent --show-error \
+            --cookie "$COOKIE_JAR" \
+            "$CLIENT_URL/api/auth/check/admin" \
+            --output /dev/null
+
+          echo "Private staging administrator login passed."
 
       - name: Smoke check resident demo session
         if: "${{ inputs.action == 'apply' }}"

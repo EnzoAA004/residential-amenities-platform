@@ -37,19 +37,19 @@ function isProblemDetailsBody(value: unknown): value is ProblemDetailsBody {
 function defaultTitleFor(status: number): string {
   switch (status) {
     case 400:
-      return 'This request is invalid.';
+      return 'La solicitud no es válida.';
     case 401:
-      return 'You need to sign in to continue.';
+      return 'Tenés que iniciar sesión para continuar.';
     case 403:
-      return 'You do not have access to this resource.';
+      return 'No tenés acceso a este recurso.';
     case 404:
-      return 'The requested resource was not found.';
+      return 'No se encontró el recurso solicitado.';
     case 409:
-      return 'This action conflicts with the current state.';
+      return 'Esta acción entra en conflicto con el estado actual.';
     case 422:
-      return 'This request could not be processed.';
+      return 'No se pudo procesar la solicitud.';
     default:
-      return 'Something went wrong. Please try again.';
+      return 'Ocurrió un error. Intentá nuevamente.';
   }
 }
 
@@ -62,7 +62,7 @@ export function toApiError(error: unknown): ApiError {
   if (!(error instanceof HttpErrorResponse)) {
     return {
       status: 0,
-      title: 'Something went wrong. Please try again.'
+      title: 'Ocurrió un error. Intentá nuevamente.'
     };
   }
 
@@ -71,7 +71,7 @@ export function toApiError(error: unknown): ApiError {
   if (error.status === 0) {
     return {
       status: 0,
-      title: 'Could not reach the server. Check your connection and try again.'
+      title: 'No pudimos conectarnos con el servidor. Revisá tu conexión e intentá nuevamente.'
     };
   }
 

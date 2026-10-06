@@ -101,11 +101,11 @@ const pageSizes = [25, 50, 100] as const;
 
       <form class="admin-filters" (submit)="applyFilters($event)">
         <ion-item>
-          <ion-label position="stacked">Building ID</ion-label>
+          <ion-label position="stacked">ID del edificio</ion-label>
           <ion-input [value]="draft().buildingId ?? ''" (ionInput)="setDraft('buildingId', $event.detail.value)" />
         </ion-item>
         <ion-item>
-          <ion-label position="stacked">Method</ion-label>
+          <ion-label position="stacked">Método</ion-label>
           <ion-select
             interface="popover"
             [value]="draft().method ?? ''"
@@ -118,7 +118,7 @@ const pageSizes = [25, 50, 100] as const;
           </ion-select>
         </ion-item>
         <ion-item>
-          <ion-label position="stacked">Status</ion-label>
+          <ion-label position="stacked">Estado</ion-label>
           <ion-select
             interface="popover"
             [value]="draft().status ?? ''"
@@ -131,7 +131,7 @@ const pageSizes = [25, 50, 100] as const;
           </ion-select>
         </ion-item>
         <ion-item>
-          <ion-label position="stacked">Manual review</ion-label>
+          <ion-label position="stacked">Revisión manual</ion-label>
           <ion-select
             interface="popover"
             [value]="manualReviewValue()"
@@ -143,19 +143,19 @@ const pageSizes = [25, 50, 100] as const;
           </ion-select>
         </ion-item>
         <ion-item>
-          <ion-label position="stacked">Reservation ID</ion-label>
+          <ion-label position="stacked">ID de reserva</ion-label>
           <ion-input [value]="draft().reservationId ?? ''" (ionInput)="setDraft('reservationId', $event.detail.value)" />
         </ion-item>
         <ion-item>
-          <ion-label position="stacked">From UTC</ion-label>
+          <ion-label position="stacked">Desde (UTC)</ion-label>
           <ion-input [value]="draft().fromUtc ?? ''" (ionInput)="setDraft('fromUtc', $event.detail.value)" />
         </ion-item>
         <ion-item>
-          <ion-label position="stacked">To UTC</ion-label>
+          <ion-label position="stacked">Hasta (UTC)</ion-label>
           <ion-input [value]="draft().toUtc ?? ''" (ionInput)="setDraft('toUtc', $event.detail.value)" />
         </ion-item>
         <ion-item>
-          <ion-label position="stacked">Page size</ion-label>
+          <ion-label position="stacked">Tamaño de página</ion-label>
           <ion-select
             interface="popover"
             [value]="draft().pageSize"
@@ -199,14 +199,14 @@ const pageSizes = [25, 50, 100] as const;
                 <div class="admin-card__meta">
                   <span>{{ payment.amount }} {{ payment.currency }}</span>
                   <span>{{ payment.createdAtUtc }}</span>
-                  <span>Reservation {{ payment.reservationId }}</span>
+                  <span>Reserva {{ payment.reservationId }}</span>
                   @if (payment.requiresManualReview) {
                     <ion-text color="warning">Requiere revisión administrativa</ion-text>
                   }
                 </div>
-                <p>Outcome: {{ payment.reservationOutcome }}</p>
+                <p>Resultado: {{ payment.reservationOutcome }}</p>
                 @if (payment.providerStatus) {
-                  <p>Provider: {{ payment.providerStatus }} {{ payment.providerStatusDetail ?? '' }}</p>
+                  <p>Proveedor: {{ payment.providerStatus }} {{ payment.providerStatusDetail ?? '' }}</p>
                 }
                 @if (payment.cashDeclaredAtUtc) {
                   <p>Efectivo declarado: {{ payment.cashDeclaredAtUtc }}</p>

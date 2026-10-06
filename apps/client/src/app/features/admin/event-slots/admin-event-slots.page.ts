@@ -88,11 +88,11 @@ function toInputTime(wire: string): string {
   ],
   template: `
     <section aria-labelledby="admin-event-slots-title">
-      <h1 id="admin-event-slots-title">Turnos de Event</h1>
+      <h1 id="admin-event-slots-title">Turnos de eventos</h1>
 
       <form class="admin-lookup" (submit)="load($event)">
         <ion-item>
-          <ion-label position="stacked">Building ID</ion-label>
+          <ion-label position="stacked">ID del edificio</ion-label>
           <ion-input [value]="draftBuildingId()" (ionInput)="draftBuildingId.set($event.detail.value ?? '')" />
         </ion-item>
         <ion-button type="submit">Cargar</ion-button>
@@ -100,7 +100,7 @@ function toInputTime(wire: string): string {
 
       @switch (listState().status) {
         @case ('idle') {
-          <p><ion-text color="medium">Ingresá un Building ID para ver sus turnos.</ion-text></p>
+          <p><ion-text color="medium">Ingresá un ID de edificio para ver sus turnos.</ion-text></p>
         }
         @case ('loading') {
           <p aria-live="polite">
@@ -257,7 +257,7 @@ export class AdminEventSlotsPage {
     const buildingId = this.draftBuildingId().trim();
 
     if (!buildingId) {
-      this.listState.set({ status: 'error', error: { status: 0, title: 'El Building ID es requerido.' } });
+      this.listState.set({ status: 'error', error: { status: 0, title: 'El ID del edificio es requerido.' } });
       return;
     }
 

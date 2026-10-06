@@ -112,11 +112,11 @@ function toInputTime(wire: string): string {
 
       <form class="admin-lookup" (submit)="load($event)">
         <ion-item>
-          <ion-label position="stacked">Building ID</ion-label>
+          <ion-label position="stacked">ID del edificio</ion-label>
           <ion-input [value]="draftBuildingId()" (ionInput)="draftBuildingId.set($event.detail.value ?? '')" />
         </ion-item>
         <ion-item>
-          <ion-label position="stacked">Amenity ID</ion-label>
+          <ion-label position="stacked">ID del espacio</ion-label>
           <ion-input [value]="draftAmenityId()" (ionInput)="draftAmenityId.set($event.detail.value ?? '')" />
         </ion-item>
         <ion-button type="submit">Cargar</ion-button>
@@ -124,7 +124,7 @@ function toInputTime(wire: string): string {
 
       @switch (configState().status) {
         @case ('idle') {
-          <p><ion-text color="medium">Ingresá Building ID y Amenity ID para cargar su configuración.</ion-text></p>
+          <p><ion-text color="medium">Ingresá el ID del edificio y el ID del espacio para cargar su configuración.</ion-text></p>
         }
         @case ('loading') {
           <p aria-live="polite">
@@ -319,7 +319,7 @@ export class AdminAvailabilityPage {
     if (!buildingId || !amenityId) {
       this.configState.set({
         status: 'error',
-        error: { status: 0, title: 'Building ID y Amenity ID son requeridos.' }
+        error: { status: 0, title: 'El ID del edificio y el ID del espacio son requeridos.' }
       });
       return;
     }

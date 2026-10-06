@@ -130,14 +130,14 @@ describe('EventReservationComponent', () => {
   it('shows no functional Event flow when the base SUM does not allow exclusive use', () => {
     createFixture(sumNotExclusive, [sumNotExclusive]);
 
-    expect(fixture.nativeElement.textContent).toContain('Este SUM no admite reservas de tipo Event.');
+    expect(fixture.nativeElement.textContent).toContain('Este SUM no admite reservas de eventos.');
     httpMock.expectNone(() => true);
   });
 
   it('offers the Event flow when the base SUM allows exclusive use', () => {
     createFixture(sumExclusive, [sumExclusive]);
 
-    expect(fixture.nativeElement.textContent).not.toContain('no admite reservas de tipo Event');
+    expect(fixture.nativeElement.textContent).not.toContain('no admite reservas de eventos');
   });
 
   it('derives add-on candidates from Pool/Barbecue amenities that allow exclusive use, excluding the base and ineligible amenities', () => {
@@ -617,7 +617,7 @@ describe('EventReservationComponent', () => {
       fixture.detectChanges();
 
       expect(component.createState()).toEqual({ status: 'idle' });
-      expect(fixture.nativeElement.textContent).not.toContain('Event reservation hold created');
+      expect(fixture.nativeElement.textContent).not.toContain('Reserva de evento creada');
     }
   );
 

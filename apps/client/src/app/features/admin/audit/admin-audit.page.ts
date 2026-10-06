@@ -98,11 +98,11 @@ const pageSizes = [25, 50, 100] as const;
 
       <form class="admin-filters" (submit)="applyFilters($event)">
         <ion-item>
-          <ion-label position="stacked">Building ID</ion-label>
+          <ion-label position="stacked">ID del edificio</ion-label>
           <ion-input [value]="draft().buildingId ?? ''" (ionInput)="setDraft('buildingId', $event.detail.value)" />
         </ion-item>
         <ion-item>
-          <ion-label position="stacked">Actor user ID</ion-label>
+          <ion-label position="stacked">ID de usuario del actor</ion-label>
           <ion-input [value]="draft().actorUserId ?? ''" (ionInput)="setDraft('actorUserId', $event.detail.value)" />
         </ion-item>
         <ion-item>
@@ -119,7 +119,7 @@ const pageSizes = [25, 50, 100] as const;
           </ion-select>
         </ion-item>
         <ion-item>
-          <ion-label position="stacked">Target type</ion-label>
+          <ion-label position="stacked">Tipo de objetivo</ion-label>
           <ion-select
             interface="popover"
             [value]="draft().targetType ?? ''"
@@ -132,19 +132,19 @@ const pageSizes = [25, 50, 100] as const;
           </ion-select>
         </ion-item>
         <ion-item>
-          <ion-label position="stacked">Target ID</ion-label>
+          <ion-label position="stacked">ID del objetivo</ion-label>
           <ion-input [value]="draft().targetId ?? ''" (ionInput)="setDraft('targetId', $event.detail.value)" />
         </ion-item>
         <ion-item>
-          <ion-label position="stacked">From UTC</ion-label>
+          <ion-label position="stacked">Desde (UTC)</ion-label>
           <ion-input [value]="draft().fromUtc ?? ''" (ionInput)="setDraft('fromUtc', $event.detail.value)" />
         </ion-item>
         <ion-item>
-          <ion-label position="stacked">To UTC</ion-label>
+          <ion-label position="stacked">Hasta (UTC)</ion-label>
           <ion-input [value]="draft().toUtc ?? ''" (ionInput)="setDraft('toUtc', $event.detail.value)" />
         </ion-item>
         <ion-item>
-          <ion-label position="stacked">Page size</ion-label>
+          <ion-label position="stacked">Tamaño de página</ion-label>
           <ion-select
             interface="popover"
             [value]="draft().pageSize"
@@ -188,9 +188,9 @@ const pageSizes = [25, 50, 100] as const;
                 <div class="admin-card__meta">
                   <span>{{ item.occurredAtUtc }}</span>
                   <span>Actor: {{ item.actorType }}{{ item.actorUserId ? ' · ' + item.actorUserId : '' }}</span>
-                  <span>Target: {{ item.targetType }}{{ item.targetId ? ' · ' + item.targetId : '' }}</span>
+                  <span>Objetivo: {{ item.targetType }}{{ item.targetId ? ' · ' + item.targetId : '' }}</span>
                   @if (item.buildingId) {
-                    <span>Building: {{ item.buildingId }}</span>
+                    <span>Edificio: {{ item.buildingId }}</span>
                   }
                   @if (item.correlationId) {
                     <span>Correlation: {{ item.correlationId }}</span>

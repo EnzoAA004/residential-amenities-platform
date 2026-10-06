@@ -16,30 +16,29 @@ import { AppShellComponent } from '../../layout/app-shell/app-shell.component';
   standalone: true,
   imports: [AppShellComponent, IonButton, IonButtons, IonText, RouterLink],
   template: `
-    <app-shell title="Residential Amenities">
+    <app-shell title="Espacios comunes">
       @if (currentUser(); as user) {
         <ion-buttons shell-actions slot="end">
           <ion-text color="medium" class="landing-user">{{ user.displayName }}</ion-text>
           <ion-button type="button" fill="clear" (click)="logout()" [disabled]="loggingOut">
-            {{ loggingOut ? 'Signing out…' : 'Sign out' }}
+            {{ loggingOut ? 'Cerrando sesión…' : 'Cerrar sesión' }}
           </ion-button>
         </ion-buttons>
       }
 
-      <h1>Welcome, {{ displayName() }}</h1>
+      <h1>Bienvenido, {{ displayName() }}</h1>
       <p>
-        Your web session is active. Reservation, payment and admin workflows
-        will arrive in the next product slices.
+        Tu sesión está activa. Desde acá podés acceder a reservas, pagos y funciones administrativas.
       </p>
       @if (memberships().length > 0) {
         <p>
           <ion-text color="medium">
-            Active memberships: {{ membershipLabels() }}
+            Membresías activas: {{ membershipLabels() }}
           </ion-text>
         </p>
       }
       <p>
-        <ion-button routerLink="/amenities">View amenities</ion-button>
+        <ion-button routerLink="/amenities">Ver espacios comunes</ion-button>
       </p>
     </app-shell>
   `,
@@ -70,7 +69,7 @@ export class LandingPage {
   loggingOut = false;
 
   displayName(): string {
-    return this.session.currentUser()?.displayName ?? 'there';
+    return this.session.currentUser()?.displayName ?? 'usuario';
   }
 
   membershipLabels(): string {

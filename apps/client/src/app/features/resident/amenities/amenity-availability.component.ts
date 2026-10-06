@@ -111,24 +111,24 @@ interface AvailabilityRequest {
       }
 
       <ion-button type="submit" [disabled]="state().status === 'loading'">
-        {{ state().status === 'loading' ? 'Loading…' : 'View availability' }}
+        {{ state().status === 'loading' ? 'Cargando…' : 'Ver disponibilidad' }}
       </ion-button>
     </form>
 
     <ion-text color="medium" class="availability-disclaimer">
-      This shows the amenity's base schedule according to its configuration.
-      Final availability is validated when you confirm a reservation.
+      Esto muestra el horario base del espacio según su configuración.
+      La disponibilidad final se valida al confirmar una reserva.
     </ion-text>
 
     @switch (state().status) {
       @case ('idle') {
         <p>
-          <ion-text color="medium">Choose a range and view its availability.</ion-text>
+          <ion-text color="medium">Elegí un rango y consultá su disponibilidad.</ion-text>
         </p>
       }
       @case ('loading') {
         <p aria-live="polite">
-          <ion-spinner name="dots" /> <ion-text color="medium">Loading availability…</ion-text>
+          <ion-spinner name="dots" /> <ion-text color="medium">Cargando disponibilidad…</ion-text>
         </p>
       }
       @case ('empty') {
@@ -140,7 +140,7 @@ interface AvailabilityRequest {
         <p aria-live="assertive">
           <ion-text color="danger">{{ errorTitle() }}</ion-text>
         </p>
-        <ion-button type="button" fill="outline" (click)="search()">Retry</ion-button>
+        <ion-button type="button" fill="outline" (click)="search()">Reintentar</ion-button>
       }
       @case ('success') {
         <div aria-live="polite">

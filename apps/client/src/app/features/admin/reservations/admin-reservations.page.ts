@@ -82,11 +82,11 @@ const pageSizes = [25, 50, 100] as const;
 
       <form class="admin-filters" (submit)="applyFilters($event)">
         <ion-item>
-          <ion-label position="stacked">Building ID</ion-label>
+          <ion-label position="stacked">ID del edificio</ion-label>
           <ion-input [value]="draft().buildingId ?? ''" (ionInput)="setDraft('buildingId', $event.detail.value)" />
         </ion-item>
         <ion-item>
-          <ion-label position="stacked">Status</ion-label>
+          <ion-label position="stacked">Estado</ion-label>
           <ion-select
             interface="popover"
             [value]="draft().status ?? ''"
@@ -99,7 +99,7 @@ const pageSizes = [25, 50, 100] as const;
           </ion-select>
         </ion-item>
         <ion-item>
-          <ion-label position="stacked">Use type</ion-label>
+          <ion-label position="stacked">Tipo de uso</ion-label>
           <ion-select
             interface="popover"
             [value]="draft().useType ?? ''"
@@ -112,11 +112,11 @@ const pageSizes = [25, 50, 100] as const;
           </ion-select>
         </ion-item>
         <ion-item>
-          <ion-label position="stacked">From UTC</ion-label>
+          <ion-label position="stacked">Desde (UTC)</ion-label>
           <ion-input [value]="draft().fromUtc ?? ''" (ionInput)="setDraft('fromUtc', $event.detail.value)" />
         </ion-item>
         <ion-item>
-          <ion-label position="stacked">To UTC</ion-label>
+          <ion-label position="stacked">Hasta (UTC)</ion-label>
           <ion-input [value]="draft().toUtc ?? ''" (ionInput)="setDraft('toUtc', $event.detail.value)" />
         </ion-item>
         <ion-item>
@@ -124,7 +124,7 @@ const pageSizes = [25, 50, 100] as const;
           <ion-input [value]="draft().membershipId ?? ''" (ionInput)="setDraft('membershipId', $event.detail.value)" />
         </ion-item>
         <ion-item>
-          <ion-label position="stacked">Page size</ion-label>
+          <ion-label position="stacked">Tamaño de página</ion-label>
           <ion-select
             interface="popover"
             [value]="draft().pageSize"
@@ -170,7 +170,7 @@ const pageSizes = [25, 50, 100] as const;
                   }
                 </div>
                 <p>
-                  <ion-text color="medium">Building {{ item.reservation.buildingId }}</ion-text>
+                  <ion-text color="medium">Edificio {{ item.reservation.buildingId }}</ion-text>
                 </p>
                 <ion-button [routerLink]="['/admin/reservations', item.reservation.reservationId]" fill="outline">
                   Ver detalle

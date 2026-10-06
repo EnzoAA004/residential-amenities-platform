@@ -126,24 +126,24 @@ type CreateState =
   template: `
     @if (!baseAllowsExclusiveUse()) {
       <p>
-        <ion-text color="medium">Este SUM no admite reservas de tipo Event.</ion-text>
+        <ion-text color="medium">Este SUM no admite reservas de eventos.</ion-text>
       </p>
     } @else if (createState(); as createStatus) {
       @if (createStatus.status === 'created') {
         <section class="confirmation-card" aria-live="polite">
-          <h3>Event reservation hold created</h3>
+          <h3>Reserva de evento creada</h3>
           <dl>
-            <dt>Amenity</dt>
+            <dt>Espacio</dt>
             <dd>{{ baseAmenityName() }}</dd>
-            <dt>Date</dt>
+            <dt>Fecha</dt>
             <dd>{{ formattedSelectedDate() }}</dd>
-            <dt>Slot</dt>
+            <dt>Turno</dt>
             <dd>{{ confirmedSlotName() }}</dd>
             @if (confirmedAddOnNames().length > 0) {
-              <dt>Add-ons</dt>
+              <dt>Adicionales</dt>
               <dd>{{ confirmedAddOnNames().join(', ') }}</dd>
             }
-            <dt>Status</dt>
+            <dt>Estado</dt>
             <dd>{{ createStatus.reservation.status }}</dd>
             <dt>Total</dt>
             <dd>{{ formatAmount(createStatus.reservation.totalAmount, createStatus.reservation.currency) }}</dd>
@@ -187,12 +187,12 @@ type CreateState =
             @switch (slotsState().status) {
               @case ('loading') {
                 <p aria-live="polite">
-                  <ion-spinner name="dots" /> <ion-text color="medium">Loading slots…</ion-text>
+                  <ion-spinner name="dots" /> <ion-text color="medium">Cargando turnos…</ion-text>
                 </p>
               }
               @case ('empty') {
                 <p>
-                  <ion-text color="medium">No hay franjas Event configuradas para esta fecha.</ion-text>
+                  <ion-text color="medium">No hay turnos de evento configurados para esta fecha.</ion-text>
                 </p>
               }
               @case ('error') {
@@ -206,7 +206,7 @@ type CreateState =
               }
               @case ('success') {
                 <fieldset>
-                  <legend>Slot</legend>
+                  <legend>Turno</legend>
                   <div class="slot-options" role="list">
                     @for (slot of slotsList(); track slot.id) {
                       <button
@@ -229,7 +229,7 @@ type CreateState =
 
           @if (eligibleAddOns().length > 0) {
             <fieldset>
-              <legend>Add-ons (optional)</legend>
+              <legend>Adicionales (opcionales)</legend>
               <div class="addon-options">
                 @for (addOn of eligibleAddOns(); track addOn.id) {
                   <label class="addon-option">
@@ -247,7 +247,7 @@ type CreateState =
 
           @if (selectedSlot()) {
             <ion-button type="submit" fill="outline" [disabled]="quoteState().status === 'loading'">
-              {{ quoteState().status === 'loading' ? 'Cotizando…' : 'Get quote' }}
+              {{ quoteState().status === 'loading' ? 'Cotizando…' : 'Cotizar' }}
             </ion-button>
           }
         </form>
@@ -285,7 +285,7 @@ type CreateState =
             (click)="create()"
             [disabled]="createStatus.status === 'creating' || createStatus.status === 'unknown'"
           >
-            {{ createStatus.status === 'creating' ? 'Creating…' : 'Confirm reservation' }}
+            {{ createStatus.status === 'creating' ? 'Creando…' : 'Confirmar reserva' }}
           </ion-button>
         }
 

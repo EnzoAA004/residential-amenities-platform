@@ -95,7 +95,7 @@ describe('AmenitiesPage', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    expect(fixture.nativeElement.textContent).toContain('Este edificio no tiene amenities activas.');
+    expect(fixture.nativeElement.textContent).toContain('Este edificio no tiene espacios comunes activos.');
   });
 
   it('renders amenities on success and lets the resident select one', async () => {

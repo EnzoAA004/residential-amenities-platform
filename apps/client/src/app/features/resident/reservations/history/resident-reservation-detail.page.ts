@@ -78,7 +78,7 @@ const OUTCOME_EXPLANATIONS: Record<ResidentReservationPayment['reservationOutcom
               <ion-text color="danger">{{ detail }}</ion-text>
             }
           </p>
-          <ion-button type="button" fill="outline" (click)="reloadDetail()">Retry</ion-button>
+          <ion-button type="button" fill="outline" (click)="reloadDetail()">Reintentar</ion-button>
         }
         @case ('success') {
           @if (reservation(); as reservation) {
@@ -129,7 +129,7 @@ const OUTCOME_EXPLANATIONS: Record<ResidentReservationPayment['reservationOutcom
             </section>
 
             <section class="detail-card">
-              <h3>Snapshot de precio</h3>
+              <h3>Detalle de precio</h3>
               <dl>
                 @for (line of reservation.priceLines; track line.amenityId + line.componentType) {
                   <dt>{{ line.componentType }}</dt>

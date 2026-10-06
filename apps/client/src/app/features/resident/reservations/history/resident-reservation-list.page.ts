@@ -89,13 +89,13 @@ type ReservationListState =
         @if (memberships().length > 1) {
           <div class="building-selector">
             <ion-item>
-              <ion-label id="reservation-building-selector-label">Edificio</ion-label>
+              <ion-label id="reservation-building-selector-label">Building</ion-label>
               <ion-select
                 aria-labelledby="reservation-building-selector-label"
                 interface="popover"
-                placeholder="Elegí un edificio"
+                placeholder="Choose a building"
                 [value]="residentContext.activeMembership()?.buildingId"
-                (ionChange)="onEdificioChange($event)"
+                (ionChange)="onBuildingChange($event)"
               >
                 @for (membership of memberships(); track membership.buildingId) {
                   <ion-select-option [value]="membership.buildingId">
@@ -129,7 +129,7 @@ type ReservationListState =
                   <ion-text color="danger">{{ detail }}</ion-text>
                 }
               </p>
-              <ion-button type="button" fill="outline" (click)="retryReservations()">Reintentar</ion-button>
+              <ion-button type="button" fill="outline" (click)="retryReservations()">Retry</ion-button>
             }
             @case ('success') {
               <ul class="reservation-list" role="list">
@@ -245,10 +245,10 @@ export class ResidentReservationListPage {
     });
   }
 
-  onEdificioChange(event: CustomEvent<{ value: string }>): void {
+  onBuildingChange(event: CustomEvent<{ value: string }>): void {
     const buildingId = event.detail.value;
     if (buildingId) {
-      this.residentContext.selectEdificio(buildingId);
+      this.residentContext.selectBuilding(buildingId);
     }
   }
 

@@ -132,7 +132,7 @@ const USE_TYPE_LABELS: Record<LeisureUseType, string> = {
             <dd>{{ formatDateTime(createStatus.reservation.startsAtUtc) }}</dd>
             <dt>To</dt>
             <dd>{{ formatDateTime(createStatus.reservation.endsAtUtc) }}</dd>
-            <dt>Status</dt>
+            <dt>Estado</dt>
             <dd>{{ createStatus.reservation.status }}</dd>
             <dt>Total</dt>
             <dd>{{ formatAmount(createStatus.reservation.totalAmount, createStatus.reservation.currency) }}</dd>
@@ -217,7 +217,7 @@ const USE_TYPE_LABELS: Record<LeisureUseType, string> = {
             }
 
             <ion-button type="submit" fill="outline" [disabled]="quoteState().status === 'loading'">
-              {{ quoteState().status === 'loading' ? 'Cotizando…' : 'Get quote' }}
+              {{ quoteState().status === 'loading' ? 'Cotizando…' : 'Cotizar' }}
             </ion-button>
           </form>
 
@@ -275,7 +275,7 @@ const USE_TYPE_LABELS: Record<LeisureUseType, string> = {
               (click)="create()"
               [disabled]="createStatus.status === 'creating' || createStatus.status === 'unknown'"
             >
-              {{ createStatus.status === 'creating' ? 'Creating…' : 'Confirm reservation' }}
+              {{ createStatus.status === 'creating' ? 'Creando…' : 'Confirmar reserva' }}
             </ion-button>
           }
 

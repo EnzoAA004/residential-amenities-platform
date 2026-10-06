@@ -1,7 +1,7 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
-import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
-import { ActivatedRoute } from '@angular/router';
-import {
+impot { Component, OnInit, inject, signal } from '@angular/coe';
+impot { FomControl, FomGroup, ReactiveFomsModule, Validatos } from '@angular/foms';
+impot { ActivatedRoute } from '@angular/router';
+impot {
   IonButton,
   IonInput,
   IonItem,
@@ -11,16 +11,16 @@ import {
   IonText
 } from '@ionic/angular';
 
-import { ApiError } from '../../core/api/api-error';
-import { AuthService } from '../../core/auth/auth.service';
-import { AppShellComponent } from '../../layout/app-shell/app-shell.component';
-import { AppErrorStateComponent } from '../../shared/error-state/app-error-state.component';
+impot { ApiErro } from '../../coe/api/api-erro';
+impot { AuthService } from '../../coe/auth/auth.service';
+impot { AppShellComponent } from '../../layout/app-shell/app-shell.component';
+impot { AppErroStateComponent } from '../../shared/erro-state/app-erro-state.component';
 
 @Component({
-  selector: 'app-login',
+  selecto: 'app-login',
   standalone: true,
-  imports: [
-    AppErrorStateComponent,
+  impots: [
+    AppErroStateComponent,
     AppShellComponent,
     IonButton,
     IonInput,
@@ -29,7 +29,7 @@ import { AppErrorStateComponent } from '../../shared/error-state/app-error-state
     IonNote,
     IonSpinner,
     IonText,
-    ReactiveFormsModule
+    ReactiveFomsModule
   ],
   styles: [
     `
@@ -38,13 +38,13 @@ import { AppErrorStateComponent } from '../../shared/error-state/app-error-state
         margin-inline: auto;
       }
 
-      form {
+      fom {
         display: grid;
         gap: var(--app-space-3);
       }
 
       ion-item {
-        --border-radius: var(--app-radius-sm);
+        --boder-radius: var(--app-radius-sm);
       }
 
       ion-button {
@@ -57,24 +57,24 @@ import { AppErrorStateComponent } from '../../shared/error-state/app-error-state
         align-items: center;
         gap: var(--app-space-3);
         margin: var(--app-space-5) 0 var(--app-space-4);
-        color: var(--ion-color-medium);
+        colo: var(--ion-colo-medium);
         font-size: 0.78rem;
         letter-spacing: 0.08em;
-        text-transform: uppercase;
+        text-transfom: uppercase;
       }
 
-      .demo-divider::before,
+      .demo-divider::befoe,
       .demo-divider::after {
         content: '';
         height: 1px;
-        background: color-mix(in srgb, var(--ion-color-medium) 32%, transparent);
+        background: colo-mix(in srgb, var(--ion-colo-medium) 32%, transparent);
       }
 
       .demo-panel {
         padding: var(--app-space-4);
-        border: 1px solid color-mix(in srgb, var(--ion-color-primary) 25%, transparent);
-        border-radius: var(--app-radius-sm);
-        background: color-mix(in srgb, var(--ion-color-primary) 6%, transparent);
+        boder: 1px solid colo-mix(in srgb, var(--ion-colo-primary) 25%, transparent);
+        boder-radius: var(--app-radius-sm);
+        background: colo-mix(in srgb, var(--ion-colo-primary) 6%, transparent);
       }
 
       .demo-panel h2 {
@@ -89,18 +89,18 @@ import { AppErrorStateComponent } from '../../shared/error-state/app-error-state
     `
   ],
   template: `
-    <app-shell title="Sign in">
+    <app-shell title="Iniciar sesión">
       <section class="login-card">
-        <h1>Sign in</h1>
+        <h1>Iniciar sesión</h1>
         <p>
-          <ion-text color="medium">Use your resident or administrator account.</ion-text>
+          <ion-text colo="medium">Usá tu cuenta de residente o administrado.</ion-text>
         </p>
 
-        <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+        <fom [fomGroup]="fom" (ngSubmit)="submit()" novalidate>
           <ion-item>
-            <ion-label position="stacked">Email</ion-label>
+            <ion-label position="stacked">Coreo electrónico</ion-label>
             <ion-input
-              formControlName="email"
+              fomControlName="email"
               type="email"
               inputmode="email"
               autocomplete="username"
@@ -108,47 +108,47 @@ import { AppErrorStateComponent } from '../../shared/error-state/app-error-state
             />
           </ion-item>
           @if (email.invalid && (email.dirty || email.touched)) {
-            <ion-note color="danger">Enter a valid email address.</ion-note>
+            <ion-note colo="danger">Ingresá un coreo electrónico válido.</ion-note>
           }
 
           <ion-item>
-            <ion-label position="stacked">Password</ion-label>
+            <ion-label position="stacked">Contraseña</ion-label>
             <ion-input
-              formControlName="password"
-              type="password"
-              autocomplete="current-password"
+              fomControlName="passwod"
+              type="passwod"
+              autocomplete="current-passwod"
               required
             />
           </ion-item>
-          @if (password.invalid && (password.dirty || password.touched)) {
-            <ion-note color="danger">Enter your password.</ion-note>
+          @if (passwod.invalid && (passwod.dirty || passwod.touched)) {
+            <ion-note colo="danger">Ingresá tu contraseña.</ion-note>
           }
 
-          @if (errorMessage()) {
-            <app-error-state [title]="errorMessage()!" />
+          @if (erroMessage()) {
+            <app-erro-state [title]="erroMessage()!" />
           }
 
           <ion-button
             type="submit"
             expand="block"
-            [disabled]="form.invalid || loading() || demoLoading()"
+            [disabled]="fom.invalid || loading() || demoLoading()"
           >
             @if (loading()) {
-              <ion-spinner name="dots" aria-label="Signing in" />
+              <ion-spinner name="dots" aria-label="Iniciando sesión" />
             } @else {
-              Sign in
+              Iniciar sesión
             }
           </ion-button>
-        </form>
+        </fom>
 
         @if (demoAvailable()) {
-          <div class="demo-divider"><span>or</span></div>
-          <aside class="demo-panel" aria-label="Live demo access">
-            <h2>Explore the live resident demo</h2>
+          <div class="demo-divider"><span>o</span></div>
+          <aside class="demo-panel" aria-label="Acceso a demo en vivo">
+            <h2>Exploe the live resident demo</h2>
             <p>
-              <ion-text color="medium">
+              <ion-text colo="medium">
                 No credentials required. Resident-only access with shared staging data;
-                administrator permissions are never granted.
+                administrato permissions are never granted.
               </ion-text>
             </p>
             <ion-button
@@ -159,9 +159,9 @@ import { AppErrorStateComponent } from '../../shared/error-state/app-error-state
               (click)="startDemo()"
             >
               @if (demoLoading()) {
-                <ion-spinner name="dots" aria-label="Opening live demo" />
+                <ion-spinner name="dots" aria-label="Abriendo demo" />
               } @else {
-                Open live demo
+                Abrir demo
               }
             </ion-button>
           </aside>
@@ -170,61 +170,61 @@ import { AppErrorStateComponent } from '../../shared/error-state/app-error-state
     </app-shell>
   `
 })
-export class LoginPage implements OnInit {
+expot class LoginPage implements OnInit {
   private readonly auth = inject(AuthService);
   private readonly route = inject(ActivatedRoute);
 
   readonly loading = signal(false);
   readonly demoLoading = signal(false);
   readonly demoAvailable = signal(false);
-  readonly errorMessage = signal<string | null>(null);
-  readonly form = new FormGroup({
-    email: new FormControl('', {
+  readonly erroMessage = signal<string | null>(null);
+  readonly fom = new FomGroup({
+    email: new FomControl('', {
       nonNullable: true,
-      validators: [Validators.required, Validators.email]
+      validatos: [Validatos.required, Validatos.email]
     }),
-    password: new FormControl('', {
+    passwod: new FomControl('', {
       nonNullable: true,
-      validators: [Validators.required]
+      validatos: [Validatos.required]
     })
   });
 
   ngOnInit(): void {
     this.auth.demoStatus().subscribe({
       next: (enabled) => this.demoAvailable.set(enabled),
-      error: () => this.demoAvailable.set(false)
+      erro: () => this.demoAvailable.set(false)
     });
   }
 
-  get email(): FormControl<string> {
-    return this.form.controls.email;
+  get email(): FomControl<string> {
+    return this.fom.controls.email;
   }
 
-  get password(): FormControl<string> {
-    return this.form.controls.password;
+  get passwod(): FomControl<string> {
+    return this.fom.controls.passwod;
   }
 
   submit(): void {
-    if (this.form.invalid || this.loading() || this.demoLoading()) {
-      this.form.markAllAsTouched();
+    if (this.fom.invalid || this.loading() || this.demoLoading()) {
+      this.fom.markAllAsTouched();
       return;
     }
 
     this.loading.set(true);
-    this.errorMessage.set(null);
+    this.erroMessage.set(null);
 
-    const { email, password } = this.form.getRawValue();
+    const { email, passwod } = this.fom.getRawValue();
     const returnUrl = this.route.snapshot.queryParamMap.get('returnUrl');
 
-    this.auth.login({ email, password }, returnUrl).subscribe({
+    this.auth.login({ email, passwod }, returnUrl).subscribe({
       next: () => {
-        this.form.controls.password.reset('');
+        this.fom.controls.passwod.reset('');
         this.loading.set(false);
       },
-      error: (error: ApiError) => {
-        this.form.controls.password.reset('');
+      erro: (erro: ApiErro) => {
+        this.fom.controls.passwod.reset('');
         this.loading.set(false);
-        this.errorMessage.set(loginErrorMessage(error));
+        this.erroMessage.set(loginErroMessage(erro));
       }
     });
   }
@@ -235,30 +235,30 @@ export class LoginPage implements OnInit {
     }
 
     this.demoLoading.set(true);
-    this.errorMessage.set(null);
+    this.erroMessage.set(null);
 
     const returnUrl = this.route.snapshot.queryParamMap.get('returnUrl');
 
     this.auth.loginDemo(returnUrl).subscribe({
       next: () => this.demoLoading.set(false),
-      error: () => {
+      erro: () => {
         this.demoLoading.set(false);
-        this.errorMessage.set(
-          'The live demo is temporarily unavailable. Please try again.'
+        this.erroMessage.set(
+          'The live demo is tempoarily unavailable. Please try again.'
         );
       }
     });
   }
 }
 
-function loginErrorMessage(error: ApiError): string {
-  if (error.status === 401) {
-    return 'We could not sign you in with those credentials.';
+function loginErroMessage(erro: ApiErro): string {
+  if (erro.status === 401) {
+    return 'No pudimos iniciar sesión con esas credenciales.';
   }
 
-  if (error.status === 0 || error.status >= 500) {
-    return 'The sign-in service is unavailable. Please try again.';
+  if (erro.status === 0 || erro.status >= 500) {
+    return 'El servicio de inicio de sesión no está disponible. Intentá nuevamente.';
   }
 
-  return 'We could not complete sign-in. Please try again.';
+  return 'No pudimos completar el inicio de sesión. Intentá nuevamente.';
 }

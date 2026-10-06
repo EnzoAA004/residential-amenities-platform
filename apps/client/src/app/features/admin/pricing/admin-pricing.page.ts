@@ -132,11 +132,11 @@ function emptyDraft(): CreateDraft {
 
       <form class="admin-filters" (submit)="applyFilters($event)">
         <ion-item>
-          <ion-label position="stacked">Building ID (requerido)</ion-label>
+          <ion-label position="stacked">ID del edificio (requerido)</ion-label>
           <ion-input [value]="draftBuildingId()" (ionInput)="draftBuildingId.set($event.detail.value ?? '')" />
         </ion-item>
         <ion-item>
-          <ion-label position="stacked">Amenity ID (opcional)</ion-label>
+          <ion-label position="stacked">ID del amenity (opcional)</ion-label>
           <ion-input [value]="draftAmenityId()" (ionInput)="draftAmenityId.set($event.detail.value ?? '')" />
         </ion-item>
         <ion-item>
@@ -148,7 +148,7 @@ function emptyDraft(): CreateDraft {
           />
         </ion-item>
         <ion-item>
-          <ion-label position="stacked">Page size</ion-label>
+          <ion-label position="stacked">Tamaño de página</ion-label>
           <ion-select
             interface="popover"
             [value]="draftPageSize()"
@@ -224,11 +224,11 @@ function emptyDraft(): CreateDraft {
 
       <form class="admin-create" (submit)="submitCreate($event)">
         <ion-item>
-          <ion-label position="stacked">Building ID</ion-label>
+          <ion-label position="stacked">ID del edificio</ion-label>
           <ion-input [value]="createDraft().buildingId" (ionInput)="setCreateField('buildingId', $event.detail.value)" />
         </ion-item>
         <ion-item>
-          <ion-label position="stacked">Amenity ID</ion-label>
+          <ion-label position="stacked">ID del amenity</ion-label>
           <ion-input [value]="createDraft().amenityId" (ionInput)="setCreateField('amenityId', $event.detail.value)" />
         </ion-item>
         <ion-item>

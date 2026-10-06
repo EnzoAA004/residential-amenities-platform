@@ -101,6 +101,11 @@ if (builder.Configuration.GetValue<bool>("Demo:Enabled") &&
     await app.Services.SeedDemoDataAsync();
 }
 
+if (app.Environment.IsStaging())
+{
+    await app.Services.SeedStagingAdministratorAsync(builder.Configuration);
+}
+
 app.MapIdentityEndpoints();
 app.MapDemoEndpoints();
 app.MapInvitationEndpoints();

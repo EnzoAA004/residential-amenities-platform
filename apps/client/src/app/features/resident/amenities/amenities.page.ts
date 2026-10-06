@@ -95,13 +95,13 @@ type AmenitiesLoadState =
         @if (memberships().length > 1) {
           <div class="building-selector">
             <ion-item>
-              <ion-label id="building-selector-label">Edificio</ion-label>
+              <ion-label id="building-selector-label">Building</ion-label>
               <ion-select
                 aria-labelledby="building-selector-label"
                 interface="popover"
-                placeholder="Elegí un edificio"
-                [value]="residentContext.activeEdificioId()"
-                (ionChange)="onEdificioChange($event)"
+                placeholder="Choose a building"
+                [value]="residentContext.activeBuildingId()"
+                (ionChange)="onBuildingChange($event)"
               >
                 @for (membership of memberships(); track membership.buildingId) {
                   <ion-select-option [value]="membership.buildingId">
@@ -113,11 +113,11 @@ type AmenitiesLoadState =
           </div>
         }
 
-        @if (residentContext.activeEdificioId(); as buildingId) {
+        @if (residentContext.activeBuildingId(); as buildingId) {
           @switch (amenitiesState().status) {
             @case ('loading') {
               <p aria-live="polite">
-                <ion-spinner name="dots" /> <ion-text color="medium">Cargando amenities…</ion-text>
+                <ion-spinner name="dots" /> <ion-text color="medium">Loading amenities…</ion-text>
               </p>
             }
             @case ('empty') {
@@ -129,7 +129,7 @@ type AmenitiesLoadState =
               <p role="alert">
                 <ion-text color="danger">{{ amenitiesErrorTitle() }}</ion-text>
               </p>
-              <ion-button type="button" fill="outline" (click)="retryAmenities()">Reintentar</ion-button>
+              <ion-button type="button" fill="outline" (click)="retryAmenities()">Retry</ion-button>
             }
             @case ('success') {
               <ul class="amenity-list" role="list">
@@ -145,10 +145,10 @@ type AmenitiesLoadState =
                       <ion-text color="medium">{{ amenity.kind }}</ion-text>
                       <div class="amenity-card__badges">
                         @if (amenity.allowsSharedUse) {
-                          <ion-badge color="medium">Uso compartido</ion-badge>
+                          <ion-badge color="medium">Shared use</ion-badge>
                         }
                         @if (amenity.allowsExclusiveUse) {
-                          <ion-badge color="medium">Uso exclusivo</ion-badge>
+                          <ion-badge color="medium">Exclusive use</ion-badge>
                         }
                       </div>
                     </button>
@@ -182,15 +182,15 @@ export class AmenitiesPage {
 
   protected readonly amenitiesState = toSignal(
     merge(
-      toObservable(this.residentContext.activeEdificioId),
-      this.retrySubject.pipe(map(() => this.residentContext.activeEdificioId()))
+      toObservable(this.residentContext.activeBuildingId),
+      this.retrySubject.pipe(map(() => this.residentContext.activeBuildingId()))
     ).pipe(
       switchMap((buildingId) => {
         if (!buildingId) {
           return of<AmenitiesLoadState>({ status: 'idle' });
         }
 
-        return this.amenitiesService.listForEdificio(buildingId).pipe(
+        return this.amenitiesService.listForBuilding(buildingId).pipe(
           map((amenities): AmenitiesLoadState =>
             amenities.length > 0 ? { status: 'success', amenities } : { status: 'empty' }
           ),
@@ -217,15 +217,15 @@ export class AmenitiesPage {
     // amenity selected under the previous building — never carries a stale
     // amenity/availability context across buildings.
     effect(() => {
-      this.residentContext.activeEdificioId();
+      this.residentContext.activeBuildingId();
       untracked(() => this.selectedAmenity.set(null));
     });
   }
 
-  onEdificioChange(event: CustomEvent<{ value: string }>): void {
+  onBuildingChange(event: CustomEvent<{ value: string }>): void {
     const buildingId = event.detail.value;
     if (buildingId) {
-      this.residentContext.selectEdificio(buildingId);
+      this.residentContext.selectBuilding(buildingId);
     }
   }
 

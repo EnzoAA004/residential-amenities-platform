@@ -17,7 +17,7 @@ type ReplaceState =
   | { status: 'saving' }
   | { status: 'error'; error: ApiError };
 
-type PeriodCrearState =
+type PeriodCreateState =
   | { status: 'idle' }
   | { status: 'creating' }
   | { status: 'error'; error: ApiError };
@@ -112,11 +112,11 @@ function toInputTime(wire: string): string {
 
       <form class="admin-lookup" (submit)="load($event)">
         <ion-item>
-          <ion-label position="stacked">ID del edificio</ion-label>
+          <ion-label position="stacked">Building ID</ion-label>
           <ion-input [value]="draftBuildingId()" (ionInput)="draftBuildingId.set($event.detail.value ?? '')" />
         </ion-item>
         <ion-item>
-          <ion-label position="stacked">ID del amenity</ion-label>
+          <ion-label position="stacked">Amenity ID</ion-label>
           <ion-input [value]="draftAmenityId()" (ionInput)="draftAmenityId.set($event.detail.value ?? '')" />
         </ion-item>
         <ion-button type="submit">Cargar</ion-button>
@@ -124,7 +124,7 @@ function toInputTime(wire: string): string {
 
       @switch (configState().status) {
         @case ('idle') {
-          <p><ion-text color="medium">Ingresá ID del edificio y ID del amenity para cargar su configuración.</ion-text></p>
+          <p><ion-text color="medium">Ingresá Building ID y Amenity ID para cargar su configuración.</ion-text></p>
         }
         @case ('loading') {
           <p aria-live="polite">
@@ -245,13 +245,13 @@ function toInputTime(wire: string): string {
               <app-error-state [title]="error" />
             }
 
-            <ion-button type="submit" [disabled]="periodCrearState().status === 'creating'">
-              {{ periodCrearState().status === 'creating' ? 'Creando…' : 'Agregar período' }}
+            <ion-button type="submit" [disabled]="periodCreateState().status === 'creating'">
+              {{ periodCreateState().status === 'creating' ? 'Creando…' : 'Agregar período' }}
             </ion-button>
           </form>
 
-          @if (periodCrearState().status === 'error') {
-            <app-error-state [title]="periodCrearErrorTitle()" [detail]="periodCrearErrorDetail() ?? undefined" />
+          @if (periodCreateState().status === 'error') {
+            <app-error-state [title]="periodCreateErrorTitle()" [detail]="periodCreateErrorDetail() ?? undefined" />
           }
         }
       }
@@ -301,13 +301,13 @@ export class AdminAvailabilityPage {
 
   readonly periodDraft = signal({ startsAtUtc: '', endsAtUtc: '', reason: '' });
   protected readonly periodValidationError = signal<string | null>(null);
-  protected readonly periodCrearState = signal<PeriodCrearState>({ status: 'idle' });
-  protected readonly periodCrearErrorTitle = computed(() => {
-    const state = this.periodCrearState();
+  protected readonly periodCreateState = signal<PeriodCreateState>({ status: 'idle' });
+  protected readonly periodCreateErrorTitle = computed(() => {
+    const state = this.periodCreateState();
     return state.status === 'error' ? state.error.title : '';
   });
-  protected readonly periodCrearErrorDetail = computed(() => {
-    const state = this.periodCrearState();
+  protected readonly periodCreateErrorDetail = computed(() => {
+    const state = this.periodCreateState();
     return state.status === 'error' ? (state.error.detail ?? null) : null;
   });
 
@@ -319,7 +319,7 @@ export class AdminAvailabilityPage {
     if (!buildingId || !amenityId) {
       this.configState.set({
         status: 'error',
-        error: { status: 0, title: 'ID del edificio y ID del amenity son requeridos.' }
+        error: { status: 0, title: 'Building ID y Amenity ID son requeridos.' }
       });
       return;
     }
@@ -334,7 +334,7 @@ export class AdminAvailabilityPage {
     this.replaceState.set({ status: 'idle' });
     this.replaceValidationError.set(null);
     this.deleteError.set(null);
-    this.periodCrearState.set({ status: 'idle' });
+    this.periodCreateState.set({ status: 'idle' });
     this.periodValidationError.set(null);
 
     this.admin.getAvailability(this.amenityId, this.buildingId).subscribe({
@@ -432,7 +432,7 @@ export class AdminAvailabilityPage {
   submitPeriod(event: Event): void {
     event.preventDefault();
 
-    if (this.periodCrearState().status === 'creating') {
+    if (this.periodCreateState().status === 'creating') {
       return;
     }
 
@@ -452,7 +452,7 @@ export class AdminAvailabilityPage {
     }
 
     this.periodValidationError.set(null);
-    this.periodCrearState.set({ status: 'creating' });
+    this.periodCreateState.set({ status: 'creating' });
 
     this.admin
       .createUnavailablePeriod(this.amenityId, {
@@ -463,11 +463,11 @@ export class AdminAvailabilityPage {
       })
       .subscribe({
         next: () => {
-          this.periodCrearState.set({ status: 'idle' });
+          this.periodCreateState.set({ status: 'idle' });
           this.periodDraft.set({ startsAtUtc: '', endsAtUtc: '', reason: '' });
           this.fetch();
         },
-        error: (error: ApiError) => this.periodCrearState.set({ status: 'error', error })
+        error: (error: ApiError) => this.periodCreateState.set({ status: 'error', error })
       });
   }
 

@@ -86,7 +86,7 @@ type AmenitiesLoadState =
     `
   ],
   template: `
-    <app-shell title="Amenities">
+    <app-shell title="Espacios comunes">
       @if (residentContext.hasNoMembership()) {
         <p>
           <ion-text color="medium">No tenés una membresía residencial activa disponible.</ion-text>
@@ -117,12 +117,12 @@ type AmenitiesLoadState =
           @switch (amenitiesState().status) {
             @case ('loading') {
               <p aria-live="polite">
-                <ion-spinner name="dots" /> <ion-text color="medium">Cargando amenities…</ion-text>
+                <ion-spinner name="dots" /> <ion-text color="medium">Cargando espacios…</ion-text>
               </p>
             }
             @case ('empty') {
               <p>
-                <ion-text color="medium">Este edificio no tiene amenities activas.</ion-text>
+                <ion-text color="medium">Este edificio no tiene espacios comunes activos.</ion-text>
               </p>
             }
             @case ('error') {

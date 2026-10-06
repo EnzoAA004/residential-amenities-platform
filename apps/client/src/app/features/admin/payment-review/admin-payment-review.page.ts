@@ -36,7 +36,7 @@ const pageSizes = [25, 50, 100] as const;
  */
 const MANUAL_REVIEW_OUTCOME_EXPLANATIONS: Record<string, string> = {
   ApprovedAfterExpiry: 'El pago se acreditó después de que venciera el plazo de la reserva.',
-  ApprovedForCancelledReservation: 'El pago se acreditó pero la reserva ya estaba cancelada.',
+  ApprovedForCancelarledReservation: 'El pago se acreditó pero la reserva ya estaba cancelada.',
   ApprovedForMissingReservation: 'El pago se acreditó pero no se encontró la reserva asociada.'
 };
 
@@ -106,19 +106,19 @@ const MANUAL_REVIEW_OUTCOME_EXPLANATIONS: Record<string, string> = {
 
       <form class="admin-filters" (submit)="applyFilters($event)">
         <ion-item>
-          <ion-label position="stacked">Building ID</ion-label>
+          <ion-label position="stacked">ID del edificio</ion-label>
           <ion-input [value]="draft().buildingId ?? ''" (ionInput)="setDraft('buildingId', $event.detail.value)" />
         </ion-item>
         <ion-item>
-          <ion-label position="stacked">Reservation ID</ion-label>
+          <ion-label position="stacked">ID de la reserva</ion-label>
           <ion-input [value]="draft().reservationId ?? ''" (ionInput)="setDraft('reservationId', $event.detail.value)" />
         </ion-item>
         <ion-item>
-          <ion-label position="stacked">From UTC</ion-label>
+          <ion-label position="stacked">Desde (UTC)</ion-label>
           <ion-input [value]="draft().fromUtc ?? ''" (ionInput)="setDraft('fromUtc', $event.detail.value)" />
         </ion-item>
         <ion-item>
-          <ion-label position="stacked">To UTC</ion-label>
+          <ion-label position="stacked">Hasta (UTC)</ion-label>
           <ion-input [value]="draft().toUtc ?? ''" (ionInput)="setDraft('toUtc', $event.detail.value)" />
         </ion-item>
         <ion-button type="submit">Aplicar</ion-button>
@@ -178,7 +178,7 @@ const MANUAL_REVIEW_OUTCOME_EXPLANATIONS: Record<string, string> = {
         <ion-button type="button" fill="outline" [disabled]="filters().page <= 1" (click)="previousPage()">
           Anterior
         </ion-button>
-        <ion-button type="button" fill="outline" [disabled]="!hasNextPage()" (click)="nextPage()">Siguiente</ion-button>
+        <ion-button type="button" fill="outline" [disabled]="!hasSiguientePage()" (click)="nextPage()">Siguiente</ion-button>
       </div>
     </section>
   `
@@ -205,7 +205,7 @@ export class AdminPaymentReviewPage {
     const state = this.state();
     return state.status === 'error' ? (state.error.detail ?? null) : null;
   });
-  protected readonly hasNextPage = computed(() => {
+  protected readonly hasSiguientePage = computed(() => {
     const page = this.page();
     return page ? page.page * page.pageSize < page.totalCount : false;
   });
@@ -250,7 +250,7 @@ export class AdminPaymentReviewPage {
   }
 
   nextPage(): void {
-    if (this.hasNextPage()) {
+    if (this.hasSiguientePage()) {
       this.changePage(this.filters().page + 1);
     }
   }

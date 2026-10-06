@@ -92,7 +92,7 @@ function toInputTime(wire: string): string {
 
       <form class="admin-lookup" (submit)="load($event)">
         <ion-item>
-          <ion-label position="stacked">Building ID</ion-label>
+          <ion-label position="stacked">ID del edificio</ion-label>
           <ion-input [value]="draftBuildingId()" (ionInput)="draftBuildingId.set($event.detail.value ?? '')" />
         </ion-item>
         <ion-button type="submit">Cargar</ion-button>

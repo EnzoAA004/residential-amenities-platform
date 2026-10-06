@@ -116,8 +116,8 @@ interface AvailabilityRequest {
     </form>
 
     <ion-text color="medium" class="availability-disclaimer">
-      Esto muestra el horario base del amenity según su configuración.
-      Final availability is validated when you confirm a reservation.
+      Esto muestra el horario base del espacio según su configuración.
+      La disponibilidad final se valida al confirmar una reserva.
     </ion-text>
 
     @switch (state().status) {

@@ -106,7 +106,7 @@ describe('AdminEventSlotsPage', () => {
         isOvernight: false,
         isActive: true
       },
-      { status: 201, statusText: 'Created' }
+      { status: 201, statusText: 'Creard' }
     );
 
     httpMock.expectOne('/api/admin/buildings/building-1/event-slots').flush([activeSlot, inactiveSlot]);

@@ -164,7 +164,7 @@ function emptyDraft(): CreateDraft {
 
       @switch (listState().status) {
         @case ('idle') {
-          <p><ion-text color="medium">Ingresá un Building ID y buscá para ver las reglas.</ion-text></p>
+          <p><ion-text color="medium">Ingresá un ID de edificio y buscá para ver las reglas.</ion-text></p>
         }
         @case ('loading') {
           <p aria-live="polite">
@@ -404,7 +404,7 @@ export class AdminPricingPage {
     if (!buildingId) {
       this.listState.set({
         status: 'error',
-        error: { status: 0, title: 'El Building ID es requerido para buscar reglas.' }
+        error: { status: 0, title: 'El ID del edificio es requerido para buscar reglas.' }
       });
       return;
     }
@@ -460,7 +460,7 @@ export class AdminPricingPage {
     const amount = Number(draft.amount);
 
     if (!buildingId || !amenityId) {
-      this.createValidationError.set('Building ID y Espacio ID son requeridos.');
+      this.createValidationError.set('El ID del edificio y el ID del espacio son requeridos.');
       return;
     }
 

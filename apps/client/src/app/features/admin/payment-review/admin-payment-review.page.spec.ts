@@ -22,8 +22,8 @@ function payment(overrides: Partial<AdminPayment>): AdminPayment {
     approvedAtUtc: '2026-10-01T10:05:00Z',
     reservationOutcome: 'ApprovedAfterExpiry',
     requiresManualReview: true,
-    providerStatus: 'approved',
-    providerStatusDetail: null,
+    providerEstado: 'approved',
+    providerEstadoDetail: null,
     cashDeclaredAtUtc: null,
     cashConfirmedAtUtc: null,
     cashConfirmedByUserId: null,
@@ -96,7 +96,7 @@ describe('AdminPaymentReviewPage', () => {
 
   it.each([
     ['ApprovedAfterExpiry', 'después de que venciera el plazo'],
-    ['ApprovedForCancelledReservation', 'ya estaba cancelada'],
+    ['ApprovedForCancelarledReservation', 'ya estaba cancelada'],
     ['ApprovedForMissingReservation', 'no se encontró la reserva asociada']
   ])('renders the factual explanation for outcome %s', async (outcome, expectedSnippet) => {
     const { harness } = await navigate();
@@ -118,7 +118,7 @@ describe('AdminPaymentReviewPage', () => {
     httpMock.expectOne((req) => req.url === '/api/admin/payments').flush({
       items: [
         payment({ paymentId: 'payment-1', method: 'Cash', status: 'Pending', reservationOutcome: 'None' }),
-        payment({ paymentId: 'payment-2', reservationOutcome: 'ApprovedForCancelledReservation' })
+        payment({ paymentId: 'payment-2', reservationOutcome: 'ApprovedForCancelarledReservation' })
       ],
       page: 1,
       pageSize: 50,

@@ -209,3 +209,42 @@ jobs:
             --type system \
             --tail 80 || true
           exit 1
+
+
+      - name: Smoke check resident demo session
+        if: "${{ inputs.action == 'apply' }}"
+        run: |
+          CLIENT_URL="${{ steps.infra.outputs.client_url }}"
+          COOKIE_JAR="$(mktemp)"
+          trap 'rm -f "$COOKIE_JAR" /tmp/demo-admin-response.txt' EXIT
+
+          DEMO_STATUS="$(curl --fail --silent --show-error "$CLIENT_URL/api/demo/status")"
+          printf '%s' "$DEMO_STATUS" | grep -q '"enabled":true'
+
+          curl --fail --silent --show-error \
+            --cookie-jar "$COOKIE_JAR" \
+            --request POST \
+            "$CLIENT_URL/api/demo/session" \
+            --output /dev/null
+
+          DEMO_USER="$(curl --fail --silent --show-error \
+            --cookie "$COOKIE_JAR" \
+            "$CLIENT_URL/api/auth/me")"
+
+          printf '%s' "$DEMO_USER" | grep -q '"email":"demo.resident@resamen.local"'
+          printf '%s' "$DEMO_USER" | grep -q '"Resident"'
+          printf '%s' "$DEMO_USER" | grep -q '"unit":"1A"'
+
+          ADMIN_STATUS="$(curl --silent --show-error \
+            --cookie "$COOKIE_JAR" \
+            --output /tmp/demo-admin-response.txt \
+            --write-out '%{http_code}' \
+            "$CLIENT_URL/api/auth/check/admin" || true)"
+
+          if [ "$ADMIN_STATUS" != "403" ]; then
+            echo "Demo account unexpectedly reached the admin authorization check: HTTP $ADMIN_STATUS"
+            cat /tmp/demo-admin-response.txt || true
+            exit 1
+          fi
+
+          echo "Resident-only one-click demo session passed."

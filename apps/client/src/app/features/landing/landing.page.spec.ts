@@ -42,7 +42,7 @@ describe('LandingPage', () => {
     expect(text).toContain('Bienvenido, Resident One');
     expect(text).toContain('Membresías activas: Pilot Building 3A');
     expect(text).toContain('Cerrar sesión');
-    expect(text).toContain('Ver amenities');
+    expect(text).toContain('Ver espacios comunes');
     expect(text).not.toContain('Check API');
     expect(text).not.toContain('not checked');
   });
